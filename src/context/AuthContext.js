@@ -106,8 +106,21 @@ export const AuthProvider = ({ children }) => {
         return { success: true, user: userData, token: authToken };
       } else {
         setLoading(false);
-        setError(response.data.message || 'Failed to verify OTP');
-        return { success: false, message: response.data.message || 'Failed to verify OTP' };
+        
+        // Extract detailed error information
+        const errorMessage = response.data.message || 'Failed to verify OTP';
+        const errorDetails = response.data.error || {};
+        
+        // Set error with more context
+        setError(errorMessage);
+        
+        // Return detailed error information to the component
+        return { 
+          success: false, 
+          message: errorMessage,
+          errorDetails: errorDetails,
+          errorCode: errorDetails.reason || 'unknown_error'
+        };
       }
     } catch (error) {
       console.error('Error in verifyOtp:', error);
