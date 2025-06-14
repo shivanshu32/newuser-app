@@ -8,6 +8,7 @@ import HomeScreen from '../screens/main/HomeScreen';
 import BookingScreen from '../screens/main/BookingScreen';
 import WalletScreen from '../screens/main/WalletScreen';
 import ProfileScreen from '../screens/main/ProfileScreen';
+import AstrologerProfileScreen from '../screens/main/AstrologerProfileScreen';
 import ChatScreen from '../screens/session/ChatScreen';
 import VideoCallScreen from '../screens/session/VideoCallScreen';
 import RatingScreen from '../screens/session/RatingScreen';
@@ -57,6 +58,11 @@ const MainNavigator = () => {
       }}
     >
       <Stack.Screen name="Main" component={TabNavigator} />
+      <Stack.Screen 
+        name="AstrologerProfile" 
+        component={AstrologerProfileScreen} 
+        options={{ headerShown: true, title: 'Astrologer Profile' }}
+      />
       <Stack.Screen 
         name="Chat" 
         component={ChatScreen} 

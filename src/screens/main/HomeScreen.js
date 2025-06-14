@@ -135,15 +135,15 @@ const HomeScreen = ({ navigation }) => {
     fetchAstrologers(1, false);
   };
 
-  const handleBooking = (astrologer) => {
-    navigation.navigate('Bookings', { astrologer });
+  const handleAstrologerPress = (astrologer) => {
+    navigation.navigate('AstrologerProfile', { astrologerId: astrologer.id });
   };
 
   const renderAstrologerItem = ({ item }) => {
     return (
     <TouchableOpacity
       style={styles.astrologerCard}
-      onPress={() => handleBooking(item)}
+      onPress={() => handleAstrologerPress(item)}
       accessible={true}
       accessibilityLabel={`${item.name}, ${item.specialization}, ${item.rating} stars, ${item.experience} years experience, ₹${item.price} per minute. ${item.online ? 'Online' : 'Offline'}`}
     >
@@ -184,7 +184,7 @@ const HomeScreen = ({ navigation }) => {
     return (
     <TouchableOpacity
       style={styles.featuredCard}
-      onPress={() => handleBooking(item)}
+      onPress={() => handleAstrologerPress(item)}
       accessible={true}
       accessibilityLabel={`Featured astrologer ${item.name}, ${item.specialization}, ${item.rating} stars, ₹${item.price} per minute. ${item.online ? 'Online' : 'Offline'}`}
     >
