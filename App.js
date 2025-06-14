@@ -1,52 +1,45 @@
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { NavigationContainer } from '@react-navigation/native';
+import { ActivityIndicator, View } from 'react-native';
 
 // Import navigation stacks
 import AuthNavigator from './src/navigation/AuthNavigator';
 import MainNavigator from './src/navigation/MainNavigator';
 
 // Import context
-import { AuthProvider } from './src/context/AuthContext';
+import { AuthProvider, useAuth } from './src/context/AuthContext';
 import { NotificationProvider } from './src/context/NotificationContext';
 
-export default function App() {
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
-
-  useEffect(() => {
-    // Check if user is logged in
-    const checkLoginStatus = async () => {
-      try {
-        const token = await AsyncStorage.getItem('userToken');
-        setIsLoggedIn(!!token);
-      } catch (error) {
-        console.log('Error checking login status:', error);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    checkLoginStatus();
-  }, []);
-
-  if (isLoading) {
-    // You could return a loading screen here
-    return null;
+// Create a wrapper component that uses the AuthContext
+function AppContent() {
+  const { token, initialLoading } = useAuth();
+  
+  if (initialLoading) {
+    // Show loading indicator only during initial auth check
+    return (
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+        <ActivityIndicator size="large" color="#8A2BE2" />
+      </View>
+    );
   }
 
+  // Return the appropriate navigator based on auth state
+  return token ? <MainNavigator /> : <AuthNavigator />;
+}
+
+export default function App() {
   return (
-    <SafeAreaProvider>
-      <AuthProvider>
-        <NotificationProvider>
-          <NavigationContainer>
-            <StatusBar style="auto" />
-            {isLoggedIn ? <MainNavigator /> : <AuthNavigator />}
-          </NavigationContainer>
-        </NotificationProvider>
-      </AuthProvider>
-    </SafeAreaProvider>
+    <NavigationContainer>
+      <SafeAreaProvider>
+        <StatusBar style="auto" />
+        <AuthProvider>
+          <NotificationProvider>
+            <AppContent />
+          </NotificationProvider>
+        </AuthProvider>
+      </SafeAreaProvider>
+    </NavigationContainer>
   );
 }

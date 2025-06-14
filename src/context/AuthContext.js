@@ -6,12 +6,13 @@ import axios from 'axios';
 const AuthContext = createContext();
 
 // API URL
-const API_URL = 'http://localhost:5000/api/v1';
+const API_URL = 'http://192.168.29.107:5000/api/v1';
 
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [token, setToken] = useState(null);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(false); // For API operations
+  const [initialLoading, setInitialLoading] = useState(true); // For initial auth check
   const [error, setError] = useState(null);
 
   // Check if user is logged in on app start
@@ -30,6 +31,9 @@ export const AuthProvider = ({ children }) => {
         }
       } catch (error) {
         console.log('Error loading stored auth data:', error);
+      } finally {
+        // Always set initialLoading to false when done
+        setInitialLoading(false);
       }
     };
 
@@ -41,9 +45,15 @@ export const AuthProvider = ({ children }) => {
     setLoading(true);
     setError(null);
     
+    const requestUrl = `${API_URL}/auth/request-otp`;
+    console.log('Making OTP request to:', requestUrl);
+    console.log('Request payload:', { mobile: phoneNumber, role: 'user' });
+    
     try {
       // Call backend API to request OTP
-      const response = await axios.post(`${API_URL}/auth/request-otp`, { phoneNumber, role: 'user' });
+      const response = await axios.post(requestUrl, { mobile: phoneNumber, role: 'user' });
+      
+      console.log('OTP request response:', response.data);
       
       if (response.data.success) {
         setLoading(false);
@@ -51,9 +61,12 @@ export const AuthProvider = ({ children }) => {
       } else {
         setLoading(false);
         setError(response.data.message || 'Failed to send OTP');
+        console.log('OTP request failed:', response.data.message);
         return { success: false, message: response.data.message || 'Failed to send OTP' };
       }
     } catch (error) {
+      console.log('OTP request error:', error);
+      console.log('Error details:', error.response?.data || error.message);
       setLoading(false);
       setError(error.response?.data?.message || 'Failed to send OTP');
       return { success: false, message: error.response?.data?.message || 'Failed to send OTP' };
@@ -67,16 +80,20 @@ export const AuthProvider = ({ children }) => {
     
     try {
       // Call backend API to verify OTP
-      const response = await axios.post(`${API_URL}/auth/verify-otp`, { phoneNumber, otp, role: 'user' });
+      const response = await axios.post(`${API_URL}/auth/verify-otp`, { mobile: phoneNumber, otp, role: 'user' });
       
       if (response.data.success) {
         // Get user data and token from response
-        const userData = response.data.user;
-        const authToken = response.data.token;
+        const userData = response.data.data.user;
+        const authToken = response.data.data.token;
         
         // Store user data and token
-        await AsyncStorage.setItem('userToken', authToken);
-        await AsyncStorage.setItem('userData', JSON.stringify(userData));
+        try {
+          await AsyncStorage.setItem('userToken', authToken);
+          await AsyncStorage.setItem('userData', JSON.stringify(userData));
+        } catch (storageError) {
+          console.error('AsyncStorage error:', storageError);
+        }
         
         // Update state
         setUser(userData);
@@ -92,9 +109,8 @@ export const AuthProvider = ({ children }) => {
         setError(response.data.message || 'Failed to verify OTP');
         return { success: false, message: response.data.message || 'Failed to verify OTP' };
       }
-      setLoading(false);
-      return { success: false, message: error.response?.data?.message || 'Failed to verify OTP' };
     } catch (error) {
+      console.error('Error in verifyOtp:', error);
       setLoading(false);
       setError(error.response?.data?.message || 'Failed to verify OTP');
       return { success: false, message: error.response?.data?.message || 'Failed to verify OTP' };
@@ -128,6 +144,7 @@ export const AuthProvider = ({ children }) => {
         user,
         token,
         loading,
+        initialLoading,
         error,
         isLoggedIn: !!token,
         requestOtp,

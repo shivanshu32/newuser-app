@@ -17,6 +17,7 @@ const OtpVerificationScreen = ({ route, navigation }) => {
   const [otp, setOtp] = useState(['', '', '', '']);
   const [timer, setTimer] = useState(30);
   const [canResend, setCanResend] = useState(false);
+  const [localLoading, setLocalLoading] = useState(false);
   const { verifyOtp, requestOtp, loading } = useAuth();
   
   const inputRefs = useRef([]);
@@ -54,6 +55,11 @@ const OtpVerificationScreen = ({ route, navigation }) => {
   };
 
   const handleVerifyOtp = async () => {
+    // Prevent double submission
+    if (localLoading || loading) {
+      return;
+    }
+    
     const otpString = otp.join('');
     
     // Validate OTP
@@ -62,13 +68,22 @@ const OtpVerificationScreen = ({ route, navigation }) => {
       return;
     }
     
-    const result = await verifyOtp(phoneNumber, otpString);
+    // Set local loading state immediately to prevent double clicks
+    setLocalLoading(true);
     
-    if (result.success) {
-      // OTP verification successful, user will be redirected automatically
-      // due to the isLoggedIn check in App.js
-    } else {
-      Alert.alert('Error', result.message || 'Failed to verify OTP');
+    try {
+      const result = await verifyOtp(phoneNumber, otpString);
+      
+      if (result.success) {
+        // OTP verification successful, user will be redirected automatically
+        // due to the isLoggedIn check in App.js
+      } else {
+        Alert.alert('Error', result.message || 'Failed to verify OTP');
+      }
+    } catch (error) {
+      Alert.alert('Error', 'Failed to verify OTP. Please try again.');
+    } finally {
+      setLocalLoading(false);
     }
   };
 
@@ -114,7 +129,7 @@ const OtpVerificationScreen = ({ route, navigation }) => {
         <TouchableOpacity
           style={styles.button}
           onPress={handleVerifyOtp}
-          disabled={loading}
+          disabled={loading || localLoading}
         >
           {loading ? (
             <ActivityIndicator color="#fff" />

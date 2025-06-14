@@ -12,11 +12,17 @@ const AuthNavigator = () => {
     <Stack.Navigator
       initialRouteName="Login"
       screenOptions={{
-        headerShown: false,
+        headerShown: false, // Hide headers for clean UI
       }}
     >
-      <Stack.Screen name="Login" component={LoginScreen} />
-      <Stack.Screen name="OtpVerification" component={OtpVerificationScreen} />
+      <Stack.Screen 
+        name="Login" 
+        component={LoginScreen} 
+      />
+      <Stack.Screen 
+        name="OtpVerification" 
+        component={OtpVerificationScreen} 
+      />
     </Stack.Navigator>
   );
 };

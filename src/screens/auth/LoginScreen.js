@@ -11,27 +11,34 @@ import {
   ActivityIndicator,
   Alert,
 } from 'react-native';
+import { useNavigation } from '@react-navigation/native';
 import { useAuth } from '../../context/AuthContext';
 
-const LoginScreen = ({ navigation }) => {
+const LoginScreen = () => {
+  const navigation = useNavigation();
   const [phoneNumber, setPhoneNumber] = useState('');
   const { requestOtp, loading } = useAuth();
 
-  const handleRequestOtp = async () => {
+  const handleRequestOtp = () => {
     // Validate phone number
     if (!phoneNumber || phoneNumber.length < 10) {
       Alert.alert('Invalid Phone Number', 'Please enter a valid phone number');
       return;
     }
-
-    const result = await requestOtp(phoneNumber);
     
-    if (result.success) {
-      // Navigate to OTP verification screen
-      navigation.navigate('OtpVerification', { phoneNumber });
-    } else {
-      Alert.alert('Error', result.message || 'Failed to send OTP');
-    }
+    // Use promise chain instead of async/await
+    requestOtp(phoneNumber)
+      .then(result => {
+        if (result && result.success) {
+          // Navigate to OTP verification screen
+          navigation.navigate('OtpVerification', { phoneNumber });
+        } else {
+          Alert.alert('Error', result?.message || 'Failed to send OTP');
+        }
+      })
+      .catch(error => {
+        Alert.alert('Error', 'Failed to send OTP. Please try again.');
+      });
   };
 
   return (
