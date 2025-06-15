@@ -1,12 +1,13 @@
 import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-// API URL
-const API_URL = 'http://localhost:5000/api/v1';
+// API URL - Using local network IP instead of localhost for device/emulator access
+const API_URL = 'http://192.168.29.107:5000';
+const API_BASE = `${API_URL}/api/v1`;
 
 // Create axios instance
 const API = axios.create({
-  baseURL: API_URL,
+  baseURL: API_BASE,
 });
 
 // Add authorization header to every request if token exists

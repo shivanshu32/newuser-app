@@ -11,6 +11,8 @@ import {
   SafeAreaView,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { astrologersAPI } from '../../services/api';
+import { initiateRealTimeBooking } from '../../services/socketService';
 
 const AstrologerProfileScreen = ({ route, navigation }) => {
   const [astrologer, setAstrologer] = useState(null);
@@ -29,49 +31,185 @@ const AstrologerProfileScreen = ({ route, navigation }) => {
       setLoading(true);
       setError(null);
       
-      const API_URL = `http://192.168.29.107:5000/api/v1/astrologers/${astrologerId}`;
+      // Use the astrologersAPI service for consistent API handling
+      const response = await astrologersAPI.getById(astrologerId);
       
-      const response = await fetch(API_URL, {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      });
-
-      const result = await response.json();
-
-      if (!response.ok) {
-        throw new Error(result.error || 'Failed to fetch astrologer details');
+      // Extract the actual astrologer data from the nested response structure
+      let astrologerData = null;
+      
+      // Handle different response structures
+      if (response?.data?.data) {
+        // Nested data.data structure
+        astrologerData = response.data.data;
+      } else if (response?.data) {
+        // Direct data property
+        astrologerData = response.data;
+      } else if (response && typeof response === 'object' && response._id) {
+        // Response is the astrologer object itself
+        astrologerData = response;
+      } else {
+        throw new Error('Invalid response format');
       }
-
-      setAstrologer(result.data);
+      
+      // Set the extracted astrologer data
+      setAstrologer(astrologerData);
     } catch (err) {
-      console.error('Error fetching astrologer details:', err);
       setError('Failed to load astrologer details. Please try again.');
     } finally {
       setLoading(false);
     }
   };
 
+  // Handle real-time booking via socket
+  const handleBookNow = async (type) => {
+    console.log(`handleBookNow called for session type: ${type}`);
+    try {
+      // If astrologer data isn't loaded yet, try fetching it again
+      if (!astrologer) {
+        console.log('No astrologer data, attempting to fetch details again');
+        await fetchAstrologerDetails();
+      }
+      
+      console.log('Current astrologer data:', JSON.stringify(astrologer));
+      
+      // Get the astrologer ID from the correct location in the object structure
+      const astrologerId = astrologer?._id || astrologer?.id || (astrologer?.data && (astrologer.data._id || astrologer.data.id));
+      console.log(`Resolved astrologerId: ${astrologerId}`);
+      
+      // Validate astrologer data is available after potential refetch
+      if (!astrologer || !astrologerId) {
+        console.error('Invalid astrologer data:', astrologer);
+        Alert.alert(
+          'Booking Error',
+          'Astrologer information is not available. Please try again.'
+        );
+        return;
+      }
+      
+      // Get the astrologer name for the confirmation dialog
+      let astrologerName = 'the astrologer';
+      
+      if (astrologer) {
+        if (typeof astrologer === 'object') {
+          astrologerName = astrologer.name || astrologer.displayName || astrologer.fullName;
+          
+          // If name is still undefined, try to find it in nested properties
+          if (!astrologerName && astrologer.data) {
+            astrologerName = astrologer.data.name || astrologer.data.displayName || astrologer.data.fullName;
+          }
+          
+          // If name is still undefined, use a generic name with ID
+          if (!astrologerName) {
+            astrologerName = `Astrologer #${astrologer._id || astrologer.id || 'Unknown'}`;
+          }
+        }
+      }
+      
+      // Prepare for booking with resolved astrologer name
+      
+      // Show confirmation dialog before initiating booking
+      const now = new Date();
+      const formattedTime = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      
+      // Show confirmation dialog with correct astrologer name and session type
+      Alert.alert(
+        'Confirm Booking',
+        `Schedule a ${type} session with ${astrologerName} at ${formattedTime}?`,
+        [
+          {
+            text: 'Cancel',
+            style: 'cancel'
+          },
+          {
+            text: 'Confirm',
+            onPress: async () => {
+              try {
+                // Prepare booking data
+                const bookingData = {
+                  astrologerId: astrologerId,
+                  type: type,
+                  notes: `Instant ${type} consultation request`
+                };
+                
+                console.log('Prepared booking data:', JSON.stringify(bookingData));
+                console.log('Calling initiateRealTimeBooking...');
+                
+                // Send booking request via socket
+                const response = await initiateRealTimeBooking(bookingData);
+                
+                console.log('Booking response received:', JSON.stringify(response));
+                
+                if (response.status === 'accepted') {
+                  console.log('Booking accepted, navigating to consultation room');
+                  // Navigate to consultation room
+                  navigation.navigate('ConsultationRoom', {
+                    booking: {
+                      _id: response.bookingId,
+                      astrologer: astrologer,
+                      type: type,
+                      rate: astrologer.rates ? astrologer.rates[type] : 0
+                    },
+                    roomId: response.roomId,
+                    sessionId: response.sessionId
+                  });
+                } else if (response.status === 'rejected') {
+                  console.log('Booking rejected:', response.message);
+                  Alert.alert(
+                    'Booking Rejected',
+                    response.message || 'Astrologer is not available right now.'
+                  );
+                } else {
+                  console.log('Unexpected booking response status:', response.status);
+                }
+              } catch (error) {
+                console.error('Booking request error:', error);
+                console.error('Error details:', error.stack || 'No stack trace available');
+                
+                // Check if it's a socket connection error
+                if (error.message && error.message.includes('Socket not connected')) {
+                  console.log('Socket connection issue detected');
+                  Alert.alert(
+                    'Connection Error',
+                    'Unable to connect to the booking service. Please check your internet connection and try again.'
+                  );
+                } else if (error.message && error.message.includes('timed out')) {
+                  console.log('Booking request timed out');
+                  Alert.alert(
+                    'Booking Timeout',
+                    'The booking request timed out. The astrologer may be unavailable at the moment.'
+                  );
+                } else {
+                  Alert.alert(
+                    'Booking Error',
+                    error.message || 'Failed to send booking request. Please try again.'
+                  );
+                }
+              }
+            }
+          }
+        ]
+      );
+    } catch (error) {
+      console.error('Booking preparation error:', error);
+      
+      Alert.alert(
+        'Booking Error',
+        error.message || 'Failed to prepare booking request. Please try again.'
+      );
+    }
+  };
+  
+  // Legacy booking handlers - replaced with real-time booking
   const handleBookChat = () => {
-    navigation.navigate('Bookings', { 
-      astrologer,
-      bookingType: 'chat'
-    });
+    handleBookNow('chat');
   };
 
   const handleBookVoiceCall = () => {
-    navigation.navigate('Bookings', { 
-      astrologer,
-      bookingType: 'voice'
-    });
+    handleBookNow('voice');
   };
 
   const handleBookVideoCall = () => {
-    navigation.navigate('Bookings', { 
-      astrologer,
-      bookingType: 'video'
-    });
+    handleBookNow('video');
   };
 
   // Render loading state
