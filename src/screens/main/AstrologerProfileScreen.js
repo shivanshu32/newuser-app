@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   StyleSheet,
   View,
@@ -8,23 +8,213 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   Alert,
+  Modal,
   SafeAreaView,
+  ToastAndroid,
+  Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { astrologersAPI } from '../../services/api';
-import { initiateRealTimeBooking } from '../../services/socketService';
+import { initiateRealTimeBooking, listenForBookingStatusUpdates } from '../../services/socketService';
+import { addPendingConsultation } from '../../utils/pendingConsultationsStore';
 
 const AstrologerProfileScreen = ({ route, navigation }) => {
   const [astrologer, setAstrologer] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [bookingStatus, setBookingStatus] = useState(null); // null, 'pending', 'accepted', 'rejected'
+  const [currentBookingId, setCurrentBookingId] = useState(null);
+  const statusListenerCleanup = useRef(null);
+  
+  // State for consultation notification
+  const [showNotificationBanner, setShowNotificationBanner] = useState(false);
+  const [consultationData, setConsultationData] = useState(null);
   
   // Get astrologer ID from navigation params
   const { astrologerId } = route.params;
 
   useEffect(() => {
     fetchAstrologerDetails();
+    
+    // Set up booking status listener when component mounts
+    setupBookingStatusListener();
+    
+    // Clean up listener when component unmounts
+    return () => {
+      if (statusListenerCleanup.current && typeof statusListenerCleanup.current === 'function') {
+        statusListenerCleanup.current();
+      }
+    };
   }, []);
+  
+  // Set up listener for booking status updates
+  const setupBookingStatusListener = async () => {
+    try {
+      const cleanup = await listenForBookingStatusUpdates(handleBookingStatusUpdate);
+      statusListenerCleanup.current = cleanup;
+    } catch (error) {
+      console.error('Failed to set up booking status listener:', error);
+    }
+  };
+  
+  // Handler for booking status updates
+  const handleBookingStatusUpdate = (data) => {
+    console.log('Received booking status update:', data.status);
+    
+    // Check both state and global variable for booking ID
+    const effectiveBookingId = currentBookingId || global.currentPendingBookingId;
+    
+    // Only process updates for the current booking
+    if (effectiveBookingId && data.bookingId === effectiveBookingId) {
+      setBookingStatus(data.status);
+      
+      if (data.status === 'accepted') {
+        try {
+          // Create a safe version of the astrologer object with fallbacks for all properties
+          const safeAstrologer = {
+            _id: astrologer?._id || data.astrologerId || 'unknown',
+            displayName: astrologer?.displayName || 'Astrologer',
+            imageUrl: astrologer?.imageUrl || null,
+            rates: astrologer?.rates || { chat: 0, voice: 0, video: 0 }
+          };
+          
+          // Store consultation data for later use with safe values
+          const consultationData = {
+            booking: {
+              _id: data.bookingId,
+              astrologer: safeAstrologer,
+              type: data.type || 'chat', // Default to chat if type is not provided
+              rate: safeAstrologer.rates[data.type || 'chat'] || 0
+            },
+            roomId: data.roomId,
+            sessionId: data.sessionId
+          };
+          
+          // Save consultation data to state or global for access when user decides to join
+          global.pendingConsultation = consultationData;
+          
+          // Store the consultation in our global pending consultations store
+          setConsultationData(consultationData);
+          
+          // Add to pending consultations store
+          addPendingConsultation(consultationData);
+        } catch (error) {
+          console.error('Error creating consultation data:', error);
+        }
+        
+        // Use direct navigation as a reliable notification method
+        try {
+          // Navigate to the pending consultations screen
+          navigation.navigate('PendingConsultations');
+          
+          // Also show toast as a secondary notification
+          if (Platform.OS === 'android') {
+            ToastAndroid.showWithGravity(
+              'Booking accepted! Check notifications to join.',
+              ToastAndroid.LONG,
+              ToastAndroid.CENTER
+            );
+          }
+        } catch (navErr) {
+          console.error('Navigation error:', navErr);
+        }
+        
+        // Notify the user that they have a pending consultation
+        global.pendingConsultationAdded = true;
+        
+        // Emit an event that can be listened to by the app's navigation container
+        try {
+          if (global.eventEmitter) {
+            global.eventEmitter.emit('pendingConsultationAdded');
+          }
+        } catch (err) {
+          console.error('Error emitting event:', err);
+        }
+        
+        // Show a simple alert
+        try {
+          Alert.alert(
+            'Booking Accepted',
+            'Your booking has been accepted! You will be redirected to the pending consultations screen.',
+            [{ text: 'OK' }]
+          );
+        } catch (alertErr) {
+          console.error('Error showing alert:', alertErr);
+        }
+      } else if (data.status === 'rejected') {
+        // Show rejection message
+        try {
+          Alert.alert(
+            'Booking Rejected',
+            data.message || 'Astrologer is not available right now.',
+            [{ text: 'OK' }]
+          );
+        } catch (alertErr) {
+          console.error('Error showing rejection alert:', alertErr);
+        }
+        
+        // Reset booking state
+        setBookingStatus(null);
+        setCurrentBookingId(null);
+      }
+    } else {
+      // Process anyway if we don't have a current booking ID but received a status update
+      if ((!currentBookingId || currentBookingId !== data.bookingId) && data.status) {
+        console.log('Processing booking status update for non-current booking ID');
+        setCurrentBookingId(data.bookingId);
+        setBookingStatus(data.status);
+        
+        if (data.status === 'accepted') {
+          console.log('Booking accepted! Showing notification to join consultation...');
+          // Store consultation data for later use
+          const consultationData = {
+            booking: {
+              _id: data.bookingId,
+              astrologer: astrologer,
+              type: data.type || 'chat', // Default to chat if type is not provided
+              rate: astrologer.rates ? astrologer.rates[data.type || 'chat'] : 0
+            },
+            roomId: data.roomId,
+            sessionId: data.sessionId
+          };
+          
+          // Save consultation data to state or global for access when user decides to join
+          global.pendingConsultation = consultationData;
+          
+          // Store the consultation in our global pending consultations store
+          setConsultationData(consultationData);
+          console.log('Adding consultation to pending consultations store');
+          
+          // Add to pending consultations store
+          const added = addPendingConsultation(consultationData);
+          
+          // Show a simple toast notification that works reliably
+          if (Platform.OS === 'android') {
+            ToastAndroid.show('Booking accepted! Check notifications to join.', ToastAndroid.LONG);
+          } else {
+            // For iOS, we'll rely on the notification badge in the app
+            console.log('Booking accepted on iOS - notification badge should update');
+          }
+          
+          // Notify the user that they have a pending consultation
+          global.pendingConsultationAdded = true;
+          
+          // Emit an event that can be listened to by the app's navigation container
+          if (global.eventEmitter) {
+            console.log('Emitting pendingConsultationAdded event');
+            global.eventEmitter.emit('pendingConsultationAdded', consultationData);
+          }
+        } else if (data.status === 'rejected') {
+          console.log('Booking rejected! Showing alert...');
+          // Show rejection message
+          Alert.alert(
+            'Booking Rejected',
+            data.message || 'Astrologer is not available right now.'
+          );
+        }
+      }
+    }
+  };
 
   const fetchAstrologerDetails = async () => {
     try {
@@ -137,30 +327,17 @@ const AstrologerProfileScreen = ({ route, navigation }) => {
                 // Send booking request via socket
                 const response = await initiateRealTimeBooking(bookingData);
                 
-                console.log('Booking response received:', JSON.stringify(response));
-                
-                if (response.status === 'accepted') {
-                  console.log('Booking accepted, navigating to consultation room');
-                  // Navigate to consultation room
-                  navigation.navigate('ConsultationRoom', {
-                    booking: {
-                      _id: response.bookingId,
-                      astrologer: astrologer,
-                      type: type,
-                      rate: astrologer.rates ? astrologer.rates[type] : 0
-                    },
-                    roomId: response.roomId,
-                    sessionId: response.sessionId
-                  });
-                } else if (response.status === 'rejected') {
-                  console.log('Booking rejected:', response.message);
-                  Alert.alert(
-                    'Booking Rejected',
-                    response.message || 'Astrologer is not available right now.'
-                  );
-                } else {
-                  console.log('Unexpected booking response status:', response.status);
+                // Store the booking ID for tracking status updates
+                if (response && response.bookingId) {
+                  setCurrentBookingId(response.bookingId);
+                  setBookingStatus('pending');
+                  
+                  // Force update the booking ID in a local variable to ensure it's available immediately
+                  // for any status updates that arrive quickly
+                  global.currentPendingBookingId = response.bookingId;
                 }
+                
+                // The actual status updates will be handled by the socket listener
               } catch (error) {
                 console.error('Booking request error:', error);
                 console.error('Error details:', error.stack || 'No stack trace available');
@@ -210,6 +387,34 @@ const AstrologerProfileScreen = ({ route, navigation }) => {
 
   const handleBookVideoCall = () => {
     handleBookNow('video');
+  };
+
+  // Booking request pending modal
+  const renderBookingPendingModal = () => {
+    return (
+      <Modal
+        visible={bookingStatus === 'pending'}
+        transparent={true}
+        animationType="fade"
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContainer}>
+            <ActivityIndicator size="large" color="#6200ee" />
+            <Text style={styles.modalText}>Waiting for astrologer response...</Text>
+            <Text style={styles.modalSubText}>This request will expire in 2 minutes if not answered</Text>
+            <TouchableOpacity 
+              style={styles.cancelButton}
+              onPress={() => {
+                setBookingStatus(null);
+                setCurrentBookingId(null);
+              }}
+            >
+              <Text style={styles.cancelButtonText}>Cancel Request</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+    );
   };
 
   // Render loading state
@@ -270,8 +475,46 @@ const AstrologerProfileScreen = ({ route, navigation }) => {
     }
   }
 
+  // Render notification banner
+  const renderNotificationBanner = () => {
+    console.log('Rendering notification banner, showNotificationBanner:', showNotificationBanner);
+    
+    if (!showNotificationBanner) return null;
+    
+    return (
+      <View style={styles.notificationBanner}>
+        <View style={styles.notificationContent}>
+          <Text style={styles.notificationTitle}>Booking Accepted!</Text>
+          <Text style={styles.notificationText}>
+            Your consultation is ready to start.
+          </Text>
+        </View>
+        <View style={styles.notificationButtonsContainer}>
+          <TouchableOpacity 
+            style={styles.joinButton}
+            onPress={() => {
+              setShowNotificationBanner(false);
+              if (consultationData) {
+                navigation.navigate('ConsultationRoom', consultationData);
+              }
+            }}
+          >
+            <Text style={styles.joinButtonText}>Join Now</Text>
+          </TouchableOpacity>
+          <TouchableOpacity 
+            style={styles.laterButton}
+            onPress={() => setShowNotificationBanner(false)}
+          >
+            <Text style={styles.laterButtonText}>Later</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
+  };
+  
   return (
     <SafeAreaView style={styles.container}>
+      {/* Notification UI removed in favor of Alert */}
       <ScrollView contentContainerStyle={styles.scrollContent}>
         {/* Profile Header */}
         <View style={styles.profileHeader}>
@@ -399,6 +642,94 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#f8f8f8',
+  },
+  // Modal styles
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalContainer: {
+    width: '80%',
+    backgroundColor: 'white',
+    borderRadius: 10,
+    padding: 20,
+    alignItems: 'center',
+    elevation: 5,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+  },
+  modalText: {
+    fontSize: 16,
+    marginVertical: 10,
+    textAlign: 'center',
+    color: '#333'
+  },
+  modalSubText: {
+    fontSize: 14,
+    marginBottom: 15,
+    textAlign: 'center',
+    color: '#666'
+  },
+  inPageNotification: {
+    margin: 10,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+    backgroundColor: 'white',
+    overflow: 'hidden',
+    elevation: 3,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.22,
+    shadowRadius: 2.22,
+  },
+  notificationHeader: {
+    backgroundColor: '#8A2BE2',
+    padding: 10,
+  },
+  notificationHeaderText: {
+    color: 'white',
+    fontWeight: 'bold',
+    fontSize: 16,
+  },
+  notificationBody: {
+    padding: 15,
+  },
+  notificationBodyText: {
+    fontSize: 14,
+    marginBottom: 15,
+    color: '#333',
+  },
+  notificationActions: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+  },
+  joinNowButton: {
+    backgroundColor: '#8A2BE2',
+    paddingVertical: 8,
+    paddingHorizontal: 15,
+    borderRadius: 5,
+    marginLeft: 10,
+  },
+  joinNowButtonText: {
+    color: 'white',
+    fontWeight: 'bold',
+    fontSize: 14,
+  },
+  dismissButton: {
+    backgroundColor: '#f0f0f0',
+    paddingVertical: 8,
+    paddingHorizontal: 15,
+    borderRadius: 5,
+    marginLeft: 10,
+  },
+  dismissButtonText: {
+    color: '#666',
+    fontSize: 14,
   },
   scrollContent: {
     padding: 16,

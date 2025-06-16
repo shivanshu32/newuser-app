@@ -26,11 +26,9 @@ export const initSocket = async () => {
     }
     
     if (!token || !userId) {
-      console.log('Token or userId not found. Cannot initialize socket.');
+      console.error('Token or userId not found. Cannot initialize socket.');
       return null;
     }
-    
-    console.log(`Initializing socket with userId: ${userId}`);
     
     // Create socket connection with authentication
     const socketInstance = io(API_URL, {
@@ -57,7 +55,6 @@ export const initSocket = async () => {
       
       // Set up event listeners
       socketInstance.on('connect', () => {
-        console.log(`Socket connected: ${socketInstance.id}`);
         clearTimeout(connectionTimeout);
         socket = socketInstance; // Store the socket instance globally
         resolve(socketInstance);
@@ -69,7 +66,6 @@ export const initSocket = async () => {
       });
       
       socketInstance.on('disconnect', (reason) => {
-        console.log(`Socket disconnected: ${reason}`);
         socket = null; // Clear the socket reference on disconnect
       });
       
@@ -92,20 +88,15 @@ export const initSocket = async () => {
  * @returns {Promise<Object>} - Socket instance
  */
 export const getSocket = async () => {
-  console.log(`getSocket: Called with current socket state: ${socket ? 'Connected: ' + socket.connected : 'No socket'}`);
-  
   if (!socket) {
-    console.log('getSocket: No socket exists, initializing new socket');
     return await initSocket();
   }
   
   if (!socket.connected) {
-    console.log('getSocket: Socket exists but not connected, reinitializing');
     socket.disconnect();
     return await initSocket();
   }
   
-  console.log(`getSocket: Returning existing socket with ID: ${socket.id}`);
   return socket;
 };
 
@@ -125,24 +116,18 @@ export const disconnectSocket = () => {
  * @returns {Promise<Object>} - Promise that resolves with booking response
  */
 export const initiateRealTimeBooking = async (bookingData) => {
-  console.log('initiateRealTimeBooking: Starting with data:', bookingData);
-  
   try {
     // Ensure we have a connected socket before proceeding
     const socketInstance = await getSocket();
     
     if (!socketInstance || !socketInstance.connected || !socketInstance.id) {
-      console.error('initiateRealTimeBooking: Socket not properly connected');
       throw new Error('Socket not connected properly');
     }
-    
-    console.log(`initiateRealTimeBooking: Using socket with ID: ${socketInstance.id}, connected: ${socketInstance.connected}`);
     
     // Return a promise that resolves when booking is accepted or rejected
     return new Promise((resolve, reject) => {
       // Set up timeout for booking request
       const timeout = setTimeout(() => {
-        console.log('initiateRealTimeBooking: Request timed out after 60 seconds');
         socketInstance.off('booking_status_update'); // Remove listeners to prevent memory leaks
         socketInstance.off('error');
         reject(new Error('Booking request timed out. Astrologer may be unavailable.'));
@@ -150,25 +135,22 @@ export const initiateRealTimeBooking = async (bookingData) => {
       
       // Listen for booking status updates
       socketInstance.once('booking_status_update', (data) => {
-        console.log(`initiateRealTimeBooking: Received booking status update: ${JSON.stringify(data)}`);
         clearTimeout(timeout);
         resolve(data);
       });
       
       // Listen for errors
       socketInstance.once('error', (error) => {
-        console.error('initiateRealTimeBooking: Socket error during booking request:', error);
+        console.error('Socket error during booking request:', error);
         clearTimeout(timeout);
         reject(error);
       });
       
       // Now that listeners are set up, emit the event
-      console.log(`initiateRealTimeBooking: Emitting initiate_booking event with data:`, bookingData);
       socketInstance.emit('initiate_booking', bookingData);
-      console.log('initiateRealTimeBooking: Event emitted, waiting for response...');
     });
   } catch (error) {
-    console.error('initiateRealTimeBooking: Exception occurred:', error);
+    console.error('Booking request error:', error);
     throw error;
   }
 };
@@ -271,6 +253,104 @@ export const listenForStatusUpdates = async (onStatusUpdate) => {
   };
 };
 
+/**
+ * Listen for booking status updates
+ * @param {Function} onStatusUpdate - Callback for status updates
+ * @returns {Promise<Function>} - Cleanup function to remove listener
+ */
+export const listenForBookingStatusUpdates = async (onStatusUpdate) => {
+  try {
+    const socketInstance = await getSocket();
+    if (!socketInstance) {
+      throw new Error('Socket not connected');
+    }
+    
+    // Create handler function
+    const handleStatusUpdate = (data) => {
+      if (onStatusUpdate && typeof onStatusUpdate === 'function') {
+        onStatusUpdate(data);
+      }
+    };
+    
+    // Register event listener
+    socketInstance.on('booking_status_update', handleStatusUpdate);
+    
+    // Return cleanup function
+    return () => {
+      if (socketInstance && socketInstance.connected) {
+        socketInstance.off('booking_status_update', handleStatusUpdate);
+      }
+    };
+  } catch (error) {
+    console.error('Error setting up booking status listener:', error);
+    return () => {}; // Return empty cleanup function
+  }
+};
+
+/**
+ * Send a chat message in a consultation
+ * @param {String} roomId - Room ID
+ * @param {String} message - Message content
+ * @param {String} messageType - Message type (text, image, etc.)
+ * @returns {Promise<Object>} - Promise that resolves with response
+ */
+export const sendChatMessage = async (roomId, message, messageType = 'text') => {
+  const socketInstance = await getSocket();
+  
+  if (!socketInstance) {
+    throw new Error('Socket not connected');
+  }
+  
+  return new Promise((resolve, reject) => {
+    const messageData = {
+      roomId,
+      content: message,
+      type: messageType,
+      timestamp: new Date().toISOString()
+    };
+    
+    socketInstance.emit('send_message', messageData, (response) => {
+      if (response && response.success) {
+        resolve(response);
+      } else {
+        reject(new Error(response?.message || 'Failed to send message'));
+      }
+    });
+    
+    // If no acknowledgment within 5 seconds, resolve anyway to prevent hanging
+    setTimeout(() => {
+      resolve({ success: true, message: 'No acknowledgment received' });
+    }, 5000);
+  });
+};
+
+/**
+ * Listen for chat messages in a consultation
+ * @param {Function} onChatMessage - Callback for new messages
+ * @returns {Promise<Function>} - Cleanup function to remove listener
+ */
+export const listenForChatMessages = async (onChatMessage) => {
+  const socketInstance = await getSocket();
+  
+  if (!socketInstance) {
+    return () => {};
+  }
+  
+  const messageHandler = (data) => {
+    if (onChatMessage && typeof onChatMessage === 'function') {
+      onChatMessage(data);
+    }
+  };
+  
+  socketInstance.on('receive_message', messageHandler);
+  
+  return () => {
+    if (socketInstance && socketInstance.connected) {
+      socketInstance.off('receive_message', messageHandler);
+    }
+  };
+};
+
 export default {
   initSocket,
   getSocket,
@@ -280,5 +360,8 @@ export default {
   leaveConsultationRoom,
   listenForParticipantEvents,
   listenForTimerUpdates,
-  listenForStatusUpdates
+  listenForStatusUpdates,
+  listenForBookingStatusUpdates,
+  sendChatMessage,
+  listenForChatMessages
 };

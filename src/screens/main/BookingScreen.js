@@ -12,10 +12,12 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../context/AuthContext';
 import { bookingsAPI, astrologersAPI } from '../../services/api';
+import { getPendingConsultationsCount } from '../../utils/pendingConsultationsStore';
 
 const BookingScreen = ({ route, navigation }) => {
   const [bookings, setBookings] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [pendingCount, setPendingCount] = useState(0);
   const { user } = useAuth();
   
   // Check if we have an astrologer passed from the home screen
@@ -27,6 +29,23 @@ const BookingScreen = ({ route, navigation }) => {
     // If we have a selected astrologer, show the booking modal
     if (selectedAstrologer) {
       showBookingOptions(selectedAstrologer);
+    }
+    
+    // Check for pending consultations
+    setPendingCount(getPendingConsultationsCount());
+    
+    // Listen for new pending consultations
+    const handleNewConsultation = () => {
+      console.log('BookingScreen: New pending consultation detected');
+      setPendingCount(getPendingConsultationsCount());
+    };
+    
+    if (global.eventEmitter) {
+      global.eventEmitter.on('pendingConsultationAdded', handleNewConsultation);
+      
+      return () => {
+        global.eventEmitter.off('pendingConsultationAdded', handleNewConsultation);
+      };
     }
   }, [selectedAstrologer]);
 
@@ -291,10 +310,28 @@ const BookingScreen = ({ route, navigation }) => {
     );
   }
 
+  // Navigate to pending consultations screen
+  const navigateToPendingConsultations = () => {
+    navigation.navigate('PendingConsultations');
+  };
+
   return (
     <View style={styles.container}>
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Your Bookings</Text>
+        {pendingCount > 0 && (
+          <TouchableOpacity 
+            style={styles.pendingButton}
+            onPress={navigateToPendingConsultations}
+          >
+            <Text style={styles.pendingButtonText}>
+              {pendingCount} Pending
+            </Text>
+            <View style={styles.pendingBadge}>
+              <Text style={styles.pendingBadgeText}>{pendingCount}</Text>
+            </View>
+          </TouchableOpacity>
+        )}
       </View>
       
       {bookings.length === 0 ? (
@@ -355,6 +392,9 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
     borderBottomWidth: 1,
     borderBottomColor: '#eee',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
   },
   headerTitle: {
     fontSize: 20,
@@ -474,7 +514,33 @@ const styles = StyleSheet.create({
   emptyButtonText: {
     color: '#fff',
     fontSize: 16,
-    fontWeight: '500',
+    fontWeight: 'bold',
+  },
+  pendingButton: {
+    backgroundColor: '#6A5ACD',
+    borderRadius: 20,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  pendingButtonText: {
+    color: '#fff',
+    fontWeight: 'bold',
+    marginRight: 5,
+  },
+  pendingBadge: {
+    backgroundColor: '#FF3B30',
+    borderRadius: 10,
+    width: 20,
+    height: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  pendingBadgeText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: 'bold',
   },
 });
 

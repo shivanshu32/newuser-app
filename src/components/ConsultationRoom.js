@@ -1,11 +1,24 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, Alert } from 'react-native';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { 
+  View, 
+  Text, 
+  StyleSheet, 
+  TouchableOpacity, 
+  ActivityIndicator, 
+  Alert, 
+  TextInput, 
+  FlatList, 
+  KeyboardAvoidingView, 
+  Platform 
+} from 'react-native';
 import { 
   joinConsultationRoom, 
   leaveConsultationRoom, 
   listenForParticipantEvents, 
   listenForTimerUpdates, 
-  listenForStatusUpdates 
+  listenForStatusUpdates,
+  sendChatMessage,
+  listenForChatMessages
 } from '../services/socketService';
 
 /**
@@ -27,6 +40,12 @@ const ConsultationRoom = ({ booking, roomId, sessionId, onSessionEnd }) => {
   });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [messages, setMessages] = useState([]);
+  const [messageInput, setMessageInput] = useState('');
+  const [sendingMessage, setSendingMessage] = useState(false);
+  
+  // Ref for FlatList to auto-scroll to bottom on new messages
+  const flatListRef = useRef(null);
 
   // Format time for display (MM:SS)
   const formatTime = (seconds) => {
@@ -119,6 +138,45 @@ const ConsultationRoom = ({ booking, roomId, sessionId, onSessionEnd }) => {
     );
   };
 
+  // Handle sending a message
+  const handleSendMessage = async () => {
+    if (!messageInput.trim() || sendingMessage) return;
+    
+    try {
+      setSendingMessage(true);
+      
+      // Send message via socket
+      await sendChatMessage(roomId, messageInput.trim());
+      
+      // Add message to local state
+      const newMessage = {
+        content: messageInput.trim(),
+        senderRole: 'user',
+        sender: 'me', // We don't need the actual ID for display purposes
+        timestamp: new Date().toISOString(),
+        type: 'text'
+      };
+      
+      setMessages(prevMessages => [...prevMessages, newMessage]);
+      setMessageInput('');
+    } catch (error) {
+      console.error('Failed to send message:', error);
+      Alert.alert('Message Error', 'Failed to send message. Please try again.');
+    } finally {
+      setSendingMessage(false);
+    }
+  };
+  
+  // Handle receiving a message
+  const handleMessageReceived = useCallback((messageData) => {
+    console.log('Message received:', messageData);
+    
+    // Only add messages from the other participant
+    if (messageData.senderRole !== 'user') {
+      setMessages(prevMessages => [...prevMessages, messageData]);
+    }
+  }, []);
+  
   // Join consultation room on component mount
   useEffect(() => {
     const setupConsultation = async () => {
@@ -137,6 +195,7 @@ const ConsultationRoom = ({ booking, roomId, sessionId, onSessionEnd }) => {
         
         const timerCleanup = await listenForTimerUpdates(handleTimerUpdate);
         const statusCleanup = await listenForStatusUpdates(handleStatusUpdate);
+        const chatCleanup = await listenForChatMessages(handleMessageReceived);
         
         setLoading(false);
         
@@ -145,6 +204,7 @@ const ConsultationRoom = ({ booking, roomId, sessionId, onSessionEnd }) => {
           if (participantCleanup) participantCleanup();
           if (timerCleanup) timerCleanup();
           if (statusCleanup) statusCleanup();
+          if (chatCleanup) chatCleanup();
         };
       } catch (error) {
         console.error('Error setting up consultation:', error);
@@ -159,7 +219,7 @@ const ConsultationRoom = ({ booking, roomId, sessionId, onSessionEnd }) => {
     return () => {
       leaveConsultationRoom(booking._id, roomId).catch(console.error);
     };
-  }, [booking._id, roomId, handleParticipantJoined, handleParticipantLeft, handleTimerUpdate, handleStatusUpdate]);
+  }, [booking._id, roomId, handleParticipantJoined, handleParticipantLeft, handleTimerUpdate, handleStatusUpdate, handleMessageReceived]);
 
   // Show loading state
   if (loading) {
@@ -216,14 +276,65 @@ const ConsultationRoom = ({ booking, roomId, sessionId, onSessionEnd }) => {
       
       {/* Main consultation content area */}
       <View style={styles.contentArea}>
-        {/* This is where chat, voice, or video UI would be rendered */}
-        {/* For now, just showing a placeholder */}
-        <Text style={styles.placeholderText}>
-          {!astrologerPresent ? 
-            'Waiting for astrologer to join...' : 
-            `${booking.type.toUpperCase()} consultation in progress`
-          }
-        </Text>
+        {!astrologerPresent ? (
+          <View style={styles.waitingContainer}>
+            <ActivityIndicator size="large" color="#673AB7" />
+            <Text style={styles.waitingText}>Waiting for astrologer to join...</Text>
+          </View>
+        ) : (
+          <View style={styles.chatContainer}>
+            {/* Chat messages */}
+            <FlatList
+              ref={flatListRef}
+              data={messages}
+              keyExtractor={(item, index) => `msg-${index}-${item.timestamp}`}
+              style={styles.messagesList}
+              contentContainerStyle={styles.messagesContent}
+              onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: true })}
+              renderItem={({ item }) => (
+                <View style={[
+                  styles.messageContainer,
+                  item.senderRole === 'user' ? styles.userMessage : styles.astrologerMessage
+                ]}>
+                  <Text style={styles.messageText}>{item.content}</Text>
+                  <Text style={styles.messageTime}>
+                    {new Date(item.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                  </Text>
+                </View>
+              )}
+              ListEmptyComponent={
+                <Text style={styles.emptyChat}>No messages yet. Start your consultation by sending a message.</Text>
+              }
+            />
+            
+            {/* Message input */}
+            <KeyboardAvoidingView
+              behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+              keyboardVerticalOffset={100}
+              style={styles.inputContainer}
+            >
+              <TextInput
+                style={styles.input}
+                placeholder="Type your message..."
+                value={messageInput}
+                onChangeText={setMessageInput}
+                multiline
+                maxLength={500}
+              />
+              <TouchableOpacity 
+                style={[styles.sendButton, sendingMessage || !messageInput.trim() ? styles.sendButtonDisabled : null]}
+                onPress={handleSendMessage}
+                disabled={sendingMessage || !messageInput.trim()}
+              >
+                {sendingMessage ? (
+                  <ActivityIndicator size="small" color="#FFFFFF" />
+                ) : (
+                  <Text style={styles.sendButtonText}>Send</Text>
+                )}
+              </TouchableOpacity>
+            </KeyboardAvoidingView>
+          </View>
+        )}
       </View>
       
       {/* Action buttons */}
@@ -337,14 +448,91 @@ const styles = StyleSheet.create({
   },
   contentArea: {
     flex: 1,
-    padding: 16,
+    padding: 0,
+  },
+  waitingContainer: {
+    flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  placeholderText: {
+  waitingText: {
     fontSize: 16,
-    color: '#9E9E9E',
+    color: '#666666',
     textAlign: 'center',
+    marginTop: 16,
+  },
+  chatContainer: {
+    flex: 1,
+    display: 'flex',
+    flexDirection: 'column',
+  },
+  messagesList: {
+    flex: 1,
+    padding: 10,
+  },
+  messagesContent: {
+    paddingBottom: 10,
+  },
+  messageContainer: {
+    maxWidth: '80%',
+    padding: 10,
+    borderRadius: 10,
+    marginVertical: 5,
+  },
+  userMessage: {
+    alignSelf: 'flex-end',
+    backgroundColor: '#673AB7',
+  },
+  astrologerMessage: {
+    alignSelf: 'flex-start',
+    backgroundColor: '#E1E1E1',
+  },
+  messageText: {
+    fontSize: 16,
+    color: '#FFFFFF',
+  },
+  messageTime: {
+    fontSize: 12,
+    color: 'rgba(255, 255, 255, 0.7)',
+    alignSelf: 'flex-end',
+    marginTop: 4,
+  },
+  emptyChat: {
+    textAlign: 'center',
+    color: '#999',
+    padding: 20,
+  },
+  inputContainer: {
+    flexDirection: 'row',
+    padding: 10,
+    backgroundColor: '#FFFFFF',
+    borderTopWidth: 1,
+    borderTopColor: '#EEEEEE',
+  },
+  input: {
+    flex: 1,
+    minHeight: 40,
+    maxHeight: 100,
+    backgroundColor: '#F5F5F5',
+    borderRadius: 20,
+    paddingHorizontal: 15,
+    paddingVertical: 10,
+    marginRight: 10,
+  },
+  sendButton: {
+    width: 60,
+    height: 40,
+    backgroundColor: '#673AB7',
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  sendButtonDisabled: {
+    backgroundColor: '#B39DDB',
+  },
+  sendButtonText: {
+    color: '#FFFFFF',
+    fontWeight: 'bold',
   },
   actionsContainer: {
     padding: 16,
