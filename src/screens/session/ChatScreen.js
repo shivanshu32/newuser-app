@@ -189,19 +189,14 @@ const ChatScreen = ({ route, navigation }) => {
       console.log('ChatScreen: Socket connected successfully');
       setConnecting(false);
       
-      // Join a room specific to this booking
-      console.log('ChatScreen: Joining room for booking:', bookingId);
+      // Join the room for this booking
       socketRef.current.emit('join_room', { bookingId }, (response) => {
         if (response && response.success) {
-          console.log('ChatScreen: Successfully joined room for booking:', bookingId);
-          
-          // After joining the room, emit event to notify astrologer that user has joined
+          // Emit user joined consultation event
           socketRef.current.emit('user_joined_consultation', {
             bookingId,
             userId: user.id,
             astrologerId
-          }, (response) => {
-            console.log('ChatScreen: user_joined_consultation event acknowledgement:', response);
           });
           
           // Also emit the alternate event name as a fallback
@@ -209,85 +204,57 @@ const ChatScreen = ({ route, navigation }) => {
             bookingId,
             userId: user.id,
             astrologerId
-          }, (response) => {
-            console.log('ChatScreen: join_consultation event acknowledgement:', response);
           });
           
-          // Send a direct notification to the astrologer as a test
+          // Send a direct notification to the astrologer
           socketRef.current.emit('direct_astrologer_notification', {
             bookingId,
             userId: user.id,
             astrologerId,
             message: 'User has joined the consultation'
-          }, (response) => {
-            console.log('ChatScreen: direct_astrologer_notification event acknowledgement:', response);
           });
-        } else {
-          console.error('ChatScreen: Failed to join room:', response?.error || 'Unknown error');
         }
-        // Add acknowledgement callback
-        console.log('ChatScreen: join_consultation event acknowledgement:', response || 'No response');
-      });
-      
-      // Direct message to specific astrologer socket
-      console.log('ChatScreen: Emitting direct_astrologer_notification to astrologerId:', astrologerId);
-      socketRef.current.emit('direct_astrologer_notification', {
-        astrologerId: astrologerId,
-        message: 'User has joined the consultation',
-        bookingId: bookingId,
-        roomId: routeParams.roomId || `consultation:${bookingId}`,
-        sessionId: routeParams.sessionId
       });
     });
     
     socketRef.current.on('disconnect', () => {
-      console.log('Socket disconnected');
       setConnecting(true);
     });
     
     // Listen for incoming messages
-    socketRef.current.on('message', (message) => {
-      setMessages(prevMessages => [...prevMessages, {
-        id: message.id || Date.now().toString(),
-        sender: 'astrologer',
-        text: message.text,
-        timestamp: message.timestamp || new Date().toISOString(),
-      }]);
+    socketRef.current.on('receive_message', (message) => {
+      if (message.roomId === bookingId) {
+        setMessages(prevMessages => [...prevMessages, {
+          id: message.id || Date.now().toString(),
+          senderId: message.sender,
+          senderName: message.senderRole === 'user' ? 'User' : 'Astrologer',
+          text: message.content,
+          timestamp: message.timestamp || new Date().toISOString(),
+        }]);
+      }
     });
     
     // Listen for session timer updates
     socketRef.current.on('timer', (data) => {
-      setSessionTime(data.seconds);
+      if (data.bookingId === bookingId) {
+        setSessionTime(data.seconds);
+      }
     });
     
     // Listen for session end event
     socketRef.current.on('session_end', (data) => {
-      handleSessionEnd(data);
+      if (data.bookingId === bookingId) {
+        handleSessionEnd(data);
+      }
     });
     
-    // Fallback in case socket connection fails
-    setTimeout(() => {
-      if (connecting) {
-        // Simulate connection if real socket fails
-        setConnecting(false);
-        setSessionActive(true);
-        
-        // Simulate receiving a welcome message
-        const welcomeMessage = {
-          id: Date.now().toString(),
-          sender: 'astrologer',
-          text: `Hello! I'm ${astrologer?.name || 'your astrologer'}. How can I help you today?`,
-          timestamp: new Date().toISOString(),
-        };
-        
-        setMessages([welcomeMessage]);
-        
-        // Start local session timer as fallback
-        timerRef.current = setInterval(() => {
-          setSessionTime(prevTime => prevTime + 1);
-        }, 1000);
-      }
-    }, 5000);
+    // Set session as active
+    setSessionActive(true);
+    
+    // Start local session timer
+    timerRef.current = setInterval(() => {
+      setSessionTime(prevTime => prevTime + 1);
+    }, 1000);
   };
 
   const handleSendMessage = () => {
@@ -308,10 +275,12 @@ const ChatScreen = ({ route, navigation }) => {
     setMessages(prevMessages => [...prevMessages, newMessage]);
     setInputText('');
     
-    // In a real app, send message via socket
+    // Send message via socket with server-compatible payload
     socketRef.current.emit('send_message', {
-      text: inputText.trim(),
-      bookingId,
+      roomId: bookingId,
+      content: inputText.trim(),
+      type: 'text',
+      timestamp: new Date().toISOString()
     });
   };
 
@@ -402,7 +371,7 @@ const ChatScreen = ({ route, navigation }) => {
     
     return (
       <View style={[styles.messageContainer, isUser ? styles.userMessage : styles.astrologerMessage]}>
-        <Text style={styles.messageText}>{item.text}</Text>
+        <Text style={[styles.messageText, isUser ? styles.userMessageText : styles.astrologerMessageText]}>{item.text}</Text>
         <Text style={styles.messageTime}>
           {new Date(item.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
         </Text>
@@ -570,6 +539,12 @@ const styles = StyleSheet.create({
   },
   messageText: {
     fontSize: 16,
+    color: '#333',
+  },
+  userMessageText: {
+    color: '#fff',
+  },
+  astrologerMessageText: {
     color: '#333',
   },
   userMessage: {
