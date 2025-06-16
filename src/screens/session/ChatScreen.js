@@ -213,6 +213,9 @@ const ChatScreen = ({ route, navigation }) => {
             astrologerId,
             message: 'User has joined the consultation'
           });
+          
+          // Explicitly request timer start
+          socketRef.current.emit('start_session_timer', { bookingId });
         }
       });
     });
@@ -235,6 +238,12 @@ const ChatScreen = ({ route, navigation }) => {
     });
     
     // Listen for session timer updates
+    socketRef.current.on('session_timer', (data) => {
+      // The server sends { sessionId, durationSeconds, durationMinutes, currentAmount, currency }
+      setSessionTime(data.durationSeconds);
+    });
+    
+    // Keep the old listener for backward compatibility
     socketRef.current.on('timer', (data) => {
       if (data.bookingId === bookingId) {
         setSessionTime(data.seconds);
@@ -251,10 +260,8 @@ const ChatScreen = ({ route, navigation }) => {
     // Set session as active
     setSessionActive(true);
     
-    // Start local session timer
-    timerRef.current = setInterval(() => {
-      setSessionTime(prevTime => prevTime + 1);
-    }, 1000);
+    // We'll rely on server timer events instead of local timer
+    // The server will emit 'timer' events that we're already listening for
   };
 
   const handleSendMessage = () => {
@@ -265,20 +272,24 @@ const ChatScreen = ({ route, navigation }) => {
       return;
     }
     
+    // Capture the trimmed input text before clearing it
+    const messageText = inputText.trim();
+    
     const newMessage = {
       id: Date.now().toString(),
       sender: 'user',
-      text: inputText.trim(),
+      text: messageText,
       timestamp: new Date().toISOString(),
     };
     
+    // Add message to local state and clear input
     setMessages(prevMessages => [...prevMessages, newMessage]);
     setInputText('');
     
     // Send message via socket with server-compatible payload
     socketRef.current.emit('send_message', {
       roomId: bookingId,
-      content: inputText.trim(),
+      content: messageText,
       type: 'text',
       timestamp: new Date().toISOString()
     });
@@ -300,16 +311,12 @@ const ChatScreen = ({ route, navigation }) => {
             try {
               setLoading(true);
               
-              // Call backend API to end the session
-              const activeSessionResponse = await sessionsAPI.getActive();
+              // Call backend API to end the session directly with bookingId
+              await sessionsAPI.end(bookingId);
               
-              if (activeSessionResponse.data && activeSessionResponse.data.session) {
-                const { sessionId } = activeSessionResponse.data.session;
-                await sessionsAPI.end(sessionId);
-              }
-              
-              // Disconnect socket
+              // Emit end_session event to socket
               if (socketRef.current) {
+                socketRef.current.emit('end_session', { bookingId });
                 socketRef.current.disconnect();
               }
               
@@ -531,35 +538,32 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-end',
     backgroundColor: '#8A2BE2',
     borderBottomRightRadius: 0,
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.2,
+    shadowRadius: 1.5,
   },
   astrologerMessage: {
     alignSelf: 'flex-start',
     backgroundColor: '#fff',
     borderBottomLeftRadius: 0,
+    elevation: 1,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 1,
   },
   messageText: {
     fontSize: 16,
-    color: '#333',
+    lineHeight: 22,
   },
   userMessageText: {
     color: '#fff',
+    fontWeight: '500',
   },
   astrologerMessageText: {
     color: '#333',
-  },
-  userMessage: {
-    alignSelf: 'flex-end',
-    backgroundColor: '#8A2BE2',
-    borderBottomRightRadius: 0,
-  },
-  astrologerMessage: {
-    alignSelf: 'flex-start',
-    backgroundColor: '#fff',
-    borderBottomLeftRadius: 0,
-  },
-  messageText: {
-    fontSize: 16,
-    color: props => (props.sender === 'user' ? '#fff' : '#333'),
   },
   messageTime: {
     fontSize: 10,
@@ -569,10 +573,16 @@ const styles = StyleSheet.create({
   },
   inputContainer: {
     flexDirection: 'row',
-    padding: 10,
+    padding: 12,
     backgroundColor: '#fff',
     borderTopWidth: 1,
     borderTopColor: '#eee',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 3,
+    elevation: 3,
   },
   input: {
     flex: 1,
@@ -581,6 +591,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 15,
     paddingVertical: 10,
     maxHeight: 100,
+    fontSize: 15,
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
   },
   sendButton: {
     backgroundColor: '#8A2BE2',
@@ -590,6 +603,11 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     marginLeft: 10,
+    shadowColor: '#8A2BE2',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 2,
+    elevation: 3,
   },
   endSessionButton: {
     backgroundColor: '#F44336',
