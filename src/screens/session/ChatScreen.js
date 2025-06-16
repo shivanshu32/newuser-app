@@ -12,13 +12,22 @@ import {
   ActivityIndicator,
   Image,
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../context/AuthContext';
 import { bookingsAPI, sessionsAPI } from '../../services/api';
 import io from 'socket.io-client';
 
 const ChatScreen = ({ route, navigation }) => {
-  const { bookingId } = route.params || {};
+  // Extract and validate bookingId from route params
+  const routeParams = route.params || {};
+  
+  // Handle different ways bookingId might be passed
+  // 1. Direct bookingId in route.params (from BookingScreen)
+  // 2. Nested in booking._id (from consultation join flow)
+  const bookingId = routeParams.bookingId || (routeParams.booking && routeParams.booking._id);
+  
+  // State variables
   const [messages, setMessages] = useState([]);
   const [inputText, setInputText] = useState('');
   const [loading, setLoading] = useState(true);
@@ -55,14 +64,26 @@ const ChatScreen = ({ route, navigation }) => {
 
   const fetchBookingDetails = async () => {
     try {
+      // Validate bookingId before making API call
+      if (!bookingId) {
+        Alert.alert(
+          'Error', 
+          'No booking ID provided. Please go back and try again.'
+        );
+        setLoading(false);
+        return;
+      }
+      
       // Call backend API to get booking details
       const response = await bookingsAPI.getById(bookingId);
       
-      if (!response.data || !response.data.booking) {
-        throw new Error('Booking not found');
+      // The API returns the booking directly in response.data, not in response.data.booking
+      if (!response.data || !response.data.success) {
+        throw new Error('Booking not found in response');
       }
       
-      const { booking } = response.data;
+      // Extract booking data directly from response.data
+      const booking = response.data.data;
       const { astrologer } = booking;
       
       setAstrologer(astrologer);
@@ -72,11 +93,24 @@ const ChatScreen = ({ route, navigation }) => {
       await startSession();
       
       // Initialize socket connection
-      initializeSocket(astrologer.id);
+      try {
+        await initializeSocket(astrologer.id);
+      } catch (error) {
+        console.error('ChatScreen: Error initializing socket:', error);
+        Alert.alert('Connection Error', 'Failed to connect to the consultation. Please try again.');
+      }
     } catch (error) {
-      console.error('Error fetching booking details:', error);
       setLoading(false);
-      Alert.alert('Error', 'Failed to load booking details. Please try again.');
+      
+      // Show more specific error message
+      if (error.response?.status === 404) {
+        Alert.alert(
+          'Booking Not Found', 
+          'The consultation you are trying to join could not be found. The astrologer may still be preparing for the session. Please try again in a moment.'
+        );
+      } else {
+        Alert.alert('Error', 'Failed to load booking details. Please try again.');
+      }
     }
   };
   
@@ -101,22 +135,109 @@ const ChatScreen = ({ route, navigation }) => {
     }
   };
 
-  const initializeSocket = (astrologerId) => {
+  const initializeSocket = async (astrologerId) => {
+    console.log('ChatScreen: Initializing socket with astrologerId:', astrologerId, 'bookingId:', bookingId);
+    
+    // Get the user token for authentication
+    const userToken = await AsyncStorage.getItem('userToken');
+    if (!userToken) {
+      console.error('ChatScreen: No user token found for socket authentication');
+      Alert.alert('Authentication Error', 'Unable to establish connection. Please try again.');
+      return;
+    }
+    
     // Connect to the Socket.IO server
-    socketRef.current = io('http://localhost:5000', {
+    const socketUrl = 'http://192.168.29.107:5000';
+    console.log('ChatScreen: Connecting to socket server at:', socketUrl);
+    
+    const socketOptions = {
       query: {
         userId: user.id,
         astrologerId,
         bookingId,
         sessionType: 'chat',
       },
+      auth: {
+        token: userToken,
+        id: user.id,
+        role: 'user'
+      },
+      path: '/ws', // Match the path used in astrologer-app
+      reconnection: true,
+      reconnectionAttempts: 10,
+      reconnectionDelay: 1000,
+      transports: ['websocket', 'polling']
+    };
+    
+    console.log('ChatScreen: Socket options:', JSON.stringify({
+      ...socketOptions,
+      auth: { ...socketOptions.auth, token: '***token-hidden***' } // Hide token in logs
+    }));
+    socketRef.current = io(socketUrl, socketOptions);
+    
+    // Debug socket connection events
+    socketRef.current.on('connect_error', (error) => {
+      console.error('ChatScreen: Socket connection error:', error.message);
+    });
+    
+    socketRef.current.on('connect_timeout', () => {
+      console.error('ChatScreen: Socket connection timeout');
     });
     
     // Set up socket event listeners
     socketRef.current.on('connect', () => {
-      console.log('Socket connected');
+      console.log('ChatScreen: Socket connected successfully');
       setConnecting(false);
-      setSessionActive(true);
+      
+      // Join a room specific to this booking
+      console.log('ChatScreen: Joining room for booking:', bookingId);
+      socketRef.current.emit('join_room', { bookingId }, (response) => {
+        if (response && response.success) {
+          console.log('ChatScreen: Successfully joined room for booking:', bookingId);
+          
+          // After joining the room, emit event to notify astrologer that user has joined
+          socketRef.current.emit('user_joined_consultation', {
+            bookingId,
+            userId: user.id,
+            astrologerId
+          }, (response) => {
+            console.log('ChatScreen: user_joined_consultation event acknowledgement:', response);
+          });
+          
+          // Also emit the alternate event name as a fallback
+          socketRef.current.emit('join_consultation', {
+            bookingId,
+            userId: user.id,
+            astrologerId
+          }, (response) => {
+            console.log('ChatScreen: join_consultation event acknowledgement:', response);
+          });
+          
+          // Send a direct notification to the astrologer as a test
+          socketRef.current.emit('direct_astrologer_notification', {
+            bookingId,
+            userId: user.id,
+            astrologerId,
+            message: 'User has joined the consultation'
+          }, (response) => {
+            console.log('ChatScreen: direct_astrologer_notification event acknowledgement:', response);
+          });
+        } else {
+          console.error('ChatScreen: Failed to join room:', response?.error || 'Unknown error');
+        }
+        // Add acknowledgement callback
+        console.log('ChatScreen: join_consultation event acknowledgement:', response || 'No response');
+      });
+      
+      // Direct message to specific astrologer socket
+      console.log('ChatScreen: Emitting direct_astrologer_notification to astrologerId:', astrologerId);
+      socketRef.current.emit('direct_astrologer_notification', {
+        astrologerId: astrologerId,
+        message: 'User has joined the consultation',
+        bookingId: bookingId,
+        roomId: routeParams.roomId || `consultation:${bookingId}`,
+        sessionId: routeParams.sessionId
+      });
     });
     
     socketRef.current.on('disconnect', () => {
@@ -155,7 +276,7 @@ const ChatScreen = ({ route, navigation }) => {
         const welcomeMessage = {
           id: Date.now().toString(),
           sender: 'astrologer',
-          text: `Hello! I'm ${astrologer.name}. How can I help you today?`,
+          text: `Hello! I'm ${astrologer?.name || 'your astrologer'}. How can I help you today?`,
           timestamp: new Date().toISOString(),
         };
         
@@ -357,7 +478,7 @@ const ChatScreen = ({ route, navigation }) => {
           
           <TouchableOpacity
             style={styles.endSessionButton}
-            onPress={handleEndSession}
+            onPress={endSession}
             disabled={!sessionActive}
           >
             <Text style={styles.endSessionText}>End Consultation</Text>
