@@ -17,6 +17,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../context/AuthContext';
 import { bookingsAPI, sessionsAPI } from '../../services/api';
 import io from 'socket.io-client';
+import * as socketService from '../../services/socketService';
 
 const ChatScreen = ({ route, navigation }) => {
   // Extract and validate bookingId from route params
@@ -35,6 +36,8 @@ const ChatScreen = ({ route, navigation }) => {
   const [sessionActive, setSessionActive] = useState(false);
   const [sessionTime, setSessionTime] = useState(0);
   const [astrologer, setAstrologer] = useState(null);
+  const [isAstrologerTyping, setIsAstrologerTyping] = useState(false);
+  const typingTimeoutRef = useRef(null);
   const { user } = useAuth();
   
   const socketRef = useRef(null);
@@ -226,14 +229,65 @@ const ChatScreen = ({ route, navigation }) => {
     
     // Listen for incoming messages
     socketRef.current.on('receive_message', (message) => {
+      console.log('[USER-APP] Received message:', message);
       if (message.roomId === bookingId) {
-        setMessages(prevMessages => [...prevMessages, {
+        // Check if this is our own message (sent by current user)
+        const isOwnMessage = message.sender === 'user' || message.senderRole === 'user';
+        
+        // Skip adding our own messages as they're already added when sending
+        if (isOwnMessage) {
+          console.log('[USER-APP] Skipping own message:', message.id);
+          return;
+        }
+        
+        const newMessage = {
           id: message.id || Date.now().toString(),
           senderId: message.sender,
           senderName: message.senderRole === 'user' ? 'User' : 'Astrologer',
           text: message.content,
           timestamp: message.timestamp || new Date().toISOString(),
-        }]);
+          status: 'sent' // Initial status is 'sent'
+        };
+        
+        console.log('[USER-APP] Adding message from astrologer:', newMessage);
+        setMessages(prevMessages => [...prevMessages, newMessage]);
+        
+        // If the message is from the astrologer, mark it as read
+        socketRef.current.emit('message_read', {
+          bookingId,
+          messageId: newMessage.id
+        });
+      }
+    });
+    
+    // Listen for typing indicators
+    socketRef.current.on('typing_started', (data) => {
+      console.log('[USER-APP] Received typing_started event:', data);
+      if (data.bookingId === bookingId) {
+        console.log('[USER-APP] Setting astrologer typing to TRUE');
+        setIsAstrologerTyping(true);
+      }
+    });
+    
+    socketRef.current.on('typing_stopped', (data) => {
+      console.log('[USER-APP] Received typing_stopped event:', data);
+      if (data.bookingId === bookingId) {
+        console.log('[USER-APP] Setting astrologer typing to FALSE');
+        setIsAstrologerTyping(false);
+      }
+    });
+    
+    // Listen for message status updates (read receipts)
+    socketRef.current.on('message_status_update', (data) => {
+      console.log('[USER-APP] Received message_status_update:', data);
+      if (data.bookingId === bookingId) {
+        // Update message status to 'read' when receiving read receipt
+        setMessages(prevMessages => 
+          prevMessages.map(msg => 
+            msg.id === data.messageId ? { ...msg, status: 'read' } : msg
+          )
+        );
+        console.log('[USER-APP] Updated message status to read for message:', data.messageId);
       }
     });
     
@@ -264,7 +318,7 @@ const ChatScreen = ({ route, navigation }) => {
     // The server will emit 'timer' events that we're already listening for
   };
 
-  const handleSendMessage = () => {
+  const handleSendMessage = async () => {
     if (!inputText.trim()) return;
     
     if (!sessionActive) {
@@ -275,24 +329,75 @@ const ChatScreen = ({ route, navigation }) => {
     // Capture the trimmed input text before clearing it
     const messageText = inputText.trim();
     
+    const messageId = Date.now().toString();
     const newMessage = {
-      id: Date.now().toString(),
+      id: messageId,
       sender: 'user',
       text: messageText,
       timestamp: new Date().toISOString(),
+      status: 'sending' // Initial status is 'sending'
     };
     
     // Add message to local state and clear input
     setMessages(prevMessages => [...prevMessages, newMessage]);
     setInputText('');
     
-    // Send message via socket with server-compatible payload
-    socketRef.current.emit('send_message', {
+    // Send typing_stopped event when sending a message
+    socketRef.current.emit('typing_stopped', { bookingId });
+    
+    try {
+      // Use the updated socketService.sendChatMessage function
+      await socketService.sendChatMessage(
+        bookingId,
+        messageText,
+        'user', // senderId
+        'User', // senderName
+        messageId,
+        'text' // messageType
+      );
+      
+      // Update message status to 'sent' when server acknowledges
+      setMessages(prevMessages => 
+        prevMessages.map(msg => 
+          msg.id === messageId ? { ...msg, status: 'sent' } : msg
+        )
+      );
+    } catch (error) {
+      console.error('Failed to send message:', error);
+    }
+  };
+  
+  // Handle text input changes with typing indicator
+  const handleTextInputChange = (text) => {
+    setInputText(text);
+    
+    // Only emit typing events if the session is active
+    if (!sessionActive) return;
+    
+    // Send typing_started event with more complete payload
+    console.log('[USER-APP] Emitting typing_started event for bookingId:', bookingId);
+    socketRef.current.emit('typing_started', { 
+      bookingId,
       roomId: bookingId,
-      content: messageText,
-      type: 'text',
-      timestamp: new Date().toISOString()
+      userId: 'user',
+      senderRole: 'user'
     });
+    
+    // Clear any existing timeout
+    if (typingTimeoutRef.current) {
+      clearTimeout(typingTimeoutRef.current);
+    }
+    
+    // Set a new timeout to emit typing_stopped after 1 second of inactivity
+    typingTimeoutRef.current = setTimeout(() => {
+      console.log('[USER-APP] Emitting typing_stopped event for bookingId:', bookingId);
+      socketRef.current.emit('typing_stopped', { 
+        bookingId,
+        roomId: bookingId,
+        userId: 'user',
+        senderRole: 'user'
+      });
+    }, 1000);
   };
 
   const endSession = () => {
@@ -376,12 +481,36 @@ const ChatScreen = ({ route, navigation }) => {
   const renderMessage = ({ item }) => {
     const isUser = item.sender === 'user';
     
+    // Render status indicators for user messages
+    const renderStatusIndicator = () => {
+      if (!isUser) return null;
+      
+      switch (item.status) {
+        case 'sending':
+          return <Ionicons name="time-outline" size={12} color="#888" style={styles.statusIcon} />;
+        case 'sent':
+          return <Ionicons name="checkmark-outline" size={12} color="#888" style={styles.statusIcon} />;
+        case 'read':
+          return (
+            <View style={styles.doubleTickContainer}>
+              <Ionicons name="checkmark-outline" size={12} color="#4CAF50" style={styles.statusIcon} />
+              <Ionicons name="checkmark-outline" size={12} color="#4CAF50" style={[styles.statusIcon, styles.secondTick]} />
+            </View>
+          );
+        default:
+          return null;
+      }
+    };
+    
     return (
       <View style={[styles.messageContainer, isUser ? styles.userMessage : styles.astrologerMessage]}>
         <Text style={[styles.messageText, isUser ? styles.userMessageText : styles.astrologerMessageText]}>{item.text}</Text>
-        <Text style={styles.messageTime}>
-          {new Date(item.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-        </Text>
+        <View style={styles.messageFooter}>
+          <Text style={styles.messageTime}>
+            {new Date(item.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+          </Text>
+          {renderStatusIndicator()}
+        </View>
       </View>
     );
   };
@@ -397,7 +526,7 @@ const ChatScreen = ({ route, navigation }) => {
   return (
     <KeyboardAvoidingView
       style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : null}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
     >
       <View style={styles.header}>
@@ -430,17 +559,23 @@ const ChatScreen = ({ route, navigation }) => {
             data={messages}
             renderItem={renderMessage}
             keyExtractor={(item) => item.id}
-            contentContainerStyle={styles.messagesList}
+            contentContainerStyle={styles.messageList}
             onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: true })}
             onLayout={() => flatListRef.current?.scrollToEnd({ animated: true })}
           />
-          
+      
+      {/* Typing indicator */}
+      {isAstrologerTyping && (
+        <View style={styles.typingIndicatorContainer}>
+          <Text style={styles.typingIndicatorText}>Astrologer is typing...</Text>
+        </View>
+      )}
           <View style={styles.inputContainer}>
             <TextInput
               style={styles.input}
-              placeholder="Type your message..."
+              placeholder="Type a message..."
               value={inputText}
-              onChangeText={setInputText}
+              onChangeText={handleTextInputChange}
               multiline
             />
             <TouchableOpacity
@@ -448,10 +583,10 @@ const ChatScreen = ({ route, navigation }) => {
               onPress={handleSendMessage}
               disabled={!inputText.trim() || !sessionActive}
             >
-              <Ionicons name="send" size={20} color="#fff" />
+              <Ionicons name="send" size={24} color="white" />
             </TouchableOpacity>
           </View>
-          
+
           <TouchableOpacity
             style={styles.endSessionButton}
             onPress={endSession}
@@ -525,7 +660,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#666',
   },
-  messagesList: {
+  messageList: {
     padding: 15,
   },
   messageContainer: {
@@ -567,9 +702,48 @@ const styles = StyleSheet.create({
   },
   messageTime: {
     fontSize: 10,
-    color: '#999',
+    color: '#888',
+    marginTop: 4,
+    marginRight: 4,
+  },
+  messageFooter: {
+    flexDirection: 'row',
+    alignItems: 'center',
     alignSelf: 'flex-end',
-    marginTop: 5,
+  },
+  statusIcon: {
+    marginLeft: 2,
+  },
+  doubleTickContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  secondTick: {
+    marginLeft: -5,
+  },
+  typingIndicatorContainer: {
+    padding: 8,
+    backgroundColor: '#f0f0f0',
+    borderRadius: 16,
+    marginHorizontal: 16,
+    marginBottom: 8,
+  },
+  typingIndicatorText: {
+    color: '#666',
+    fontStyle: 'italic',
+    fontSize: 12,
+  },
+  typingIndicator: {
+    padding: 8,
+    backgroundColor: '#f0f0f0',
+    borderRadius: 16,
+    marginHorizontal: 16,
+    marginBottom: 8,
+  },
+  typingText: {
+    fontSize: 12,
+    color: '#666',
+    fontStyle: 'italic',
   },
   inputContainer: {
     flexDirection: 'row',

@@ -1,6 +1,9 @@
 import { io } from 'socket.io-client';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
+// Constants for typing indicator
+const TYPING_DEBOUNCE_TIME = 1000; // 1 second
+
 // API URL (should match the backend URL) - Using local network IP instead of localhost for device/emulator access
 const API_URL = 'http://192.168.29.107:5000';
 
@@ -291,10 +294,13 @@ export const listenForBookingStatusUpdates = async (onStatusUpdate) => {
  * Send a chat message in a consultation
  * @param {String} roomId - Room ID
  * @param {String} message - Message content
+ * @param {String} senderId - Sender ID
+ * @param {String} senderName - Sender name
+ * @param {String} messageId - Message ID for tracking
  * @param {String} messageType - Message type (text, image, etc.)
  * @returns {Promise<Object>} - Promise that resolves with response
  */
-export const sendChatMessage = async (roomId, message, messageType = 'text') => {
+export const sendChatMessage = async (roomId, message, senderId, senderName, messageId, messageType = 'text') => {
   const socketInstance = await getSocket();
   
   if (!socketInstance) {
@@ -306,7 +312,10 @@ export const sendChatMessage = async (roomId, message, messageType = 'text') => 
       roomId,
       content: message,
       type: messageType,
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
+      id: messageId || Date.now().toString(), // Include messageId for tracking read receipts
+      sender: senderId,
+      senderName: senderName
     };
     
     socketInstance.emit('send_message', messageData, (response) => {
@@ -351,6 +360,109 @@ export const listenForChatMessages = async (onChatMessage) => {
   };
 };
 
+/**
+ * Send typing indicator status
+ * @param {String} roomId - Room ID (booking ID)
+ * @param {Boolean} isTyping - Whether the user is typing or stopped typing
+ * @returns {Promise<void>}
+ */
+export const sendTypingStatus = async (roomId, isTyping) => {
+  try {
+    const socketInstance = await getSocket();
+    
+    if (!socketInstance) {
+      console.error('[USER-APP] Socket not connected for typing status');
+      throw new Error('Socket not connected');
+    }
+    
+    const eventName = isTyping ? 'typing_started' : 'typing_stopped';
+    console.log(`[USER-APP] Emitting ${eventName} event with payload:`, { bookingId: roomId });
+    socketInstance.emit(eventName, { bookingId: roomId });
+    
+    return Promise.resolve();
+  } catch (error) {
+    console.error('Error sending typing status:', error);
+    return Promise.reject(error);
+  }
+};
+
+/**
+ * Listen for typing status changes
+ * @param {Function} onTypingStarted - Callback when typing starts
+ * @param {Function} onTypingStopped - Callback when typing stops
+ * @returns {Promise<Function>} - Cleanup function to remove listeners
+ */
+export const listenForTypingStatus = async (onTypingStarted, onTypingStopped) => {
+  try {
+    const socketInstance = await getSocket();
+    
+    if (!socketInstance) {
+      return () => {};
+    }
+    
+    socketInstance.on('typing_started', onTypingStarted);
+    socketInstance.on('typing_stopped', onTypingStopped);
+    
+    return () => {
+      if (socketInstance && socketInstance.connected) {
+        socketInstance.off('typing_started', onTypingStarted);
+        socketInstance.off('typing_stopped', onTypingStopped);
+      }
+    };
+  } catch (error) {
+    console.error('Error setting up typing status listeners:', error);
+    return () => {};
+  }
+};
+
+/**
+ * Mark a message as read
+ * @param {String} roomId - Room ID (booking ID)
+ * @param {String} messageId - ID of the message that was read
+ * @returns {Promise<void>}
+ */
+export const markMessageAsRead = async (roomId, messageId) => {
+  try {
+    const socketInstance = await getSocket();
+    
+    if (!socketInstance) {
+      throw new Error('Socket not connected');
+    }
+    
+    socketInstance.emit('message_read', { bookingId: roomId, messageId });
+    return Promise.resolve();
+  } catch (error) {
+    console.error('Error marking message as read:', error);
+    return Promise.reject(error);
+  }
+};
+
+/**
+ * Listen for message status updates (read receipts)
+ * @param {Function} onMessageStatusUpdate - Callback for status updates
+ * @returns {Promise<Function>} - Cleanup function to remove listener
+ */
+export const listenForMessageStatusUpdates = async (onMessageStatusUpdate) => {
+  try {
+    const socketInstance = await getSocket();
+    
+    if (!socketInstance) {
+      return () => {};
+    }
+    
+    socketInstance.on('message_status_update', onMessageStatusUpdate);
+    
+    return () => {
+      if (socketInstance && socketInstance.connected) {
+        socketInstance.off('message_status_update', onMessageStatusUpdate);
+      }
+    };
+  } catch (error) {
+    console.error('Error setting up message status listeners:', error);
+    return () => {};
+  }
+};
+
 export default {
   initSocket,
   getSocket,
@@ -363,5 +475,9 @@ export default {
   listenForStatusUpdates,
   listenForBookingStatusUpdates,
   sendChatMessage,
-  listenForChatMessages
+  listenForChatMessages,
+  sendTypingStatus,
+  listenForTypingStatus,
+  markMessageAsRead,
+  listenForMessageStatusUpdates
 };
