@@ -216,6 +216,10 @@
             try {
                 logWebRTC('MESSAGE', `Processing message: ${message.type}`);
                 
+                if (message.signal) {
+                    message = message.signal;
+                }
+                
                 switch (message.type) {
                     case 'init':
                         logWebRTC('INIT', `Received initialization data: userId=${message.userId}, bookingId=${message.bookingId}, sessionId=${message.sessionId}, roomId=${message.roomId}`);
@@ -290,6 +294,16 @@
                 sendToReactNative({ type: 'error', error: error.message });
             }
         };
+        
+        // Listen for messages from React Native
+        window.addEventListener('message', (event) => {
+            try {
+                const message = JSON.parse(event.data);
+                handleMessage(message);
+            } catch (error) {
+                logWebRTC('ERROR', `Failed to parse message: ${error.message}`);
+            }
+        });
         
         // Toggle mute
         document.getElementById('toggleMic').addEventListener('click', () => {

@@ -111,106 +111,65 @@ const VideoConsultationScreen = () => {
   useEffect(() => {
     if (!socket) {
       console.log('VideoConsultationScreen: Socket is NULL - this is a critical issue');
-    }
-  }, [socket]);
-
-  // Join consultation room when socket is available
-  useEffect(() => {
-    if (!socket) {
-      console.log('VideoConsultationScreen: Cannot join consultation room - socket is null');
       return;
     }
     
     if (!bookingId) {
-      console.log('VideoConsultationScreen: Cannot join consultation room - bookingId is null');
+      console.log('VideoConsultationScreen: Cannot proceed - bookingId is null');
       return;
     }
     
-    if (!socket.connected) {
-      console.log('VideoConsultationScreen: Socket exists but is not connected. Will attempt to connect.');
-      
-      // Set up a one-time connect event listener to emit events once connected
-      const onConnectHandler = () => {
-        console.log('VideoConsultationScreen: Socket connected, now attempting to join room and emit events');
-        attemptJoinAndEmitEvents();
-        socket.off('connect', onConnectHandler); // Remove the handler after it's used
-      };
-      
-      socket.on('connect', onConnectHandler);
-      return () => {
-        socket.off('connect', onConnectHandler);
-      };
-    } else {
-      console.log('VideoConsultationScreen: Socket is connected, proceeding with join and emit');
-      attemptJoinAndEmitEvents();
+    console.log('VideoConsultationScreen: Socket available:', !!socket);
+    console.log('VideoConsultationScreen: Socket connected:', socket?.connected);
+  }, [socket, bookingId]);
+
+  // Join consultation room when socket is available and connected
+  useEffect(() => {
+    if (!socket || !socket.connected || !bookingId) {
+      console.log('VideoConsultationScreen: Cannot join consultation room - socket not ready or missing bookingId');
+      return;
     }
     
-    function attemptJoinAndEmitEvents() {
-      console.log('VideoConsultationScreen: Socket is available, joining consultation room');
+    console.log('VideoConsultationScreen: Socket is connected, proceeding with room join');
+    
+    // Join the room for this consultation
+    socket.emit('join_consultation_room', { bookingId }, (response) => {
+      console.log(`VideoConsultationScreen: join_consultation_room response:`, response);
       
-      // Join the room for this consultation
-      socket.emit('join_consultation_room', { bookingId }, (response) => {
-        console.log(`VideoConsultationScreen: join_consultation_room response:`, response);
+      if (response && response.success) {
+        console.log(`VideoConsultationScreen: Successfully joined consultation room for booking: ${bookingId}`);
         
-        if (response && response.success) {
-          console.log(`VideoConsultationScreen: Successfully joined consultation room for booking: ${bookingId}`);
+        // Start session timer when user joins
+        console.log('VideoConsultationScreen: Starting session timer');
+        socket.emit('start_session_timer', { bookingId });
+        
+        // If we have eventData from PendingConsultationsScreen, emit the user_joined_consultation event
+        if (eventData) {
+          console.log('VideoConsultationScreen: Found eventData, emitting user_joined_consultation event');
           
-          // If we have eventData from PendingConsultationsScreen, it means the socket wasn't available there
-          // So we need to emit the user_joined_consultation event from here as a fallback
-          if (eventData) {
-            console.log('VideoConsultationScreen: Found eventData from PendingConsultationsScreen, attempting fallback event emission');
-            console.log('VideoConsultationScreen: eventData content:', JSON.stringify(eventData));
+          socket.emit('user_joined_consultation', eventData, (response) => {
+            console.log(`VideoConsultationScreen: user_joined_consultation response:`, response);
             
-            // First join the room
-            const roomId = eventData.roomId || `consultation:${bookingId}`;
-            console.log(`VideoConsultationScreen: Joining room: ${roomId}`);
-            
-            socket.emit('join_room', { bookingId }, (joinResponse) => {
-              console.log(`VideoConsultationScreen: join_room response:`, joinResponse);
-              
-              if (joinResponse && joinResponse.success) {
-                console.log(`VideoConsultationScreen: Successfully joined room for booking: ${bookingId}`);
-                
-                // Now emit the user_joined_consultation event
-                console.log('VideoConsultationScreen: Emitting user_joined_consultation event with data:', JSON.stringify(eventData));
-                socket.emit('user_joined_consultation', eventData, (response) => {
-                  console.log(`VideoConsultationScreen: user_joined_consultation response:`, response);
-                  
-                  if (response && response.success) {
-                    console.log('VideoConsultationScreen: Successfully notified astrologer about joining video consultation');
-                    
-                    // Also emit the alternate event as a fallback
-                    console.log('VideoConsultationScreen: Emitting join_consultation event as fallback');
-                    socket.emit('join_consultation', eventData);
-                    
-                    // Also emit direct notification to astrologer
-                    console.log('VideoConsultationScreen: Emitting direct_astrologer_notification event as fallback');
-                    socket.emit('direct_astrologer_notification', eventData);
-                  } else {
-                    console.error('VideoConsultationScreen: Failed to notify astrologer:', response?.error || 'Unknown error');
-                  }
-                });
-              } else {
-                console.error('VideoConsultationScreen: Failed to join room:', joinResponse?.error || 'Unknown error');
-              }
-            });
-          } else {
-            console.log('VideoConsultationScreen: No eventData available, skipping fallback emission');
-          }
-        } else {
-          console.error('VideoConsultationScreen: Failed to join consultation room:', response?.error || 'Unknown error');
+            if (response && response.success) {
+              console.log('VideoConsultationScreen: Successfully notified astrologer about joining video consultation');
+            } else {
+              console.error('VideoConsultationScreen: Failed to notify astrologer:', response?.error || 'Unknown error');
+            }
+          });
         }
-      });
-    }
+      } else {
+        console.error('VideoConsultationScreen: Failed to join consultation room:', response?.error || 'Unknown error');
+      }
+    });
     
     return () => {
       // Leave the room when component unmounts
-      if (socket) {
+      if (socket && socket.connected) {
         console.log(`VideoConsultationScreen: Leaving consultation room for booking: ${bookingId}`);
         socket.emit('leave_consultation_room', { bookingId });
       }
     };
-  }, [socket, bookingId, eventData]);
+  }, [socket?.connected, bookingId, eventData]);
 
   // Listen for session timer updates
   useEffect(() => {
@@ -237,9 +196,11 @@ const VideoConsultationScreen = () => {
     
     // Listen for incoming WebRTC signaling messages
     socket.on('signal', (data) => {
-      // Forward the signal to the WebView for processing
+      console.log('[USER-APP] Received signal from backend:', JSON.stringify(data, null, 2));
+      // Forward the complete signal data to the WebView for processing
       if (data.signal && webViewRef.current) {
-        sendMessageToWebView(data.signal);
+        console.log('[USER-APP] Forwarding signal to WebView:', data.signal.type);
+        sendMessageToWebView(data);
       }
     });
     
@@ -265,7 +226,11 @@ const VideoConsultationScreen = () => {
           return; // Don't process further
           
         case 'ready':
-          console.log('WebView ready, initializing WebRTC');
+          console.log('[USER-APP] WebView is ready, sending initialization data');
+          console.log('[USER-APP] Socket state - available:', !!socket, 'connected:', socket?.connected);
+          console.log('[USER-APP] Current user object:', JSON.stringify(user, null, 2));
+          console.log('[USER-APP] User role check:', user.role, 'equals user?', user.role === 'user');
+          
           // WebView is ready, send initial data
           sendMessageToWebView({
             type: 'init',
@@ -274,6 +239,9 @@ const VideoConsultationScreen = () => {
             sessionId,
             roomId
           });
+          
+          // User doesn't create offer, waits for astrologer's offer
+          console.log('[USER-APP] User app initialized, waiting for astrologer offer');
           break;
           
         case 'offer':
@@ -283,7 +251,9 @@ const VideoConsultationScreen = () => {
             socket.emit('signal', {
               roomId,
               sessionId,
-              signal: message.offer
+              bookingId,
+              signal: message,
+              to: 'astrologer'
             });
           }
           break;
@@ -295,7 +265,9 @@ const VideoConsultationScreen = () => {
             socket.emit('signal', {
               roomId,
               sessionId,
-              signal: message.answer
+              bookingId,
+              signal: message,
+              to: 'astrologer'
             });
           }
           break;
@@ -307,7 +279,9 @@ const VideoConsultationScreen = () => {
             socket.emit('signal', {
               roomId,
               sessionId,
-              signal: message.candidate
+              bookingId,
+              signal: message,
+              to: 'astrologer'
             });
           }
           break;
