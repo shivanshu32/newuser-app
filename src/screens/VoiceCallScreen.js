@@ -10,12 +10,13 @@ import {
 } from 'react-native';
 import { WebView } from 'react-native-webview';
 import { useRoute, useNavigation } from '@react-navigation/native';
-import { useSocket } from '../context/SocketContext';
+import { useSocket, SocketProvider } from '../context/SocketContext';
 import { useAuth } from '../context/AuthContext';
 import * as FileSystem from 'expo-file-system';
 import { Asset } from 'expo-asset';
 
-const VoiceCallScreen = () => {
+// Inner component that uses the socket context
+const VoiceCallScreenInner = () => {
   const route = useRoute();
   const navigation = useNavigation();
   const { socket } = useSocket();
@@ -30,6 +31,9 @@ const VoiceCallScreen = () => {
     duration: 0,
     currentAmount: 0
   });
+  const [isLocalWebRTCConnected, setIsLocalWebRTCConnected] = useState(false);
+  const [isRemoteWebRTCReadyForTimer, setIsRemoteWebRTCReadyForTimer] = useState(false);
+  const [isTimerStarted, setIsTimerStarted] = useState(false);
   
   // Get booking details from route params
   const { bookingId, sessionId, roomId, eventData } = route.params || {};
@@ -140,6 +144,14 @@ const VoiceCallScreen = () => {
         ]
       );
     };
+    
+    // Handle when the other client is ready for timer
+    const handleWebRTCClientReadyForTimer = (data) => {
+      console.log('[USER-APP] Remote client is ready for timer:', data);
+      if (data && data.bookingId === bookingId) {
+        setIsRemoteWebRTCReadyForTimer(true);
+      }
+    };
 
     // Add socket listeners
     socket.on('voice_call_offer', handleVoiceCallOffer);
@@ -147,6 +159,7 @@ const VoiceCallScreen = () => {
     socket.on('voice_ice_candidate', handleVoiceIceCandidate);
     socket.on('start_voice_call', handleStartVoiceCall);
     socket.on('voice_call_ended', handleVoiceCallEnded);
+    socket.on('webrtc_client_ready_for_timer', handleWebRTCClientReadyForTimer);
 
     // Cleanup listeners
     return () => {
@@ -155,13 +168,53 @@ const VoiceCallScreen = () => {
       socket.off('voice_ice_candidate', handleVoiceIceCandidate);
       socket.off('start_voice_call', handleStartVoiceCall);
       socket.off('voice_call_ended', handleVoiceCallEnded);
+      socket.off('webrtc_client_ready_for_timer', handleWebRTCClientReadyForTimer);
     };
-  }, [socket, navigation]);
+  }, [socket, navigation, bookingId]);
 
-  // Emit user joined consultation when component mounts
+  // Track socket connection state
+  const [socketReady, setSocketReady] = useState(false);
+  
+  // Monitor socket connection status
   useEffect(() => {
-    if (socket && bookingId && sessionId && roomId) {
-      console.log('[USER-APP] Joining consultation room first, then emitting user_joined_consultation');
+    if (socket) {
+      const checkSocketConnection = () => {
+        const isConnected = socket.connected;
+        console.log('[USER-APP] Socket connection status check:', isConnected);
+        setSocketReady(isConnected);
+        return isConnected;
+      };
+      
+      // Check initial connection state
+      const initiallyConnected = checkSocketConnection();
+      
+      // If not connected initially, set up a listener for the connect event
+      if (!initiallyConnected) {
+        console.log('[USER-APP] Socket not initially connected, setting up connect listener');
+        
+        const handleConnect = () => {
+          console.log('[USER-APP] Socket connected event fired');
+          setSocketReady(true);
+        };
+        
+        socket.on('connect', handleConnect);
+        
+        // Cleanup
+        return () => {
+          socket.off('connect', handleConnect);
+        };
+      }
+    } else {
+      console.log('[USER-APP] No socket instance available yet');
+      setSocketReady(false);
+    }
+  }, [socket]);
+  
+  // Emit user joined consultation when component mounts AND socket is ready
+  useEffect(() => {
+    // Only proceed if socket is ready and we have all required data
+    if (socketReady && socket && bookingId && sessionId && roomId) {
+      console.log('[USER-APP] Socket is ready! Joining consultation room');
       console.log('[USER-APP] Room details:', { bookingId, roomId, socketConnected: socket.connected });
       
       // First join the consultation room
@@ -192,8 +245,7 @@ const VoiceCallScreen = () => {
         console.log('[USER-APP] join_consultation_room timeout check - if no response logged above, the server may not be responding');
       }, 5000);
     } else {
-      console.error('[USER-APP] Cannot join consultation room - missing required data:', {
-        hasSocket: !!socket,
+      console.log('[USER-APP] Waiting for socket to be ready or missing required data:', {
         bookingId,
         sessionId,
         roomId,
@@ -240,6 +292,22 @@ const VoiceCallScreen = () => {
             roomId: roomId,
             fromUser: true
           });
+          break;
+          
+        case 'webrtc_local_connection_established':
+          console.log('[USER-APP] Local WebRTC connection established');
+          setIsLocalWebRTCConnected(true);
+          
+          // Notify the other client that we're ready for timer
+          if (socket && socket.connected) {
+            console.log('[USER-APP] Emitting webrtc_client_ready_for_timer');
+            socket.emit('webrtc_client_ready_for_timer', {
+              bookingId: bookingId,
+              sessionId: sessionId,
+              roomId: roomId,
+              fromUser: true
+            });
+          }
           break;
 
         case 'timer_update':
@@ -312,6 +380,20 @@ const VoiceCallScreen = () => {
 
     return () => backHandler.remove();
   }, [sessionInfo.duration]);
+  
+  // Effect to start timer when both sides are ready
+  useEffect(() => {
+    if (isLocalWebRTCConnected && isRemoteWebRTCReadyForTimer && !isTimerStarted && webViewRef.current) {
+      console.log('[USER-APP] Both clients ready, starting timer');
+      
+      // Tell the WebView to start the timer
+      webViewRef.current.postMessage(JSON.stringify({
+        type: 'start_the_timer'
+      }));
+      
+      setIsTimerStarted(true);
+    }
+  }, [isLocalWebRTCConnected, isRemoteWebRTCReadyForTimer, isTimerStarted]);
 
   if (loading) {
     return (
@@ -395,5 +477,19 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
 });
+
+// Outer component that provides the socket context
+const VoiceCallScreen = () => {
+  // Log for debugging navigation
+  useEffect(() => {
+    console.log('VoiceCallScreen: Outer component mounted');
+  }, []);
+
+  return (
+    <SocketProvider>
+      <VoiceCallScreenInner />
+    </SocketProvider>
+  );
+};
 
 export default VoiceCallScreen;

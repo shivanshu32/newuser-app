@@ -120,14 +120,13 @@ const PendingConsultationsScreen = ({ navigation }) => {
     // Remove from pending list
     removePendingConsultation(consultation.booking._id);
     
+    const bookingId = consultation.booking._id;
+    const sessionId = consultation.sessionId || bookingId; // Fallback to bookingId only if sessionId is missing
+    const roomId = `consultation:${bookingId}`;
+    
     // Check consultation type and navigate to appropriate screen
     if (consultation.booking.type === 'video') {
       // For video consultations, navigate to VideoConsultationScreen
-      const bookingId = consultation.booking._id;
-      // Use the REAL sessionId from the consultation data (received from backend)
-      // The backend creates a unique Session document and sends the sessionId in booking_status_update
-      const sessionId = consultation.sessionId || bookingId; // Fallback to bookingId only if sessionId is missing
-      const roomId = `consultation:${bookingId}`;
       
       // Prepare event data regardless of socket availability
       const eventData = {
@@ -140,7 +139,7 @@ const PendingConsultationsScreen = ({ navigation }) => {
         consultationType: 'video'  // Add this for backward compatibility
       };
       
-      console.log('PendingConsultationsScreen: Event data:', JSON.stringify(eventData));
+      console.log('PendingConsultationsScreen: Video call event data:', JSON.stringify(eventData));
       
       // Create consultation data object for emission and retry
       const consultationData = {
@@ -164,6 +163,77 @@ const PendingConsultationsScreen = ({ navigation }) => {
           roomId,
           eventData
         });
+      }
+    } else if (consultation.booking.type === 'voice') {
+      // For voice consultations, navigate to VoiceCallScreen
+      console.log('PendingConsultationsScreen: Handling voice call consultation');
+      
+      // Prepare event data for voice call
+      const eventData = {
+        bookingId,
+        userId: user?.id,
+        astrologerId: consultation.booking.astrologer,
+        sessionId,
+        roomId,
+        type: 'voice',
+        consultationType: 'voice'
+      };
+      
+      console.log('PendingConsultationsScreen: Voice call event data:', JSON.stringify(eventData));
+      
+      // IMPORTANT CHANGE: Navigate to VoiceCallScreen FIRST, then handle socket events
+      // This ensures the navigation happens regardless of socket callback issues
+      console.log('PendingConsultationsScreen: Navigating to VoiceCall screen FIRST');
+      try {
+        navigation.navigate('VoiceCall', {
+          bookingId,
+          sessionId,
+          roomId,
+          eventData
+        });
+        console.log('PendingConsultationsScreen: Navigation to VoiceCall initiated successfully');
+        
+        // After navigation, handle socket events if socket is available
+        if (socket && socket.connected) {
+          console.log(`PendingConsultationsScreen: Joining consultation room for voice call: ${bookingId}`);
+          
+          // Join the consultation room
+          console.log(`PendingConsultationsScreen: Emitting join_consultation_room with bookingId: ${bookingId}, roomId: ${roomId}`);
+          socket.emit('join_consultation_room', { bookingId, roomId }, (joinResponse) => {
+            if (joinResponse && joinResponse.success) {
+              console.log(`PendingConsultationsScreen: Successfully joined consultation room for voice call: ${bookingId}`);
+              
+              // Now emit user_joined_consultation event
+              console.log('PendingConsultationsScreen: Emitting user_joined_consultation for voice call');
+              console.log('PendingConsultationsScreen: Socket ID before emit:', socket.id);
+              console.log('PendingConsultationsScreen: Socket namespace:', socket.nsp?.name || 'unknown');
+              console.log('PendingConsultationsScreen: Socket auth:', JSON.stringify(socket.auth || {}));
+              
+              const eventData = {
+                bookingId: bookingId,
+                sessionId: sessionId,
+                roomId: roomId,
+                userId: user?.id,
+                astrologerId: consultation.booking.astrologer,
+                userName: user?.name,
+                consultationType: 'voice',
+                type: 'voice'
+              };
+              
+              console.log('PendingConsultationsScreen: user_joined_consultation payload:', JSON.stringify(eventData));
+              
+              socket.emit('user_joined_consultation', eventData, (response) => {
+                console.log('PendingConsultationsScreen: user_joined_consultation callback received:', JSON.stringify(response));
+              });
+            } else {
+              console.error('PendingConsultationsScreen: Failed to join consultation room for voice call:', joinResponse?.error || 'Unknown error');
+            }
+          });
+        } else {
+          console.error('PendingConsultationsScreen: Socket not available for voice call after navigation');
+        }
+      } catch (navError) {
+        console.error('PendingConsultationsScreen: Error navigating to VoiceCall:', navError);
       }
     } else {
       // For chat consultations, navigate to ChatScreen

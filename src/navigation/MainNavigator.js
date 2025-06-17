@@ -13,6 +13,7 @@ import AstrologerProfileScreen from '../screens/main/AstrologerProfileScreen';
 import PendingConsultationsScreen from '../screens/main/PendingConsultationsScreen';
 import ChatScreen from '../screens/session/ChatScreen';
 import VideoCallScreen from '../screens/session/VideoCallScreen';
+import VoiceCallScreen from '../screens/VoiceCallScreen';
 import RatingScreen from '../screens/session/RatingScreen';
 
 // Import components
@@ -134,6 +135,11 @@ const MainNavigator = () => {
         name="ConsultationRoom" 
         component={ChatScreen} 
         options={{ headerShown: true, title: 'Consultation Room' }}
+      />
+      <Stack.Screen 
+        name="VoiceCall" 
+        component={VoiceCallScreen} 
+        options={{ headerShown: true, title: 'Voice Consultation' }}
       />
     </Stack.Navigator>
   );
