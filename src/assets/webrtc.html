@@ -96,9 +96,23 @@
     <script>
         // Communication with React Native
         const sendToReactNative = (message) => {
+            console.log('[WebRTC] Sending message to React Native:', JSON.stringify(message));
             if (window.ReactNativeWebView) {
                 window.ReactNativeWebView.postMessage(JSON.stringify(message));
+            } else {
+                console.error('[WebRTC] ReactNativeWebView not available, cannot send message');
             }
+        };
+        
+        // Debug logger
+        const logWebRTC = (type, message) => {
+            const log = `[WebRTC][${type}] ${message}`;
+            console.log(log);
+            // Also send logs to React Native for debugging
+            sendToReactNative({
+                type: 'log',
+                log: log
+            });
         };
 
         // Variables
@@ -127,6 +141,8 @@
         // Initialize WebRTC
         const initWebRTC = async () => {
             try {
+                logWebRTC('INIT', 'Initializing WebRTC...');
+                
                 // Get user media
                 localStream = await navigator.mediaDevices.getUserMedia({
                     audio: true,
@@ -137,7 +153,11 @@
                     }
                 });
                 
-                document.getElementById('localVideo').srcObject = localStream;
+                logWebRTC('MEDIA', 'Got local media stream');
+                
+                // Set local video source
+                const localVideo = document.getElementById('localVideo');
+                localVideo.srcObject = localStream;
                 
                 // Create peer connection
                 const configuration = {
@@ -149,10 +169,17 @@
                 
                 peerConnection = new RTCPeerConnection(configuration);
                 
-                // Add local stream tracks to peer connection
+                // Add local stream to peer connection
                 localStream.getTracks().forEach(track => {
                     peerConnection.addTrack(track, localStream);
                 });
+                
+                // Handle remote stream
+                peerConnection.ontrack = (event) => {
+                    logWebRTC('PEER', 'Received remote stream');
+                    const remoteVideo = document.getElementById('remoteVideo');
+                    remoteVideo.srcObject = event.streams[0];
+                };
                 
                 // Handle ICE candidates
                 peerConnection.onicecandidate = (event) => {
@@ -166,40 +193,51 @@
                 
                 // Handle connection state changes
                 peerConnection.onconnectionstatechange = () => {
-                    if (peerConnection.connectionState === 'connected') {
-                        startTimer();
+                    logWebRTC('PEER', `Connection state: ${peerConnection.connectionState}`);
+                    if (peerConnection.connectionState === 'failed') {
+                        logWebRTC('ERROR', 'Peer connection failed');
                     }
                 };
                 
-                // Handle remote stream
-                peerConnection.ontrack = (event) => {
-                    if (event.streams && event.streams[0]) {
-                        document.getElementById('remoteVideo').srcObject = event.streams[0];
-                    }
-                };
-                
-                // Listen for messages from React Native
-                window.addEventListener('message', (event) => {
-                    const message = JSON.parse(event.data);
-                    handleMessage(message);
-                });
-                
-                // Create offer (if initiator)
+                // Notify React Native that WebRTC is ready
                 sendToReactNative({ type: 'ready' });
                 
             } catch (error) {
-                console.error('Error initializing WebRTC:', error);
-                sendToReactNative({ type: 'error', error: error.message });
+                logWebRTC('ERROR', `Failed to initialize WebRTC: ${error.message}`);
+                sendToReactNative({ 
+                    type: 'error', 
+                    error: `Failed to initialize: ${error.message}` 
+                });
             }
         };
         
         // Handle messages from React Native
         const handleMessage = async (message) => {
             try {
+                logWebRTC('MESSAGE', `Processing message: ${message.type}`);
+                
                 switch (message.type) {
+                    case 'init':
+                        logWebRTC('INIT', `Received initialization data: userId=${message.userId}, bookingId=${message.bookingId}, sessionId=${message.sessionId}, roomId=${message.roomId}`);
+                        // Store initialization data for later use if needed
+                        window.initData = {
+                            userId: message.userId,
+                            bookingId: message.bookingId,
+                            sessionId: message.sessionId,
+                            roomId: message.roomId
+                        };
+                        logWebRTC('INIT', 'Initialization data stored successfully');
+                        break;
+                        
                     case 'create-offer':
+                        logWebRTC('SIGNALING', 'Creating offer as requested');
                         const offer = await peerConnection.createOffer();
+                        logWebRTC('SIGNALING', `Offer created: ${JSON.stringify(offer).substring(0, 100)}...`);
+                        
+                        logWebRTC('SIGNALING', 'Setting local description (offer)');
                         await peerConnection.setLocalDescription(offer);
+                        logWebRTC('SIGNALING', `Local description set, state: ${peerConnection.signalingState}`);
+                        
                         sendToReactNative({
                             type: 'offer',
                             offer: peerConnection.localDescription
@@ -207,9 +245,19 @@
                         break;
                         
                     case 'offer':
+                        logWebRTC('SIGNALING', 'Received offer from remote peer');
+                        logWebRTC('SIGNALING', `Setting remote description (offer), current state: ${peerConnection.signalingState}`);
                         await peerConnection.setRemoteDescription(new RTCSessionDescription(message.offer));
+                        logWebRTC('SIGNALING', `Remote description set, new state: ${peerConnection.signalingState}`);
+                        
+                        logWebRTC('SIGNALING', 'Creating answer');
                         const answer = await peerConnection.createAnswer();
+                        logWebRTC('SIGNALING', `Answer created: ${JSON.stringify(answer).substring(0, 100)}...`);
+                        
+                        logWebRTC('SIGNALING', 'Setting local description (answer)');
                         await peerConnection.setLocalDescription(answer);
+                        logWebRTC('SIGNALING', `Local description set, state: ${peerConnection.signalingState}`);
+                        
                         sendToReactNative({
                             type: 'answer',
                             answer: peerConnection.localDescription
@@ -217,19 +265,28 @@
                         break;
                         
                     case 'answer':
+                        logWebRTC('SIGNALING', 'Received answer from remote peer');
+                        logWebRTC('SIGNALING', `Setting remote description (answer), current state: ${peerConnection.signalingState}`);
                         await peerConnection.setRemoteDescription(new RTCSessionDescription(message.answer));
+                        logWebRTC('SIGNALING', `Remote description set, new state: ${peerConnection.signalingState}`);
                         break;
                         
                     case 'ice-candidate':
+                        logWebRTC('ICE', `Received ICE candidate: ${JSON.stringify(message.candidate).substring(0, 100)}...`);
                         await peerConnection.addIceCandidate(new RTCIceCandidate(message.candidate));
+                        logWebRTC('ICE', 'Added remote ICE candidate');
                         break;
                         
                     case 'end-call':
+                        logWebRTC('CALL', 'Received end-call request');
                         endCall();
                         break;
+                        
+                    default:
+                        logWebRTC('MESSAGE', `Unknown message type: ${message.type}`);
                 }
             } catch (error) {
-                console.error('Error handling message:', error);
+                logWebRTC('ERROR', `Error handling message (${message.type}): ${error.message}`);
                 sendToReactNative({ type: 'error', error: error.message });
             }
         };
@@ -264,22 +321,36 @@
         });
         
         const endCall = () => {
-            if (peerConnection) {
-                peerConnection.close();
-            }
+            logWebRTC('CALL', 'Ending call');
             
+            // Stop all tracks
             if (localStream) {
-                localStream.getTracks().forEach(track => track.stop());
+                logWebRTC('MEDIA', `Stopping ${localStream.getTracks().length} local tracks`);
+                localStream.getTracks().forEach(track => {
+                    track.stop();
+                    logWebRTC('MEDIA', `Stopped ${track.kind} track`);
+                });
+            } else {
+                logWebRTC('MEDIA', 'No local stream to stop');
             }
             
-            if (timerInterval) {
-                clearInterval(timerInterval);
+            // Close peer connection
+            if (peerConnection) {
+                logWebRTC('PEER', `Closing peer connection (state: ${peerConnection.connectionState})`);
+                peerConnection.close();
+                logWebRTC('PEER', 'Peer connection closed');
+            } else {
+                logWebRTC('PEER', 'No peer connection to close');
             }
             
-            sendToReactNative({ 
-                type: 'call-ended', 
-                sessionDuration: sessionTime 
-            });
+            // Clear video elements
+            document.getElementById('localVideo').srcObject = null;
+            document.getElementById('remoteVideo').srcObject = null;
+            logWebRTC('MEDIA', 'Cleared video elements');
+            
+            // Notify React Native
+            logWebRTC('CALL', 'Sending call-ended notification to React Native');
+            sendToReactNative({ type: 'call-ended', sessionDuration: sessionTime });
         };
         
         // Initialize when page loads

@@ -24,6 +24,10 @@ const AstrologerProfileScreen = ({ route, navigation }) => {
   const [error, setError] = useState(null);
   const [bookingStatus, setBookingStatus] = useState(null); // null, 'pending', 'accepted', 'rejected'
   const [currentBookingId, setCurrentBookingId] = useState(null);
+  
+  // Use refs for values that need to persist across renders and be immune to stale closures
+  const currentBookingIdRef = useRef(null);
+  const currentBookingTypeRef = useRef(null);
   const statusListenerCleanup = useRef(null);
   
   // State for consultation notification
@@ -47,6 +51,26 @@ const AstrologerProfileScreen = ({ route, navigation }) => {
     };
   }, []);
   
+  // Reset booking state when booking status changes to accepted or rejected
+  useEffect(() => {
+    if (bookingStatus === 'accepted' || bookingStatus === 'rejected') {
+      // Add a small delay to ensure all processing is complete
+      const timer = setTimeout(() => {
+        // Reset state variables
+        setCurrentBookingId(null);
+        setBookingStatus(null);
+        
+        // Reset ref variables
+        currentBookingIdRef.current = null;
+        currentBookingTypeRef.current = null;
+        
+        console.log('Reset booking state after status:', bookingStatus);
+      }, 2000); // 2 second delay
+      
+      return () => clearTimeout(timer);
+    }
+  }, [bookingStatus]);
+  
   // Set up listener for booking status updates
   const setupBookingStatusListener = async () => {
     try {
@@ -61,8 +85,8 @@ const AstrologerProfileScreen = ({ route, navigation }) => {
   const handleBookingStatusUpdate = (data) => {
     console.log('Received booking status update:', data.status);
     
-    // Check both state and global variable for booking ID
-    const effectiveBookingId = currentBookingId || global.currentPendingBookingId;
+    // Check ref first, then state for booking ID
+    const effectiveBookingId = currentBookingIdRef.current || currentBookingId;
     
     // Only process updates for the current booking
     if (effectiveBookingId && data.bookingId === effectiveBookingId) {
@@ -78,13 +102,17 @@ const AstrologerProfileScreen = ({ route, navigation }) => {
             rates: astrologer?.rates || { chat: 0, voice: 0, video: 0 }
           };
           
+          // Use the ref value which is immune to stale closures
+          const bookingType = currentBookingTypeRef.current || data.type || 'chat';
+          console.log('Using booking type for consultation:', bookingType);
+          
           // Store consultation data for later use with safe values
           const consultationData = {
             booking: {
               _id: data.bookingId,
               astrologer: safeAstrologer,
-              type: data.type || 'chat', // Default to chat if type is not provided
-              rate: safeAstrologer.rates[data.type || 'chat'] || 0
+              type: bookingType, // Use the tracked booking type from ref
+              rate: safeAstrologer.rates[bookingType] || 0
             },
             roomId: data.roomId,
             sessionId: data.sessionId
@@ -324,17 +352,19 @@ const AstrologerProfileScreen = ({ route, navigation }) => {
                 console.log('Prepared booking data:', JSON.stringify(bookingData));
                 console.log('Calling initiateRealTimeBooking...');
                 
+                // Store the booking type in ref for later use
+                currentBookingTypeRef.current = type;
+                console.log('Setting current booking type ref:', type);
+                
                 // Send booking request via socket
                 const response = await initiateRealTimeBooking(bookingData);
                 
                 // Store the booking ID for tracking status updates
                 if (response && response.bookingId) {
+                  // Update both state and ref
                   setCurrentBookingId(response.bookingId);
+                  currentBookingIdRef.current = response.bookingId;
                   setBookingStatus('pending');
-                  
-                  // Force update the booking ID in a local variable to ensure it's available immediately
-                  // for any status updates that arrive quickly
-                  global.currentPendingBookingId = response.bookingId;
                 }
                 
                 // The actual status updates will be handled by the socket listener

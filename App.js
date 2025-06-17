@@ -11,6 +11,7 @@ import MainNavigator from './src/navigation/MainNavigator';
 // Import context
 import { AuthProvider, useAuth } from './src/context/AuthContext';
 import { NotificationProvider } from './src/context/NotificationContext';
+import { SocketProvider } from './src/context/SocketContext';
 
 // Create a wrapper component that uses the AuthContext
 function AppContent() {
@@ -35,9 +36,11 @@ export default function App() {
       <SafeAreaProvider>
         <StatusBar style="auto" />
         <AuthProvider>
-          <NotificationProvider>
-            <AppContent />
-          </NotificationProvider>
+          <SocketProvider>
+            <NotificationProvider>
+              <AppContent />
+            </NotificationProvider>
+          </SocketProvider>
         </AuthProvider>
       </SafeAreaProvider>
     </NavigationContainer>

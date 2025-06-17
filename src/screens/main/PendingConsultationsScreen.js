@@ -10,9 +10,13 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { getPendingConsultations, removePendingConsultation } from '../../utils/pendingConsultationsStore';
+import { useSocket } from '../../context/SocketContext';
+import { useAuth } from '../../context/AuthContext';
 
 const PendingConsultationsScreen = ({ navigation }) => {
   const [consultations, setConsultations] = useState([]);
+  const { socket } = useSocket();
+  const { user } = useAuth();
 
   // Load pending consultations when the screen is focused
   useEffect(() => {
@@ -34,12 +38,140 @@ const PendingConsultationsScreen = ({ navigation }) => {
     setConsultations(pendingConsultations);
   };
 
+  // Initialize socket connection if needed and monitor socket status
+  useEffect(() => {
+    if (!socket && user) {
+      console.log('PendingConsultationsScreen: Socket not initialized, attempting to initialize from context');
+      // The useSocket hook should handle initialization, but we'll log this for debugging
+    } else if (socket) {
+      console.log('PendingConsultationsScreen: Socket is available, connected status:', socket.connected);
+      console.log('PendingConsultationsScreen: Socket ID:', socket.id || 'No ID available');
+    }
+  }, [socket, user]);
+  
+  // Store pending video consultation data for retry mechanism
+  const [pendingVideoConsultation, setPendingVideoConsultation] = useState(null);
+  
+  // Retry emitting user_joined_consultation event when socket becomes available
+  useEffect(() => {
+    if (pendingVideoConsultation && socket && socket.connected) {
+      console.log('PendingConsultationsScreen: Socket now available and connected, attempting to emit pending event');
+      emitUserJoinedConsultation(pendingVideoConsultation);
+    }
+  }, [socket, pendingVideoConsultation]);
+
+  // Function to emit user_joined_consultation event
+  const emitUserJoinedConsultation = (consultationData) => {
+    const { bookingId, eventData, roomId } = consultationData;
+    
+    if (!socket || !socket.connected) {
+      console.error('emitUserJoinedConsultation: Socket not available or not connected, storing for retry');
+      setPendingVideoConsultation(consultationData);
+      return false;
+    }
+    
+    console.log(`emitUserJoinedConsultation: Emitting user_joined_consultation event for booking: ${bookingId}, type: video`);
+    console.log('emitUserJoinedConsultation: Socket connected:', socket.connected);
+    
+    // First join the room
+    console.log(`emitUserJoinedConsultation: Joining room: ${roomId}`);
+    socket.emit('join_room', { bookingId }, (joinResponse) => {
+      if (joinResponse && joinResponse.success) {
+        console.log(`emitUserJoinedConsultation: Successfully joined room for booking: ${bookingId}`);
+        
+        // Now emit the user_joined_consultation event
+        console.log('emitUserJoinedConsultation: Emitting user_joined_consultation event');
+        socket.emit('user_joined_consultation', eventData, (response) => {
+          if (response && response.success) {
+            console.log('emitUserJoinedConsultation: Successfully notified astrologer about joining video consultation');
+            
+            // Also emit the alternate event as a fallback
+            console.log('emitUserJoinedConsultation: Emitting join_consultation event as fallback');
+            socket.emit('join_consultation', eventData);
+            
+            // Also emit direct notification to astrologer
+            console.log('emitUserJoinedConsultation: Emitting direct_astrologer_notification event as fallback');
+            socket.emit('direct_astrologer_notification', eventData);
+            
+            // Clear the pending consultation since we've successfully emitted the event
+            setPendingVideoConsultation(null);
+            
+            // Navigate to VideoCall screen after getting the real sessionId from backend
+            navigation.navigate('VideoCall', {
+              bookingId,
+              sessionId: eventData.sessionId,
+              roomId,
+              eventData
+            });
+          } else {
+            console.error('emitUserJoinedConsultation: Failed to notify astrologer:', response?.error || 'Unknown error');
+          }
+        });
+      } else {
+        console.error('emitUserJoinedConsultation: Failed to join room:', joinResponse?.error || 'Unknown error');
+      }
+    });
+    
+    return true;
+  };
+  
   const handleJoinConsultation = (consultation) => {
-    console.log('Joining consultation:', consultation.booking._id);
+    console.log('Joining consultation:', consultation.booking._id, 'Type:', consultation.booking.type);
     // Remove from pending list
     removePendingConsultation(consultation.booking._id);
-    // Navigate to consultation room
-    navigation.navigate('ConsultationRoom', consultation);
+    
+    // Check consultation type and navigate to appropriate screen
+    if (consultation.booking.type === 'video') {
+      // For video consultations, navigate to VideoConsultationScreen
+      const bookingId = consultation.booking._id;
+      // Use the REAL sessionId from the consultation data (received from backend)
+      // The backend creates a unique Session document and sends the sessionId in booking_status_update
+      const sessionId = consultation.sessionId || bookingId; // Fallback to bookingId only if sessionId is missing
+      const roomId = `consultation:${bookingId}`;
+      
+      // Prepare event data regardless of socket availability
+      const eventData = {
+        bookingId,
+        userId: user?.id,
+        astrologerId: consultation.booking.astrologer,
+        sessionId,
+        roomId,
+        type: 'video',  // Explicitly set the consultation type
+        consultationType: 'video'  // Add this for backward compatibility
+      };
+      
+      console.log('PendingConsultationsScreen: Event data:', JSON.stringify(eventData));
+      
+      // Create consultation data object for emission and retry
+      const consultationData = {
+        bookingId,
+        eventData,
+        roomId
+      };
+      
+      // Don't navigate immediately - wait for the real sessionId from backend
+      // The navigation will happen in the emitUserJoinedConsultation callback
+      
+      // Attempt to emit user_joined_consultation event
+      const emitSuccess = emitUserJoinedConsultation(consultationData);
+      
+      if (!emitSuccess) {
+        console.log('PendingConsultationsScreen: Event emission queued for retry when socket is available');
+        // If socket is not available, navigate with the current sessionId as fallback
+        navigation.navigate('VideoCall', {
+          bookingId,
+          sessionId,
+          roomId,
+          eventData
+        });
+      }
+    } else {
+      // For chat consultations, navigate to ChatScreen
+      navigation.navigate('Chat', {
+        booking: consultation.booking,
+        bookingId: consultation.booking._id
+      });
+    }
   };
 
   const renderConsultationItem = ({ item }) => {
