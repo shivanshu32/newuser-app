@@ -308,18 +308,26 @@ export const sendChatMessage = async (roomId, message, senderId, senderName, mes
   }
   
   return new Promise((resolve, reject) => {
+    // Ensure we have a valid messageId
+    if (!messageId) {
+      console.error('Missing messageId when sending message');
+      messageId = Date.now().toString();
+    }
+    
     const messageData = {
       roomId,
       content: message,
       type: messageType,
       timestamp: new Date().toISOString(),
-      id: messageId || Date.now().toString(), // Include messageId for tracking read receipts
+      id: messageId, // Always use the provided messageId, no fallback to ensure consistency
+      messageId: messageId, // IMPORTANT: Also include as messageId to ensure consistency
       sender: senderId,
       senderName: senderName
     };
     
     socketInstance.emit('send_message', messageData, (response) => {
       if (response && response.success) {
+        // Message sent successfully
         resolve(response);
       } else {
         reject(new Error(response?.message || 'Failed to send message'));
@@ -346,6 +354,11 @@ export const listenForChatMessages = async (onChatMessage) => {
   }
   
   const messageHandler = (data) => {
+    // Ensure message has an ID to maintain consistency across apps
+    if (!data.id) {
+      console.error('Received message without ID');
+    }
+    
     if (onChatMessage && typeof onChatMessage === 'function') {
       onChatMessage(data);
     }

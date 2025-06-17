@@ -229,30 +229,40 @@ const ChatScreen = ({ route, navigation }) => {
     
     // Listen for incoming messages
     socketRef.current.on('receive_message', (message) => {
-      console.log('[USER-APP] Received message:', message);
+      // Received message from server
       if (message.roomId === bookingId) {
         // Check if this is our own message (sent by current user)
-        const isOwnMessage = message.sender === 'user' || message.senderRole === 'user';
+        const isOwnMessage = message.sender === user.id || 
+                           message.senderId === user.id || 
+                           message.senderRole === 'user';
         
         // Skip adding our own messages as they're already added when sending
         if (isOwnMessage) {
-          console.log('[USER-APP] Skipping own message:', message.id);
+          // Skip adding our own messages as they're already added when sending
           return;
         }
         
+        // IMPORTANT: Always use the original message.id sent by the server
+        // This ensures consistency between sender and receiver for read receipts
+        if (!message.id) {
+          console.error('[USER-APP] Received message without ID, generating one:', message);
+        }
+        
         const newMessage = {
-          id: message.id || Date.now().toString(),
-          senderId: message.sender,
-          senderName: message.senderRole === 'user' ? 'User' : 'Astrologer',
-          text: message.content,
+          id: message.id, // Always use the original ID, no fallback to ensure consistency
+          senderId: message.sender || message.senderId,
+          sender: message.senderRole || 'astrologer', // For backward compatibility
+          senderName: message.senderName || 'Astrologer',
+          text: message.content || message.text,
           timestamp: message.timestamp || new Date().toISOString(),
           status: 'sent' // Initial status is 'sent'
         };
         
-        console.log('[USER-APP] Adding message from astrologer:', newMessage);
+        // Add message from astrologer to state
         setMessages(prevMessages => [...prevMessages, newMessage]);
         
         // If the message is from the astrologer, mark it as read
+        // Mark message as read
         socketRef.current.emit('message_read', {
           bookingId,
           messageId: newMessage.id
@@ -262,32 +272,34 @@ const ChatScreen = ({ route, navigation }) => {
     
     // Listen for typing indicators
     socketRef.current.on('typing_started', (data) => {
-      console.log('[USER-APP] Received typing_started event:', data);
+      // Received typing started event
       if (data.bookingId === bookingId) {
-        console.log('[USER-APP] Setting astrologer typing to TRUE');
         setIsAstrologerTyping(true);
       }
     });
     
     socketRef.current.on('typing_stopped', (data) => {
-      console.log('[USER-APP] Received typing_stopped event:', data);
+      // Received typing stopped event
       if (data.bookingId === bookingId) {
-        console.log('[USER-APP] Setting astrologer typing to FALSE');
         setIsAstrologerTyping(false);
       }
     });
     
     // Listen for message status updates (read receipts)
     socketRef.current.on('message_status_update', (data) => {
-      console.log('[USER-APP] Received message_status_update:', data);
+      // Received message status update
       if (data.bookingId === bookingId) {
         // Update message status to 'read' when receiving read receipt
-        setMessages(prevMessages => 
-          prevMessages.map(msg => 
-            msg.id === data.messageId ? { ...msg, status: 'read' } : msg
-          )
-        );
-        console.log('[USER-APP] Updated message status to read for message:', data.messageId);
+        setMessages(prevMessages => {
+          const updatedMessages = prevMessages.map(msg => {
+            if (msg.id === data.messageId) {
+              // Update message status to read
+              return { ...msg, status: 'read' };
+            }
+            return msg;
+          });
+          return updatedMessages;
+        });
       }
     });
     
@@ -326,44 +338,58 @@ const ChatScreen = ({ route, navigation }) => {
       return;
     }
     
-    // Capture the trimmed input text before clearing it
-    const messageText = inputText.trim();
-    
+    // Generate a unique ID for the message
     const messageId = Date.now().toString();
+    
+    // Create the message object
     const newMessage = {
       id: messageId,
-      sender: 'user',
-      text: messageText,
+      senderId: user.id,  // Use consistent field name
+      sender: 'user',     // Keep for backward compatibility
+      senderName: user?.name || 'User',
+      text: inputText.trim(),
       timestamp: new Date().toISOString(),
       status: 'sending' // Initial status is 'sending'
     };
     
-    // Add message to local state and clear input
+    // Add message to local state
     setMessages(prevMessages => [...prevMessages, newMessage]);
+    
+    // Clear input field
     setInputText('');
     
     // Send typing_stopped event when sending a message
     socketRef.current.emit('typing_stopped', { bookingId });
     
     try {
-      // Use the updated socketService.sendChatMessage function
+      // Send message via socket
       await socketService.sendChatMessage(
         bookingId,
-        messageText,
-        'user', // senderId
-        'User', // senderName
-        messageId,
-        'text' // messageType
+        newMessage.text,
+        user.id,
+        user.name || 'User',
+        messageId
       );
       
-      // Update message status to 'sent' when server acknowledges
-      setMessages(prevMessages => 
-        prevMessages.map(msg => 
+      // Update message status to 'sent'
+      setMessages(prevMessages =>
+        prevMessages.map(msg =>
           msg.id === messageId ? { ...msg, status: 'sent' } : msg
         )
       );
+      // Message sent, update status to sent
     } catch (error) {
-      console.error('Failed to send message:', error);
+      console.error('Error sending message:', error);
+      
+      // Update message status to show error
+      setMessages(prevMessages =>
+        prevMessages.map(msg =>
+          msg.id === messageId ? { ...msg, status: 'error' } : msg
+        )
+      );
+      
+      // Show error alert
+      Alert.alert('Error', 'Failed to send message. Please try again.');
     }
   };
   
@@ -375,7 +401,7 @@ const ChatScreen = ({ route, navigation }) => {
     if (!sessionActive) return;
     
     // Send typing_started event with more complete payload
-    console.log('[USER-APP] Emitting typing_started event for bookingId:', bookingId);
+    // Emit typing started event
     socketRef.current.emit('typing_started', { 
       bookingId,
       roomId: bookingId,
@@ -390,7 +416,6 @@ const ChatScreen = ({ route, navigation }) => {
     
     // Set a new timeout to emit typing_stopped after 1 second of inactivity
     typingTimeoutRef.current = setTimeout(() => {
-      console.log('[USER-APP] Emitting typing_stopped event for bookingId:', bookingId);
       socketRef.current.emit('typing_stopped', { 
         bookingId,
         roomId: bookingId,
@@ -479,11 +504,14 @@ const ChatScreen = ({ route, navigation }) => {
   };
 
   const renderMessage = ({ item }) => {
-    const isUser = item.sender === 'user';
+    // Check if message is from the current user (more reliable check)
+    const isUser = item.senderId === user.id || item.sender === 'user';
     
     // Render status indicators for user messages
     const renderStatusIndicator = () => {
       if (!isUser) return null;
+      
+      // Render message with status
       
       switch (item.status) {
         case 'sending':
@@ -498,7 +526,7 @@ const ChatScreen = ({ route, navigation }) => {
             </View>
           );
         default:
-          return null;
+          return <Ionicons name="checkmark-outline" size={12} color="#888" style={styles.statusIcon} />;
       }
     };
     
