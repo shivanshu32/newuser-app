@@ -17,14 +17,18 @@
     ],
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.jyotishcall.user"
+      "bundleIdentifier": "com.jyotishcall.user",
+      "infoPlist": {
+        "NSMicrophoneUsageDescription": "Allow Jyotish Call to access your microphone for voice consultations with astrologers"
+      }
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/icon-square.svg",
         "backgroundColor": "#ffffff"
       },
-      "package": "com.jyotishcall.user"
+      "package": "com.jyotishcall.user",
+      "permissions": ["RECORD_AUDIO", "MODIFY_AUDIO_SETTINGS"]
     },
     "web": {
       "favicon": "./assets/splash.png"

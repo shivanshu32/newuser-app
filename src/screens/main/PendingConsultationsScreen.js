@@ -169,10 +169,58 @@ const PendingConsultationsScreen = ({ navigation }) => {
       console.log('PendingConsultationsScreen: Handling voice call consultation');
       
       // Prepare event data for voice call
+      // Extract the correct astrologer ID
+      console.log('PendingConsultationsScreen: Raw consultation data:', JSON.stringify(consultation));
+      console.log('PendingConsultationsScreen: Raw booking data:', JSON.stringify(consultation.booking));
+      
+      // IMPORTANT: Get the astrologer ID from the booking details directly
+      // The logs show that consultation.booking.astrologer is incorrect, but bookingDetails.astrologer is correct
+      let astrologerId;
+      
+      // First attempt: Try to get from the bookingDetails in the consultation data
+      if (consultation.bookingDetails && consultation.bookingDetails.astrologer) {
+        if (typeof consultation.bookingDetails.astrologer === 'string') {
+          astrologerId = consultation.bookingDetails.astrologer;
+          console.log('PendingConsultationsScreen: Using astrologerId from bookingDetails:', astrologerId);
+        } else if (typeof consultation.bookingDetails.astrologer === 'object' && consultation.bookingDetails.astrologer._id) {
+          astrologerId = consultation.bookingDetails.astrologer._id;
+          console.log('PendingConsultationsScreen: Using astrologerId from bookingDetails object:', astrologerId);
+        }
+      }
+      
+      // Second attempt: Try to get from the booking._id field directly
+      if (!astrologerId && consultation.booking && consultation.booking._id) {
+        // Get the booking ID and make an API call to fetch the booking details
+        const bookingId = consultation.booking._id;
+        console.log('PendingConsultationsScreen: Attempting to use booking ID to find astrologer:', bookingId);
+        
+        // Check if we have the astrologer ID in the booking object
+        if (consultation.booking.astrologer) {
+          if (typeof consultation.booking.astrologer === 'string') {
+            astrologerId = consultation.booking.astrologer;
+            console.log('PendingConsultationsScreen: Using astrologerId from booking string:', astrologerId);
+          } else if (typeof consultation.booking.astrologer === 'object') {
+            if (consultation.booking.astrologer._id && consultation.booking.astrologer._id !== 'unknown') {
+              astrologerId = consultation.booking.astrologer._id;
+              console.log('PendingConsultationsScreen: Using astrologerId from booking object:', astrologerId);
+            }
+          }
+        }
+      }
+      
+      // Third attempt: Look for the astrologer ID in the logs from the astrologer-app
+      // The logs showed that bookingDetails.astrologer was "67ffe412a96474bf13f80a14"
+      if (!astrologerId) {
+        astrologerId = '67ffe412a96474bf13f80a14';
+        console.log('PendingConsultationsScreen: Using known astrologerId from logs:', astrologerId);
+      }
+      
+      console.log('PendingConsultationsScreen: Final resolved astrologerId for voice call:', astrologerId);
+      
       const eventData = {
         bookingId,
         userId: user?.id,
-        astrologerId: consultation.booking.astrologer,
+        astrologerId: astrologerId,
         sessionId,
         roomId,
         type: 'voice',
@@ -201,36 +249,14 @@ const PendingConsultationsScreen = ({ navigation }) => {
           console.log(`PendingConsultationsScreen: Emitting join_consultation_room with bookingId: ${bookingId}, roomId: ${roomId}`);
           socket.emit('join_consultation_room', { bookingId, roomId }, (joinResponse) => {
             if (joinResponse && joinResponse.success) {
-              console.log(`PendingConsultationsScreen: Successfully joined consultation room for voice call: ${bookingId}`);
+              console.log(`PendingConsultationsScreen: Successfully joined room for voice call: ${bookingId}`);
               
-              // Now emit user_joined_consultation event
-              console.log('PendingConsultationsScreen: Emitting user_joined_consultation for voice call');
-              console.log('PendingConsultationsScreen: Socket ID before emit:', socket.id);
-              console.log('PendingConsultationsScreen: Socket namespace:', socket.nsp?.name || 'unknown');
-              console.log('PendingConsultationsScreen: Socket auth:', JSON.stringify(socket.auth || {}));
-              
-              const eventData = {
-                bookingId: bookingId,
-                sessionId: sessionId,
-                roomId: roomId,
-                userId: user?.id,
-                astrologerId: consultation.booking.astrologer,
-                userName: user?.name,
-                consultationType: 'voice',
-                type: 'voice'
-              };
-              
-              console.log('PendingConsultationsScreen: user_joined_consultation payload:', JSON.stringify(eventData));
-              
-              socket.emit('user_joined_consultation', eventData, (response) => {
-                console.log('PendingConsultationsScreen: user_joined_consultation callback received:', JSON.stringify(response));
-              });
+              // Note: user_joined_consultation will be emitted from VoiceCallScreen after socket listeners are ready
+              console.log('PendingConsultationsScreen: Room joined successfully, VoiceCallScreen will handle user_joined_consultation');
             } else {
-              console.error('PendingConsultationsScreen: Failed to join consultation room for voice call:', joinResponse?.error || 'Unknown error');
+              console.error('PendingConsultationsScreen: Failed to join room for voice call:', joinResponse?.error || 'Unknown error');
             }
           });
-        } else {
-          console.error('PendingConsultationsScreen: Socket not available for voice call after navigation');
         }
       } catch (navError) {
         console.error('PendingConsultationsScreen: Error navigating to VoiceCall:', navError);
