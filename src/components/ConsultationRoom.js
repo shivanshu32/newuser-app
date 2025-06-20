@@ -225,7 +225,7 @@ const ConsultationRoom = ({ booking, roomId, sessionId, onSessionEnd }) => {
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#673AB7" />
+        <ActivityIndicator size="large" color="#F97316" />
         <Text style={styles.loadingText}>Joining consultation room...</Text>
       </View>
     );
@@ -278,7 +278,7 @@ const ConsultationRoom = ({ booking, roomId, sessionId, onSessionEnd }) => {
       <View style={styles.contentArea}>
         {!astrologerPresent ? (
           <View style={styles.waitingContainer}>
-            <ActivityIndicator size="large" color="#673AB7" />
+            <ActivityIndicator size="large" color="#F97316" />
             <Text style={styles.waitingText}>Waiting for astrologer to join...</Text>
           </View>
         ) : (

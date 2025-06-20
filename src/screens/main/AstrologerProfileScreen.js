@@ -12,6 +12,7 @@ import {
   SafeAreaView,
   ToastAndroid,
   Platform,
+  StatusBar,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { astrologersAPI } from '../../services/api';
@@ -429,7 +430,7 @@ const AstrologerProfileScreen = ({ route, navigation }) => {
       >
         <View style={styles.modalOverlay}>
           <View style={styles.modalContainer}>
-            <ActivityIndicator size="large" color="#6200ee" />
+            <ActivityIndicator size="large" color="#F97316" />
             <Text style={styles.modalText}>Waiting for astrologer response...</Text>
             <Text style={styles.modalSubText}>This request will expire in 2 minutes if not answered</Text>
             <TouchableOpacity 
@@ -451,7 +452,7 @@ const AstrologerProfileScreen = ({ route, navigation }) => {
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#8A2BE2" />
+        <ActivityIndicator size="large" color="#F97316" />
         <Text style={styles.loadingText}>Loading astrologer profile...</Text>
       </View>
     );
@@ -544,18 +545,44 @@ const AstrologerProfileScreen = ({ route, navigation }) => {
   
   return (
     <SafeAreaView style={styles.container}>
+      <StatusBar backgroundColor="#fff" barStyle="dark-content" />
+      
+      {/* Header with back button */}
+      <View style={styles.header}>
+        <TouchableOpacity 
+          style={styles.backButton}
+          onPress={() => navigation.goBack()}
+          accessibilityLabel="Go back"
+        >
+          <Ionicons name="arrow-back" size={24} color="#374151" />
+        </TouchableOpacity>
+        <Text style={styles.headerTitle}>Astrologer Profile</Text>
+        <View style={styles.headerRight} />
+      </View>
+      
       {/* Notification UI removed in favor of Alert */}
-      <ScrollView contentContainerStyle={styles.scrollContent}>
+      <ScrollView 
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}>
         {/* Profile Header */}
         <View style={styles.profileHeader}>
-          <Image 
-            source={{ uri: astrologer.imageUrl || astrologer.profileImage }} 
-            style={styles.profileImage}
-            accessibilityLabel={`Profile picture of ${astrologer.displayName || astrologer.name}`}
-          />
+          <View style={styles.profileImageContainer}>
+            <Image 
+              source={{ uri: astrologer.imageUrl || astrologer.profileImage }} 
+              style={styles.profileImage}
+              accessibilityLabel={`Profile picture of ${astrologer.displayName || astrologer.name}`}
+            />
+            <View
+              style={[
+                styles.statusIndicator,
+                { backgroundColor: astrologer.status === 'Online' ? '#4CAF50' : '#F44336' },
+              ]}
+            />
+          </View>
           
           <View style={styles.nameContainer}>
             <Text style={styles.name}>{astrologer.displayName || astrologer.name}</Text>
+            <Text style={styles.specialization}>{astrologer.specialization || astrologer.specialties?.[0] || 'Astrologer'}</Text>
             
             <View style={styles.ratingContainer}>
               <Ionicons name="star" size={16} color="#FFD700" />
@@ -565,15 +592,33 @@ const AstrologerProfileScreen = ({ route, navigation }) => {
               )}
             </View>
             
-            <View style={styles.statusContainer}>
-              <View
-                style={[
-                  styles.statusIndicator,
-                  { backgroundColor: astrologer.status === 'Online' ? '#4CAF50' : '#F44336' },
-                ]}
-              />
-              <Text style={styles.statusText}>{astrologer.status || 'Offline'}</Text>
+            <View style={styles.statusTextContainer}>
+              <Text style={styles.statusText}>
+                {astrologer.status === 'Online' ? 'Available now' : 'Currently unavailable'}
+              </Text>
             </View>
+          </View>
+        </View>
+        
+        {/* Stats Section */}
+        <View style={styles.statsContainer}>
+          <View style={styles.statItem}>
+            <Text style={styles.statValue}>{astrologer.experience || '0'}+</Text>
+            <Text style={styles.statLabel}>Years</Text>
+          </View>
+          
+          <View style={styles.statDivider} />
+          
+          <View style={styles.statItem}>
+            <Text style={styles.statValue}>{ratingText}</Text>
+            <Text style={styles.statLabel}>Rating</Text>
+          </View>
+          
+          <View style={styles.statDivider} />
+          
+          <View style={styles.statItem}>
+            <Text style={styles.statValue}>{astrologer.totalConsultations || '100'}+</Text>
+            <Text style={styles.statLabel}>Consultations</Text>
           </View>
         </View>
 
@@ -588,82 +633,156 @@ const AstrologerProfileScreen = ({ route, navigation }) => {
           {/* Specialties */}
           <View style={styles.detailSection}>
             <Text style={styles.sectionTitle}>Specialties</Text>
-            <Text style={styles.detailText}>{specialtiesText}</Text>
+            <View style={styles.tagsContainer}>
+              {Array.isArray(astrologer.specialties) ? (
+                astrologer.specialties.map((specialty, index) => (
+                  <View key={`specialty-${index}`} style={styles.tagItem}>
+                    <Text style={styles.tagText}>{specialty}</Text>
+                  </View>
+                ))
+              ) : (
+                <Text style={styles.detailText}>{specialtiesText}</Text>
+              )}
+            </View>
           </View>
 
           {/* Languages */}
           <View style={styles.detailSection}>
             <Text style={styles.sectionTitle}>Languages</Text>
-            <Text style={styles.detailText}>{languagesText}</Text>
+            <View style={styles.tagsContainer}>
+              {Array.isArray(astrologer.languages) ? (
+                astrologer.languages.map((language, index) => (
+                  <View key={`language-${index}`} style={styles.tagItem}>
+                    <Text style={styles.tagText}>{language}</Text>
+                  </View>
+                ))
+              ) : (
+                <Text style={styles.detailText}>{languagesText}</Text>
+              )}
+            </View>
           </View>
 
           {/* Experience */}
           <View style={styles.detailSection}>
             <Text style={styles.sectionTitle}>Experience</Text>
-            <Text style={styles.detailText}>{astrologer.experience || 'Not specified'} years</Text>
+            <View style={styles.experienceContainer}>
+              <Ionicons name="briefcase-outline" size={20} color="#F97316" />
+              <Text style={styles.detailText}>{astrologer.experience || 'Not specified'} years of professional experience</Text>
+            </View>
           </View>
 
           {/* Charges */}
           <View style={styles.detailSection}>
             <Text style={styles.sectionTitle}>Consultation Charges</Text>
             <View style={styles.chargesContainer}>
-              <View style={styles.chargeItem}>
-                <Ionicons name="chatbubble-outline" size={20} color="#8A2BE2" />
-                <Text style={styles.chargeLabel}>Chat</Text>
-                <Text style={styles.chargeValue}>
-                  ₹{astrologer.chatPrice || astrologer.price || '20'}/min
-                </Text>
+              <View style={styles.chargeCard}>
+                <View style={styles.chargeIconContainer}>
+                  <Ionicons name="chatbubble" size={22} color="#fff" />
+                </View>
+                <View style={styles.chargeContent}>
+                  <Text style={styles.chargeLabel}>Chat Consultation</Text>
+                  <Text style={styles.chargeValue}>
+                    ₹{astrologer.chatPrice || astrologer.price || '20'}<Text style={styles.perMinText}>/min</Text>
+                  </Text>
+                </View>
               </View>
               
-              <View style={styles.chargeItem}>
-                <Ionicons name="call-outline" size={20} color="#8A2BE2" />
-                <Text style={styles.chargeLabel}>Voice Call</Text>
-                <Text style={styles.chargeValue}>
-                  ₹{astrologer.voicePrice || astrologer.price || '30'}/min
-                </Text>
+              <View style={styles.chargeCard}>
+                <View style={[styles.chargeIconContainer, styles.voiceIconContainer]}>
+                  <Ionicons name="call" size={22} color="#fff" />
+                </View>
+                <View style={styles.chargeContent}>
+                  <Text style={styles.chargeLabel}>Voice Call</Text>
+                  <Text style={styles.chargeValue}>
+                    ₹{astrologer.voicePrice || astrologer.price || '30'}<Text style={styles.perMinText}>/min</Text>
+                  </Text>
+                </View>
               </View>
               
-              <View style={styles.chargeItem}>
-                <Ionicons name="videocam-outline" size={20} color="#8A2BE2" />
-                <Text style={styles.chargeLabel}>Video Call</Text>
-                <Text style={styles.chargeValue}>
-                  ₹{astrologer.videoPrice || astrologer.price || '40'}/min
-                </Text>
+              <View style={styles.chargeCard}>
+                <View style={[styles.chargeIconContainer, styles.videoIconContainer]}>
+                  <Ionicons name="videocam" size={22} color="#fff" />
+                </View>
+                <View style={styles.chargeContent}>
+                  <Text style={styles.chargeLabel}>Video Call</Text>
+                  <Text style={styles.chargeValue}>
+                    ₹{astrologer.videoPrice || astrologer.price || '40'}<Text style={styles.perMinText}>/min</Text>
+                  </Text>
+                </View>
               </View>
             </View>
           </View>
         </View>
 
         {/* Booking Buttons */}
-        <View style={styles.bookingButtonsContainer}>
-          <TouchableOpacity 
-            style={[styles.bookingButton, styles.chatButton]} 
-            onPress={handleBookChat}
-            accessibilityLabel="Book Chat Consultation"
-          >
-            <Ionicons name="chatbubble" size={24} color="#fff" />
-            <Text style={styles.bookingButtonText}>Book Chat</Text>
-          </TouchableOpacity>
+        <View style={styles.bookingSection}>
+          <Text style={styles.bookingSectionTitle}>Book a Consultation</Text>
+          <Text style={styles.bookingSubtitle}>
+            {astrologer.status === 'Online' 
+              ? 'Astrologer is available now. Choose a consultation type:' 
+              : 'Astrologer is currently offline. The astrologer will be notified once they come online.'}
+          </Text>
           
-          <TouchableOpacity 
-            style={[styles.bookingButton, styles.voiceButton]} 
-            onPress={handleBookVoiceCall}
-            accessibilityLabel="Book Voice Call Consultation"
-          >
-            <Ionicons name="call" size={24} color="#fff" />
-            <Text style={styles.bookingButtonText}>Book Voice Call</Text>
-          </TouchableOpacity>
-          
-          <TouchableOpacity 
-            style={[styles.bookingButton, styles.videoButton]} 
-            onPress={handleBookVideoCall}
-            accessibilityLabel="Book Video Call Consultation"
-          >
-            <Ionicons name="videocam" size={24} color="#fff" />
-            <Text style={styles.bookingButtonText}>Book Video Call</Text>
-          </TouchableOpacity>
+          <View style={styles.bookingButtonsContainer}>
+            <TouchableOpacity 
+              style={[styles.bookingButton, styles.chatButton]} 
+              onPress={handleBookChat}
+              accessibilityLabel="Book Chat Consultation"
+            >
+              <Ionicons 
+                name="chatbubble" 
+                size={24} 
+                color="#fff" 
+              />
+              <Text style={styles.bookingButtonText}>
+                Chat
+              </Text>
+              <Text style={styles.bookingButtonPrice}>
+                ₹{astrologer.chatPrice || astrologer.price || '20'}/min
+              </Text>
+            </TouchableOpacity>
+            
+            <TouchableOpacity 
+              style={[styles.bookingButton, styles.voiceButton]} 
+              onPress={handleBookVoiceCall}
+              accessibilityLabel="Book Voice Call Consultation"
+            >
+              <Ionicons 
+                name="call" 
+                size={24} 
+                color="#fff" 
+              />
+              <Text style={styles.bookingButtonText}>
+                Voice Call
+              </Text>
+              <Text style={styles.bookingButtonPrice}>
+                ₹{astrologer.voicePrice || astrologer.price || '30'}/min
+              </Text>
+            </TouchableOpacity>
+            
+            <TouchableOpacity 
+              style={[styles.bookingButton, styles.videoButton]} 
+              onPress={handleBookVideoCall}
+              accessibilityLabel="Book Video Call Consultation"
+            >
+              <Ionicons 
+                name="videocam" 
+                size={24} 
+                color="#fff" 
+              />
+              <Text style={styles.bookingButtonText}>
+                Video Call
+              </Text>
+              <Text style={styles.bookingButtonPrice}>
+                ₹{astrologer.videoPrice || astrologer.price || '40'}/min
+              </Text>
+            </TouchableOpacity>
+          </View>
         </View>
       </ScrollView>
+      
+      {/* Booking Pending Modal */}
+      {renderBookingPendingModal()}
     </SafeAreaView>
   );
 };
@@ -671,7 +790,30 @@ const AstrologerProfileScreen = ({ route, navigation }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f8f8f8',
+    backgroundColor: '#ffffff',
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    backgroundColor: '#ffffff',
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f0f0',
+  },
+  backButton: {
+    padding: 8,
+  },
+  headerTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#374151',
+    textAlign: 'center',
+    flex: 1,
+  },
+  headerRight: {
+    width: 40,
   },
   // Modal styles
   modalOverlay: {
@@ -768,29 +910,37 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+    backgroundColor: '#ffffff',
   },
   loadingText: {
     marginTop: 10,
     fontSize: 16,
-    color: '#666',
+    color: '#6B7280',
+    fontWeight: '500',
   },
   errorContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
     padding: 20,
+    backgroundColor: '#ffffff',
   },
   errorText: {
     fontSize: 16,
-    color: '#333',
+    color: '#4B5563',
     marginVertical: 20,
     textAlign: 'center',
   },
   retryButton: {
-    backgroundColor: '#8A2BE2',
+    backgroundColor: '#6366F1',
     paddingHorizontal: 20,
     paddingVertical: 10,
-    borderRadius: 5,
+    borderRadius: 8,
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.2,
+    shadowRadius: 1.41,
   },
   retryButtonText: {
     color: '#fff',
@@ -800,13 +950,35 @@ const styles = StyleSheet.create({
   profileHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 20,
+    marginBottom: 24,
+    paddingVertical: 8,
+  },
+  profileImageContainer: {
+    position: 'relative',
+    marginRight: 16,
   },
   profileImage: {
     width: 100,
     height: 100,
     borderRadius: 50,
-    marginRight: 16,
+    borderWidth: 3,
+    borderColor: '#ffffff',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  statusIndicator: {
+    position: 'absolute',
+    bottom: 5,
+    right: 5,
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+    borderWidth: 2,
+    borderColor: '#ffffff',
+    backgroundColor: '#4CAF50',
   },
   nameContainer: {
     flex: 1,
@@ -814,44 +986,77 @@ const styles = StyleSheet.create({
   name: {
     fontSize: 22,
     fontWeight: 'bold',
-    color: '#333',
+    color: '#1F2937',
     marginBottom: 4,
+  },
+  specialization: {
+    fontSize: 16,
+    color: '#6B7280',
+    marginBottom: 8,
   },
   ratingContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 4,
+    marginBottom: 6,
   },
   rating: {
     fontSize: 16,
     fontWeight: 'bold',
-    color: '#333',
+    color: '#1F2937',
     marginLeft: 4,
   },
   ratingCount: {
     fontSize: 14,
-    color: '#666',
+    color: '#6B7280',
     marginLeft: 4,
   },
-  statusContainer: {
+  statusTextContainer: {
     flexDirection: 'row',
     alignItems: 'center',
   },
-  statusIndicator: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    marginRight: 6,
-  },
   statusText: {
     fontSize: 14,
-    color: '#666',
+    color: '#6B7280',
+    fontWeight: '500',
+  },
+  statsContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    backgroundColor: '#F9FAFB',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 24,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 1,
+  },
+  statItem: {
+    alignItems: 'center',
+    flex: 1,
+  },
+  statValue: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#1F2937',
+    marginBottom: 4,
+  },
+  statLabel: {
+    fontSize: 14,
+    color: '#6B7280',
+  },
+  statDivider: {
+    width: 1,
+    height: '70%',
+    backgroundColor: '#E5E7EB',
+    alignSelf: 'center',
   },
   detailsContainer: {
     backgroundColor: '#fff',
-    borderRadius: 10,
+    borderRadius: 12,
     padding: 16,
-    marginBottom: 20,
+    marginBottom: 24,
     elevation: 2,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
@@ -859,71 +1064,158 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
   },
   detailSection: {
-    marginBottom: 16,
+    marginBottom: 20,
   },
   sectionTitle: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: '#333',
-    marginBottom: 8,
+    color: '#1F2937',
+    marginBottom: 12,
   },
   bioText: {
     fontSize: 16,
-    color: '#444',
-    lineHeight: 22,
+    color: '#4B5563',
+    lineHeight: 24,
   },
   detailText: {
     fontSize: 16,
-    color: '#444',
+    color: '#4B5563',
+  },
+  tagsContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    marginTop: 4,
+  },
+  tagItem: {
+    backgroundColor: '#F3F4F6',
+    borderRadius: 16,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    marginRight: 8,
+    marginBottom: 8,
+  },
+  tagText: {
+    color: '#4B5563',
+    fontSize: 14,
+  },
+  experienceContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   chargesContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    flexWrap: 'wrap',
+    marginTop: 8,
   },
-  chargeItem: {
+  chargeCard: {
+    flexDirection: 'row',
     alignItems: 'center',
-    width: '30%',
-    backgroundColor: '#f0f0f0',
-    borderRadius: 8,
-    padding: 12,
+    backgroundColor: '#F9FAFB',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 1,
+  },
+  chargeIconContainer: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#6366F1',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 16,
+  },
+  voiceIconContainer: {
+    backgroundColor: '#F97316',
+  },
+  videoIconContainer: {
+    backgroundColor: '#10B981',
+  },
+  chargeContent: {
+    flex: 1,
   },
   chargeLabel: {
-    fontSize: 14,
-    color: '#666',
-    marginTop: 4,
+    fontSize: 16,
+    color: '#4B5563',
+    marginBottom: 4,
   },
   chargeValue: {
-    fontSize: 16,
+    fontSize: 18,
     fontWeight: 'bold',
-    color: '#333',
-    marginTop: 4,
+    color: '#1F2937',
+  },
+  perMinText: {
+    fontSize: 14,
+    fontWeight: 'normal',
+    color: '#6B7280',
+  },
+  bookingSection: {
+    marginBottom: 24,
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 16,
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+  },
+  bookingSectionTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#1F2937',
+    marginBottom: 8,
+  },
+  bookingSubtitle: {
+    fontSize: 14,
+    color: '#6B7280',
+    marginBottom: 16,
   },
   bookingButtonsContainer: {
-    marginBottom: 20,
+    marginBottom: 8,
   },
   bookingButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    padding: 16,
-    borderRadius: 8,
+    justifyContent: 'space-between',
+    paddingVertical: 16,
+    paddingHorizontal: 20,
+    borderRadius: 12,
     marginBottom: 12,
+    elevation: 1,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
   },
   chatButton: {
-    backgroundColor: '#4CAF50',
+    backgroundColor: '#6366F1',
   },
   voiceButton: {
-    backgroundColor: '#2196F3',
+    backgroundColor: '#F97316',
   },
   videoButton: {
-    backgroundColor: '#FF6B00',
+    backgroundColor: '#10B981',
+  },
+  disabledButton: {
+    backgroundColor: '#F3F4F6',
   },
   bookingButtonText: {
     color: '#fff',
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: 'bold',
-    marginLeft: 10,
+    marginLeft: 8,
+    flex: 1,
+  },
+  bookingButtonPrice: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  disabledButtonText: {
+    color: '#9CA3AF',
   },
 });
 

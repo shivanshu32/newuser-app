@@ -12,31 +12,28 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../context/AuthContext';
-import { walletAPI } from '../../services/api';
-
-// Mock Razorpay implementation for Expo Go compatibility
-// This avoids the native module error
-const RazorpayCheckout = {
-  open: (options) => {
-    console.log('Mock Razorpay payment initiated with options:', options);
-    // Return a promise that resolves with mock payment data
-    return Promise.resolve({
-      razorpay_payment_id: 'mock_payment_' + Date.now(),
-      razorpay_order_id: options.order_id,
-      razorpay_signature: 'mock_signature_' + Date.now()
-    });
-  }
-};
+import { walletAPI, offersAPI } from '../../services/api';
+//import RazorpayCheckout from 'react-native-razorpay';
+import RazorpayCheckout from '../../utils/razorpayMock';
 
 const WalletScreen = () => {
   const [transactions, setTransactions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [amount, setAmount] = useState('');
   const [processingPayment, setProcessingPayment] = useState(false);
-  const { user } = useAuth();
+  const [offers, setOffers] = useState([]);
+  const [selectedOffer, setSelectedOffer] = useState(null);
+  const [loadingOffers, setLoadingOffers] = useState(false);
+  const [page, setPage] = useState(1);
+  const [hasMoreTransactions, setHasMoreTransactions] = useState(true);
+  const [loadingMoreTransactions, setLoadingMoreTransactions] = useState(false);
+  const { user, updateUser } = useAuth();
+
+  const quickAmounts = [100, 500, 1000, 2000];
 
   useEffect(() => {
     fetchTransactions();
+    fetchOffers();
   }, []);
 
   const fetchTransactions = async () => {
@@ -46,8 +43,8 @@ const WalletScreen = () => {
       // Fetch wallet balance
       const balanceResponse = await walletAPI.getBalance();
       if (balanceResponse.data && balanceResponse.data.balance !== undefined) {
-        // Update user wallet balance in auth context
-        user.walletBalance = balanceResponse.data.balance;
+        // Update user wallet balance in auth context using the updateUser function
+        await updateUser({ walletBalance: balanceResponse.data.balance });
       }
       
       // Fetch wallet transactions
@@ -96,141 +93,175 @@ const WalletScreen = () => {
     }
   };
 
-  const handleAddMoney = () => {
-    if (!amount || isNaN(amount) || parseFloat(amount) <= 0) {
-      Alert.alert('Invalid Amount', 'Please enter a valid amount');
-      return;
-    }
-    
-    const amountValue = parseFloat(amount);
-    
-    Alert.alert(
-      'Confirm Payment',
-      `Add ₹${amountValue} to your wallet?`,
-      [
-        {
-          text: 'Cancel',
-          style: 'cancel'
-        },
-        {
-          text: 'Proceed',
-          onPress: () => processPayment(amountValue)
-        }
-      ]
-    );
-  };
-  
-  const processPayment = async (amountValue) => {
+  const fetchOffers = async () => {
     try {
-      setProcessingPayment(true);
+      setLoadingOffers(true);
       
-      // Call backend API to create an order
-      const orderResponse = await walletAPI.createOrder(amountValue);
+      const offersResponse = await offersAPI.getActiveOffers(amount);
       
-      if (!orderResponse.data || !orderResponse.data.orderId || !orderResponse.data.keyId) {
-        throw new Error('Failed to create payment order');
-      }
-      
-      const { orderId, keyId } = orderResponse.data;
-      
-      // Configure Razorpay options
-      const options = {
-        description: 'Wallet Top-up',
-        image: 'https://i.imgur.com/3g7nmJC.png', // Replace with your app icon
-        currency: 'INR',
-        key: keyId,
-        amount: amountValue * 100, // Razorpay expects amount in paise
-        name: 'JyotishCall',
-        order_id: orderId,
-        prefill: {
-          email: user.email || '',
-          contact: user.phoneNumber || '',
-          name: user.name || ''
-        },
-        theme: { color: '#8A2BE2' }
-      };
-      
-      // Open Razorpay payment flow
-      RazorpayCheckout.open(options).then((data) => {
-        verifyPayment(data, amountValue);
-      }).catch((error) => {
-        console.log('Payment Error:', error);
-        setProcessingPayment(false);
-        Alert.alert('Payment Failed', 'There was an error processing your payment.');
-      });
-      
-    } catch (error) {
-      console.log('Error initiating payment:', error);
-      setProcessingPayment(false);
-      Alert.alert('Error', 'Failed to initiate payment. Please try again.');
-    }
-  };
-  
-  const verifyPayment = async (paymentData, amountValue) => {
-    try {
-      // Call backend API to verify the payment
-      const response = await walletAPI.verifyPayment({
-        razorpay_payment_id: paymentData.razorpay_payment_id,
-        razorpay_order_id: paymentData.razorpay_order_id,
-        razorpay_signature: paymentData.razorpay_signature,
-        amount: amountValue
-      });
-      
-      if (response.data && response.data.success) {
-        // Update local state with the new transaction
-        const newTransaction = response.data.transaction;
-        setTransactions(prevTransactions => [newTransaction, ...prevTransactions]);
-        
-        // Update user wallet balance
-        if (user) {
-          user.walletBalance = response.data.newBalance;
-        }
-        
-        setProcessingPayment(false);
-        setAmount('');
-        
-        Alert.alert('Payment Successful', `₹${amountValue} has been added to your wallet.`);
-        
-        // Refresh transactions list
-        fetchTransactions();
+      if (offersResponse.data && offersResponse.data.success) {
+        setOffers(offersResponse.data.data || []);
       } else {
-        throw new Error('Payment verification failed');
+        setOffers([]);
       }
+      
+      setLoadingOffers(false);
     } catch (error) {
-      console.log('Payment verification error:', error);
-      setProcessingPayment(false);
-      Alert.alert('Payment Failed', 'There was an error verifying your payment.');
+      console.error('Error fetching offers:', error);
+      setLoadingOffers(false);
+      setOffers([]);
     }
   };
 
-  const renderTransactionItem = ({ item }) => {
-    const transactionDate = new Date(item.timestamp);
+  const handleAddMoney = async () => {
+    const amountValue = parseFloat(amount);
     
+    // Validate minimum amount
+    if (!amount || isNaN(amountValue) || amountValue < 10) {
+      Alert.alert('Invalid Amount', 'Minimum recharge amount is ₹10');
+      return;
+    }
+
+    try {
+      setProcessingPayment(true);
+
+      // Create order
+      const orderResponse = await walletAPI.createOrder(amountValue);
+      
+      if (!orderResponse.data.success) {
+        throw new Error('Failed to create order');
+      }
+
+      const { orderId, keyId, amount: orderAmount, currency } = orderResponse.data.data;
+
+      // Prepare Razorpay options
+      const options = {
+        description: 'Wallet Recharge',
+        image: 'https://your-logo-url.com/logo.png', // Replace with your app logo
+        currency: currency,
+        key: keyId,
+        amount: orderAmount,
+        order_id: orderId,
+        name: 'Jyotish Call',
+        prefill: {
+          email: user.email,
+          contact: user.phone,
+          name: user.name
+        },
+        theme: { color: '#8A2BE2' }
+      };
+
+      // Open Razorpay checkout
+      const paymentResult = await RazorpayCheckout.open(options);
+      
+      // Verify payment
+      const verificationData = {
+        razorpay_order_id: paymentResult.razorpay_order_id,
+        razorpay_payment_id: paymentResult.razorpay_payment_id,
+        razorpay_signature: paymentResult.razorpay_signature
+      };
+
+      const verifyResponse = await walletAPI.verifyPayment(verificationData);
+      
+      if (verifyResponse.data.success) {
+        Alert.alert('Success', 'Money added successfully!');
+        setAmount('');
+        fetchTransactions();
+        
+        // Show bonus message if applicable
+        if (verifyResponse.data.data.bonusAmount > 0) {
+          Alert.alert(
+            'Bonus Credited!', 
+            `You received a bonus of ₹${verifyResponse.data.data.bonusAmount}!`
+          );
+        }
+      } else {
+        throw new Error('Payment verification failed');
+      }
+
+    } catch (error) {
+      console.error('Payment error:', error);
+      Alert.alert('Payment Failed', error.message || 'Something went wrong. Please try again.');
+    } finally {
+      setProcessingPayment(false);
+    }
+  };
+
+  const renderTransaction = ({ item }) => {
+    const isCredit = item.type === 'wallet_topup' || item.type === 'bonus_credit';
+    const iconName = isCredit ? 'add-circle' : 'remove-circle';
+    const iconColor = isCredit ? '#4CAF50' : '#F44336';
+    const amountPrefix = isCredit ? '+' : '-';
+
     return (
       <View style={styles.transactionItem}>
-        <View style={styles.transactionIconContainer}>
-          <Ionicons
-            name={item.type === 'credit' ? 'arrow-down-outline' : 'arrow-up-outline'}
-            size={20}
-            color={item.type === 'credit' ? '#4CAF50' : '#F44336'}
-          />
+        <View style={styles.transactionLeft}>
+          <Ionicons name={iconName} size={24} color={iconColor} />
+          <View style={styles.transactionDetails}>
+            <Text style={styles.transactionType}>
+              {item.type === 'wallet_topup' ? 'Wallet Recharge' : 
+               item.type === 'bonus_credit' ? 'Bonus Credit' : 
+               item.description || 'Transaction'}
+            </Text>
+            <Text style={styles.transactionDate}>
+              {new Date(item.createdAt).toLocaleDateString()}
+            </Text>
+            <Text style={styles.transactionStatus}>
+              Status: {item.status}
+            </Text>
+          </View>
         </View>
-        <View style={styles.transactionDetails}>
-          <Text style={styles.transactionDescription}>{item.description}</Text>
-          <Text style={styles.transactionDate}>
-            {transactionDate.toLocaleDateString()} at {transactionDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-          </Text>
-        </View>
-        <Text
-          style={[
-            styles.transactionAmount,
-            { color: item.type === 'credit' ? '#4CAF50' : '#F44336' },
-          ]}
-        >
-          {item.type === 'credit' ? '+' : '-'}₹{item.amount}
+        <Text style={[styles.transactionAmount, { color: iconColor }]}>
+          {amountPrefix}₹{item.amount}
         </Text>
       </View>
     );
+  };
+
+  const renderOffer = ({ item }) => (
+    <TouchableOpacity
+      style={[
+        styles.offerCard,
+        selectedOffer?.id === item.id && styles.selectedOfferCard
+      ]}
+      onPress={() => setSelectedOffer(selectedOffer?.id === item.id ? null : item)}
+    >
+      <View style={styles.offerHeader}>
+        <Text style={styles.offerName}>{item.name}</Text>
+        <View style={styles.offerBadge}>
+          <Text style={styles.offerBadgeText}>
+            {item.percentageBonus > 0 ? `${item.percentageBonus}%` : `₹${item.flatBonus}`}
+          </Text>
+        </View>
+      </View>
+      <Text style={styles.offerDescription}>{item.description}</Text>
+      <Text style={styles.offerMinAmount}>
+        Min. recharge: ₹{item.minRechargeAmount}
+      </Text>
+      {item.maxBonusAmount && (
+        <Text style={styles.offerMaxBonus}>
+          Max bonus: ₹{item.maxBonusAmount}
+        </Text>
+      )}
+    </TouchableOpacity>
+  );
+
+  const handleLoadMoreTransactions = async () => {
+    if (!hasMoreTransactions || loadingMoreTransactions) return;
+
+    setLoadingMoreTransactions(true);
+    try {
+      const transactionsResponse = await walletAPI.getTransactions(page + 1);
+      if (transactionsResponse.data && transactionsResponse.data.transactions) {
+        setTransactions([...transactions, ...transactionsResponse.data.transactions]);
+        setPage(page + 1);
+        setHasMoreTransactions(transactionsResponse.data.hasMore);
+      }
+    } catch (error) {
+      console.error('Error loading more transactions:', error);
+    } finally {
+      setLoadingMoreTransactions(false);
+    }
   };
 
   return (
@@ -254,7 +285,7 @@ const WalletScreen = () => {
           </View>
           
           <View style={styles.quickAmounts}>
-            {[100, 200, 500, 1000].map((quickAmount) => (
+            {quickAmounts.map((quickAmount) => (
               <TouchableOpacity
                 key={quickAmount}
                 style={styles.quickAmountButton}
@@ -268,7 +299,7 @@ const WalletScreen = () => {
           
           <TouchableOpacity
             style={[styles.topUpButton, processingPayment && styles.disabledButton]}
-            onPress={handleTopUp}
+            onPress={handleAddMoney}
             disabled={processingPayment}
           >
             {processingPayment ? (
@@ -278,13 +309,32 @@ const WalletScreen = () => {
             )}
           </TouchableOpacity>
         </View>
+        
+        <View style={styles.offersContainer}>
+          <Text style={styles.offersTitle}>Offers</Text>
+          {loadingOffers ? (
+            <ActivityIndicator style={styles.loader} size="large" color="#F97316" />
+          ) : offers.length === 0 ? (
+            <View style={styles.emptyOffers}>
+              <Ionicons name="gift-outline" size={60} color="#ccc" />
+              <Text style={styles.emptyText}>No offers available</Text>
+            </View>
+          ) : (
+            <FlatList
+              data={offers}
+              renderItem={renderOffer}
+              keyExtractor={(item) => item.id}
+              scrollEnabled={false}
+            />
+          )}
+        </View>
       </View>
       
       <View style={styles.transactionsContainer}>
         <Text style={styles.transactionsTitle}>Transaction History</Text>
         
         {loading ? (
-          <ActivityIndicator style={styles.loader} size="large" color="#8A2BE2" />
+          <ActivityIndicator style={styles.loader} size="large" color="#F97316" />
         ) : transactions.length === 0 ? (
           <View style={styles.emptyTransactions}>
             <Ionicons name="wallet-outline" size={60} color="#ccc" />
@@ -293,9 +343,10 @@ const WalletScreen = () => {
         ) : (
           <FlatList
             data={transactions}
-            renderItem={renderTransactionItem}
+            renderItem={renderTransaction}
             keyExtractor={(item) => item.id}
-            scrollEnabled={false}
+            onEndReached={handleLoadMoreTransactions}
+            onEndReachedThreshold={0.5}
           />
         )}
       </View>
@@ -385,6 +436,64 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: 'bold',
   },
+  offersContainer: {
+    marginTop: 20,
+  },
+  offersTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    marginBottom: 10,
+  },
+  offerCard: {
+    backgroundColor: '#fff',
+    borderRadius: 10,
+    padding: 15,
+    marginBottom: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  selectedOfferCard: {
+    backgroundColor: '#f0e6ff',
+  },
+  offerHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  offerName: {
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  offerBadge: {
+    backgroundColor: '#8A2BE2',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 20,
+  },
+  offerBadgeText: {
+    color: '#fff',
+    fontSize: 12,
+  },
+  offerDescription: {
+    fontSize: 14,
+    color: '#666',
+    marginBottom: 10,
+  },
+  offerMinAmount: {
+    fontSize: 14,
+    color: '#666',
+  },
+  offerMaxBonus: {
+    fontSize: 14,
+    color: '#666',
+  },
+  emptyOffers: {
+    alignItems: 'center',
+    padding: 30,
+  },
   transactionsContainer: {
     backgroundColor: '#fff',
     borderRadius: 10,
@@ -421,29 +530,28 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: '#eee',
   },
-  transactionIconContainer: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#f0f0f0',
-    justifyContent: 'center',
+  transactionLeft: {
+    flexDirection: 'row',
     alignItems: 'center',
-    marginRight: 15,
   },
   transactionDetails: {
-    flex: 1,
+    marginLeft: 15,
   },
-  transactionDescription: {
+  transactionType: {
     fontSize: 16,
-    marginBottom: 5,
   },
   transactionDate: {
+    fontSize: 12,
+    color: '#666',
+  },
+  transactionStatus: {
     fontSize: 12,
     color: '#666',
   },
   transactionAmount: {
     fontSize: 16,
     fontWeight: 'bold',
+    marginLeft: 20,
   },
 });
 

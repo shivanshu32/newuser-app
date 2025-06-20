@@ -56,53 +56,20 @@ const BookingScreen = ({ route, navigation }) => {
       // Call backend API to fetch user's bookings
       const response = await bookingsAPI.getAll();
       
-      if (response.data && response.data.bookings) {
-        setBookings(response.data.bookings);
+      // The backend returns data in response.data.data format as per the controller
+      if (response.data && response.data.data) {
+        setBookings(response.data.data);
       } else {
-        // Fallback to dummy bookings if no bookings found
-        const dummyBookings = [
-          {
-            id: '1',
-            astrologerId: '1',
-            astrologerName: 'Pandit Sharma',
-            astrologerImage: 'https://via.placeholder.com/100',
-            type: 'chat',
-            status: 'scheduled',
-            scheduledTime: new Date(Date.now() + 3600000).toISOString(), // 1 hour from now
-            duration: 0,
-            amount: 0,
-          },
-          {
-            id: '2',
-            astrologerId: '2',
-            astrologerName: 'Jyotish Gupta',
-            astrologerImage: 'https://via.placeholder.com/100',
-            type: 'video',
-            status: 'completed',
-            scheduledTime: new Date(Date.now() - 86400000).toISOString(), // 1 day ago
-            duration: 15,
-            amount: 225,
-          },
-          {
-            id: '3',
-            astrologerId: '3',
-            astrologerName: 'Astrologer Patel',
-            astrologerImage: 'https://via.placeholder.com/100',
-            type: 'chat',
-            status: 'cancelled',
-            scheduledTime: new Date(Date.now() - 172800000).toISOString(), // 2 days ago
-            duration: 0,
-            amount: 0,
-          },
-        ];
-        
-        setBookings(dummyBookings);
+        // If no bookings found, set empty array
+        setBookings([]);
       }
       
       setLoading(false);
     } catch (error) {
       console.log('Error fetching bookings:', error);
       setLoading(false);
+      // In case of error, set empty bookings array
+      setBookings([]);
     }
   };
   
@@ -305,7 +272,7 @@ const BookingScreen = ({ route, navigation }) => {
   if (loading && bookings.length === 0) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#8A2BE2" />
+        <ActivityIndicator size="large" color="#F97316" />
       </View>
     );
   }
@@ -360,7 +327,7 @@ const BookingScreen = ({ route, navigation }) => {
       
       {loading && bookings.length > 0 && (
         <View style={styles.loadingOverlay}>
-          <ActivityIndicator size="large" color="#8A2BE2" />
+          <ActivityIndicator size="large" color="#F97316" />
         </View>
       )}
     </View>
@@ -481,7 +448,7 @@ const styles = StyleSheet.create({
     borderTopColor: '#eee',
   },
   actionText: {
-    color: '#8A2BE2',
+    color: '#F97316',
     fontSize: 14,
     fontWeight: '500',
     marginRight: 4,
@@ -506,7 +473,7 @@ const styles = StyleSheet.create({
     marginBottom: 24,
   },
   emptyButton: {
-    backgroundColor: '#8A2BE2',
+    backgroundColor: '#F97316',
     paddingHorizontal: 24,
     paddingVertical: 12,
     borderRadius: 24,
@@ -517,7 +484,7 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   },
   pendingButton: {
-    backgroundColor: '#6A5ACD',
+    backgroundColor: '#F97316',
     borderRadius: 20,
     paddingVertical: 8,
     paddingHorizontal: 12,

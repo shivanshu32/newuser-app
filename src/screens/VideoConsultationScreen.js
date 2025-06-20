@@ -363,7 +363,7 @@ const VideoConsultationScreen = () => {
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#6200ee" />
+        <ActivityIndicator size="large" color="#F97316" />
         <Text style={styles.loadingText}>Setting up video call...</Text>
       </View>
     );

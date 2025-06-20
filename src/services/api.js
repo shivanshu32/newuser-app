@@ -42,7 +42,7 @@ export const astrologersAPI = {
 // Bookings API
 export const bookingsAPI = {
   create: (bookingData) => API.post('/bookings/create', bookingData),
-  getAll: () => API.get('/bookings/user'),
+  getAll: () => API.get('/bookings'),
   getById: (id) => API.get(`/bookings/${id}`),
   cancel: (id) => API.put(`/bookings/${id}/cancel`),
 };
@@ -52,7 +52,13 @@ export const walletAPI = {
   getBalance: () => API.get('/wallet/balance'),
   createOrder: (amount) => API.post('/wallet/create-order', { amount }),
   verifyPayment: (paymentData) => API.post('/wallet/verify-payment', paymentData),
-  getTransactions: () => API.get('/wallet/transactions'),
+  getTransactions: (params) => API.get('/wallet/transactions', { params }),
+  getRazorpayConfig: () => API.get('/wallet/razorpay-config'),
+};
+
+// Offers API
+export const offersAPI = {
+  getActiveOffers: (amount) => API.get('/offers/active', { params: { amount } }),
 };
 
 // Sessions API

@@ -16,7 +16,6 @@ import { useAuth } from '../context/AuthContext';
 import * as FileSystem from 'expo-file-system';
 import { Asset } from 'expo-asset';
 import * as Device from 'expo-device';
-import Constants from 'expo-constants';
 import { Audio } from 'expo-av';
 
 // Outer component that provides the socket context
@@ -53,10 +52,11 @@ const VoiceCallScreenInner = () => {
   const [warning, setWarning] = useState(null);
   const [socketReady, setSocketReady] = useState(false);
   const [isWebViewReady, setIsWebViewReady] = useState(false);
-  const [hasPermission, setHasPermission] = useState(false);
   const [callStarted, setCallStarted] = useState(false);
   const [offerCreated, setOfferCreated] = useState(false); // Track if offer has been created
-  
+  const [audioRecording, setAudioRecording] = useState(null);
+  const [isRecording, setIsRecording] = useState(false);
+
   // Get booking details from route params
   const { bookingId, sessionId, roomId, eventData } = route.params || {};
   
@@ -100,183 +100,20 @@ const VoiceCallScreenInner = () => {
     }
   }, [socket, bookingId, roomId]);
 
-  // Load HTML content using expo-asset  // Request microphone permissions
-  const [permissionsRequested, setPermissionsRequested] = useState(false);
-  const [permissionStatus, setPermissionStatus] = useState(null);
-
-  const requestMicrophonePermissions = async () => {
-    try {
-      console.log('[USER-APP] Requesting microphone permissions using expo-av...');
-      
-      // Check if we're running on a physical device
-      if (Device.isDevice) {
-        // Request audio recording permissions using expo-av
-        const { status, granted } = await Audio.requestPermissionsAsync();
-        console.log('[USER-APP] Audio permission status:', status, 'granted:', granted);
-        
-        setPermissionStatus(status);
-        
-        if (status === 'granted') {
-          console.log('[USER-APP] Microphone permission granted');
-          // No need for an alert, permission was granted
-        } else {
-          console.log('[USER-APP] Microphone permission denied or restricted');
-          
-          // Show an alert to inform the user about the consequences
-          Alert.alert(
-            'Microphone Access Required',
-            'Voice call requires microphone access. Without it, the other person will not be able to hear you. Please grant permission in your device settings.',
-            [{ text: 'Continue Anyway' }]
-          );
-        }
-      } else {
-        console.log('[USER-APP] Not running on a physical device, microphone access may be limited');
-        setPermissionStatus('unknown');
-      }
-      
-      setPermissionsRequested(true);
-      return true;
-    } catch (error) {
-      console.error('[USER-APP] Error requesting microphone permissions:', error);
-      setError('Failed to request microphone permissions. Voice call may not work properly.');
-      setPermissionStatus('error');
-      return false;
-    }
-  };
-
-  // Load HTML content from asset
+  // Load HTML content using expo-asset
   useEffect(() => {
     const loadHtmlContent = async () => {
       try {
         console.log('[USER-APP] Loading voice-webrtc.html');
         
-        // Request microphone permissions first using expo-av
-        await requestMicrophonePermissions();
-        
-        // Load HTML file from assets
         const asset = Asset.fromModule(require('../assets/voice-webrtc.html'));
         await asset.downloadAsync();
         
-        // Read the file content
         const htmlContent = await FileSystem.readAsStringAsync(asset.localUri);
         
-        // Add getUserMedia polyfill before loading HTML
-        const additionalPolyfill = `
-        <script>
-        // Store native permission status from React Native
-        window.nativePermissionStatus = "${permissionStatus || 'unknown'}";
-        console.log('Native permission status:', window.nativePermissionStatus);
+        console.log('[USER-APP] Voice HTML content loaded successfully, length:', htmlContent.length);
         
-        (function() {
-          // Force navigator.mediaDevices to exist
-          if (!navigator.mediaDevices) {
-            navigator.mediaDevices = {};
-            console.log('Polyfill: Created navigator.mediaDevices');
-          }
-          
-          // Force getUserMedia to be available
-          if (!navigator.mediaDevices.getUserMedia) {
-            navigator.mediaDevices.getUserMedia = function(constraints) {
-              // First try to use legacy methods
-              const getUserMedia = navigator.webkitGetUserMedia || 
-                                  navigator.mozGetUserMedia || 
-                                  navigator.msGetUserMedia;
-              
-              if (getUserMedia) {
-                console.log('Polyfill: Using legacy getUserMedia');
-                return new Promise(function(resolve, reject) {
-                  getUserMedia.call(navigator, constraints, resolve, reject);
-                });
-              } else {
-                console.log('Polyfill: No getUserMedia implementation found, creating mock audio');
-                // Last resort - create a mock audio stream
-                try {
-                  const audioContext = new (window.AudioContext || window.webkitAudioContext)();
-                  const oscillator = audioContext.createOscillator();
-                  const destination = audioContext.createMediaStreamDestination();
-                  oscillator.connect(destination);
-                  oscillator.start();
-                  console.log('Polyfill: Created mock audio with oscillator');
-                  return Promise.resolve(destination.stream);
-                } catch (e) {
-                  console.error('Polyfill: Failed to create mock audio:', e);
-                  return Promise.reject(new Error('getUserMedia is not implemented in this browser/WebView'));
-                }
-              }
-            }
-          }
-        })();
-        </script>
-        `;
-        
-        // Insert the polyfill right after the <head> tag
-        let enhancedHtml = htmlContent.replace('<head>', '<head>' + additionalPolyfill);
-        
-        // Add permission status script that will run immediately when page loads
-        const permissionStatusScript = `
-        <script>
-          document.addEventListener('DOMContentLoaded', function() {
-            console.log('DOM loaded, checking native permission status:', window.nativePermissionStatus);
-            
-            // If permission was granted at the native level, try to use real audio
-            if (window.nativePermissionStatus === 'granted') {
-              console.log('Native permission was granted, will attempt to use real audio');
-              
-              // Try to get real audio immediately
-              if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-                navigator.mediaDevices.getUserMedia({ audio: true })
-                  .then(function(stream) {
-                    console.log('Successfully got real audio stream!');
-                    // Store the stream for later use
-                    window.permissionStream = stream;
-                    
-                    // Notify React Native
-                    if (window.ReactNativeWebView) {
-                      window.ReactNativeWebView.postMessage(JSON.stringify({
-                        type: 'permission_granted',
-                        data: { permission: 'microphone' }
-                      }));
-                    }
-                  })
-                  .catch(function(err) {
-                    console.error('Failed to get real audio despite native permission:', err);
-                    
-                    // Notify React Native
-                    if (window.ReactNativeWebView) {
-                      window.ReactNativeWebView.postMessage(JSON.stringify({
-                        type: 'permission_denied',
-                        data: { 
-                          permission: 'microphone',
-                          error: err.toString()
-                        }
-                      }));
-                    }
-                  });
-              }
-            } else {
-              console.log('Native permission was not granted, will use synthetic audio');
-              
-              // Notify React Native
-              if (window.ReactNativeWebView) {
-                window.ReactNativeWebView.postMessage(JSON.stringify({
-                  type: 'webrtc_info',
-                  data: {
-                    info: 'Using synthetic audio',
-                    details: 'Microphone permission was not granted at the native level. Using synthetic audio instead.'
-                  }
-                }));
-              }
-            }
-          });
-        </script>
-        `;
-        
-        // Add the permission script right before the closing </body> tag
-        enhancedHtml = enhancedHtml.replace('</body>', permissionStatusScript + '</body>');
-        
-        console.log('[USER-APP] Voice HTML content loaded and enhanced successfully, length:', enhancedHtml.length);
-        
-        setHtmlContent(enhancedHtml);
+        setHtmlContent(htmlContent);
         setLoading(false);
       } catch (error) {
         console.error('[USER-APP] Error loading voice-webrtc.html:', error);
@@ -286,7 +123,7 @@ const VoiceCallScreenInner = () => {
     };
 
     loadHtmlContent();
-  }, [permissionStatus]); // Re-run if permission status changes
+  }, []);
 
   // Socket event listeners
   useEffect(() => {
@@ -605,19 +442,27 @@ const VoiceCallScreenInner = () => {
           // Show alert with more helpful information
           Alert.alert(
             'Voice Call Error', 
-            `${message.data.error}\n\n${message.data.details || ''}\n\nPlease check that:\n- Microphone permissions are granted\n- You're not in battery saving mode\n- You restart the app and try again`, 
-            [
-              { 
-                text: 'OK',
-                onPress: () => navigation.goBack()
-              }
-            ]
+            `${message.data.error}\n\n${message.data.details || ''}\n\nThe call will continue, but audio quality may be affected.`,
+            [{ text: 'Continue' }],
+            { cancelable: true }
           );
           break;
           
         case 'webrtc_ready':
           console.log('[USER-APP] WebRTC is ready');
           break;
+          
+        case 'request_audio_stream':
+          // Handle request for audio stream from WebView
+          console.log('[USER-APP] WebView requesting audio stream');
+          startAudioRecording();
+          break;
+
+        case 'remote_audio_received':
+          // Handle remote audio received notification
+          console.log('[USER-APP] Remote audio received in WebView');
+          break;
+
         case 'voice_call_offer':
           // Send offer to astrologer via socket
           socket.emit('voice_call_offer', {
@@ -760,8 +605,6 @@ const VoiceCallScreenInner = () => {
           }
           break;
 
-        // Note: webrtc_ready and webrtc_error are already handled above
-
         case 'log':
           // Handle logging from WebView
           break;
@@ -771,6 +614,68 @@ const VoiceCallScreenInner = () => {
       }
     } catch (error) {
       console.error('[USER-APP] Error parsing WebView message:', error);
+    }
+  };
+
+  // Audio recording functions for React Native Audio Bridge
+  const startAudioRecording = async () => {
+    try {
+      console.log('[USER-APP] Starting audio recording for WebRTC bridge...');
+      
+      // Request audio permissions
+      const { status } = await Audio.requestPermissionsAsync();
+      if (status !== 'granted') {
+        console.log('[USER-APP] Audio permission denied');
+        return false;
+      }
+
+      // Configure audio mode for voice calls
+      await Audio.setAudioModeAsync({
+        allowsRecordingIOS: true,
+        interruptionModeIOS: Audio.INTERRUPTION_MODE_IOS_DO_NOT_MIX,
+        playsInSilentModeIOS: true,
+        shouldDuckAndroid: true,
+        interruptionModeAndroid: Audio.INTERRUPTION_MODE_ANDROID_DO_NOT_MIX,
+        playThroughEarpieceAndroid: false,
+        staysActiveInBackground: true,
+      });
+
+      // Start recording
+      const recording = new Audio.Recording();
+      await recording.prepareToRecordAsync(Audio.RECORDING_OPTIONS_PRESET_HIGH_QUALITY);
+      await recording.startAsync();
+      
+      setAudioRecording(recording);
+      setIsRecording(true);
+      
+      console.log('[USER-APP] Audio recording started successfully');
+      
+      // Notify WebView that audio stream is ready
+      if (webViewRef.current) {
+        webViewRef.current.postMessage(JSON.stringify({
+          type: 'audio_stream_ready',
+          data: { ready: true }
+        }));
+      }
+      
+      return true;
+    } catch (error) {
+      console.error('[USER-APP] Failed to start audio recording:', error);
+      return false;
+    }
+  };
+
+  const stopAudioRecording = async () => {
+    try {
+      if (audioRecording) {
+        console.log('[USER-APP] Stopping audio recording...');
+        await audioRecording.stopAndUnloadAsync();
+        setAudioRecording(null);
+        setIsRecording(false);
+        console.log('[USER-APP] Audio recording stopped');
+      }
+    } catch (error) {
+      console.error('[USER-APP] Error stopping audio recording:', error);
     }
   };
 
@@ -812,7 +717,16 @@ const VoiceCallScreenInner = () => {
 
     return () => backHandler.remove();
   }, [sessionInfo.duration]);
-  
+
+  // Cleanup audio recording on unmount
+  useEffect(() => {
+    return () => {
+      if (audioRecording) {
+        stopAudioRecording();
+      }
+    };
+  }, [audioRecording]);
+
   // Effect to start timer when both sides are ready
   useEffect(() => {
     if (isLocalWebRTCConnected && isRemoteWebRTCReadyForTimer && !isTimerStarted && webViewRef.current) {
@@ -831,7 +745,7 @@ const VoiceCallScreenInner = () => {
     <SafeAreaView style={styles.container}>
       {loading ? (
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#6200ee" />
+          <ActivityIndicator size="large" color="#F97316" />
           <Text style={styles.loadingText}>Setting up voice call...</Text>
         </View>
       ) : error ? (
@@ -856,77 +770,17 @@ const VoiceCallScreenInner = () => {
               javaScriptEnabled={true}
               mediaPlaybackRequiresUserAction={false}
               allowsInlineMediaPlayback={true}
-              allowFileAccess={true}
-              allowFileAccessFromFileURLs={true}
-              allowUniversalAccessFromFileURLs={true}
-              geolocationEnabled={true}
               useWebkit={true}
               androidLayerType="hardware"
-              mediaCapturePermissionGrantType="grant"
-              iosAllowsAudioRecording={true}
               androidHardwareAccelerationDisabled={false}
               cacheEnabled={false}
-              incognito={true} // Use incognito mode to avoid permission caching issues
               domStorageEnabled={true}
               startInLoadingState={true}
               onShouldStartLoadWithRequest={() => true}
               onError={(error) => console.error('WebView error:', error)}
               onLoadEnd={() => {
                 console.log('[USER-APP] WebView load ended');
-                // Inject additional getUserMedia polyfill after WebView loads
-                if (webViewRef.current) {
-                  const injectScript = `
-                    (function() {
-                      console.log('Injecting additional getUserMedia polyfill...');
-                      
-                      // Force navigator.mediaDevices to exist
-                      if (!navigator.mediaDevices) {
-                        navigator.mediaDevices = {};
-                      }
-                      
-                      // Force getUserMedia to be available
-                      if (!navigator.mediaDevices.getUserMedia) {
-                        navigator.mediaDevices.getUserMedia = function(constraints) {
-                          // Try legacy methods first
-                          const getUserMedia = navigator.webkitGetUserMedia || 
-                                              navigator.mozGetUserMedia || 
-                                              navigator.msGetUserMedia;
-                          
-                          if (getUserMedia) {
-                            return new Promise(function(resolve, reject) {
-                              getUserMedia.call(navigator, constraints, resolve, reject);
-                            });
-                          } else {
-                            // Last resort - create a mock audio stream
-                            console.log('Creating mock audio stream via injection...');
-                            try {
-                              const audioContext = new (window.AudioContext || window.webkitAudioContext)();
-                              const oscillator = audioContext.createOscillator();
-                              const destination = audioContext.createMediaStreamDestination();
-                              oscillator.connect(destination);
-                              oscillator.start();
-                              return Promise.resolve(destination.stream);
-                            } catch (e) {
-                              return Promise.reject(new Error('getUserMedia is not supported'));
-                            }
-                          }
-                        };
-                      }
-                      
-                      // Test if getUserMedia works now
-                      navigator.mediaDevices.getUserMedia({ audio: true })
-                        .then(function(stream) {
-                          console.log('getUserMedia injection SUCCESS: Got audio stream');
-                          // Don't actually use this stream yet, just testing if it works
-                          // We'll let the regular WebRTC code handle it
-                        })
-                        .catch(function(err) {
-                          console.error('getUserMedia injection FAILED:', err);
-                        });
-                    })();
-                  `;
-                  webViewRef.current.injectJavaScript(injectScript);
-                }
+                console.log('[USER-APP] WebView loaded - no polyfill injection, relying on native getUserMedia');
               }}
             />
           </View>

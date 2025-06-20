@@ -17,16 +17,21 @@ export const initSocket = async () => {
   try {
     // Get user token from AsyncStorage
     const token = await AsyncStorage.getItem('userToken');
-    let userId = await AsyncStorage.getItem('userId');
     
-    // If userId is not found directly, try getting it from userData
-    if (!userId) {
-      const userData = await AsyncStorage.getItem('userData');
-      if (userData) {
-        const parsedUserData = JSON.parse(userData);
-        userId = parsedUserData._id;
-      }
+    // Always get userId from userData to ensure we have the latest user ID
+    let userId = null;
+    const userData = await AsyncStorage.getItem('userData');
+    if (userData) {
+      const parsedUserData = JSON.parse(userData);
+      userId = parsedUserData._id || parsedUserData.id;
     }
+    
+    // Fallback to direct userId storage if userData is not available
+    if (!userId) {
+      userId = await AsyncStorage.getItem('userId');
+    }
+    
+    console.log('🔧 [socketService] Authentication data - token exists:', !!token, 'userId:', userId);
     
     if (!token || !userId) {
       console.error('Token or userId not found. Cannot initialize socket.');
@@ -146,6 +151,19 @@ export const initiateRealTimeBooking = async (bookingData) => {
       socketInstance.once('error', (error) => {
         console.error('Socket error during booking request:', error);
         clearTimeout(timeout);
+        
+        // Handle specific error codes
+        if (error.code === 'USER_NOT_FOUND' && error.action === 'CLEAR_AUTH_DATA') {
+          console.log('🔧 Invalid user data detected, clearing auth data...');
+          // Import AsyncStorage and clear auth data
+          import('@react-native-async-storage/async-storage').then(({ default: AsyncStorage }) => {
+            AsyncStorage.multiRemove(['userToken', 'userData']).then(() => {
+              console.log('🔧 Auth data cleared. Please log in again.');
+              // You could also trigger a logout here if needed
+            });
+          });
+        }
+        
         reject(error);
       });
       

@@ -5,7 +5,7 @@
     "slug": "jyotish-call-user",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/icon-square.svg",
+    "icon": "./assets/icon-square.png",
     "userInterfaceStyle": "light",
     "splash": {
       "image": "./assets/splash.png",
@@ -24,7 +24,7 @@
     },
     "android": {
       "adaptiveIcon": {
-        "foregroundImage": "./assets/icon-square.svg",
+        "foregroundImage": "./assets/icon-square.png",
         "backgroundColor": "#ffffff"
       },
       "package": "com.jyotishcall.user",

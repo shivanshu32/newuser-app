@@ -16,7 +16,7 @@ const RECONNECT_DELAY = 3000; // 3 seconds
 const MAX_RECONNECT_ATTEMPTS = 10;
 
 export const SocketProvider = ({ children }) => {
-  const { token } = useAuth();
+  const { token, user } = useAuth();
   const [socket, setSocket] = useState(null);
   const [isConnected, setIsConnected] = useState(false);
   const [isConnecting, setIsConnecting] = useState(false);
@@ -27,18 +27,19 @@ export const SocketProvider = ({ children }) => {
   
   // Initialize or reinitialize socket
   const initializeSocket = async () => {
-    // Don't initialize if already connecting or no token available
-    if (isConnecting || !token) return;
+    // Don't initialize if already connecting or no token/user available
+    if (isConnecting || !token || !user) return;
     
     try {
       setIsConnecting(true);
       
-      // Get authentication data
-      const token = await AsyncStorage.getItem('userToken');
-      const userId = await AsyncStorage.getItem('userId');
+      // Get user ID from the AuthContext user object instead of AsyncStorage
+      const userId = user._id || user.id;
+      
+      console.log('SocketContext: Authentication data - token exists:', !!token, 'userId:', userId);
       
       if (!token || !userId) {
-        console.error('Token or userId not found. Cannot initialize socket.');
+        console.log('SocketContext: No user token or ID, cleaning up socket if any');
         setIsConnecting(false);
         return;
       }
@@ -192,7 +193,7 @@ export const SocketProvider = ({ children }) => {
         clearTimeout(reconnectTimer.current);
       }
     };
-  }, [token]);
+  }, [token, user]); // Add user to dependencies so socket reinitializes when user changes
   
   // Handle app state changes
   useEffect(() => {

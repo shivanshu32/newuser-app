@@ -130,6 +130,25 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
+  // Update user data
+  const updateUser = async (userData) => {
+    try {
+      // Merge new data with existing user data
+      const updatedUser = { ...user, ...userData };
+      
+      // Update state
+      setUser(updatedUser);
+      
+      // Update AsyncStorage
+      await AsyncStorage.setItem('userData', JSON.stringify(updatedUser));
+      
+      return { success: true, user: updatedUser };
+    } catch (error) {
+      console.log('Error updating user data:', error);
+      return { success: false, message: 'Failed to update user data' };
+    }
+  };
+
   // Logout
   const logout = async () => {
     try {
@@ -162,6 +181,7 @@ export const AuthProvider = ({ children }) => {
         isLoggedIn: !!token,
         requestOtp,
         verifyOtp,
+        updateUser,
         logout,
       }}
     >

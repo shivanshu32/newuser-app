@@ -35,10 +35,13 @@ const ChatScreen = ({ route, navigation }) => {
   const [connecting, setConnecting] = useState(true);
   const [sessionActive, setSessionActive] = useState(false);
   const [sessionTime, setSessionTime] = useState(0);
+  const [sessionId, setSessionId] = useState(null);
   const [astrologer, setAstrologer] = useState(null);
+  const [user, setUser] = useState(null);
+  const [booking, setBooking] = useState(null);
   const [isAstrologerTyping, setIsAstrologerTyping] = useState(false);
   const typingTimeoutRef = useRef(null);
-  const { user } = useAuth();
+  const { user: authUser } = useAuth();
   
   const socketRef = useRef(null);
   const flatListRef = useRef(null);
@@ -59,9 +62,7 @@ const ChatScreen = ({ route, navigation }) => {
       if (socketRef.current) {
         socketRef.current.disconnect();
       }
-      if (timerRef.current) {
-        clearInterval(timerRef.current);
-      }
+      if (timerRef.current) clearInterval(timerRef.current);
     };
   }, []);
 
@@ -77,64 +78,44 @@ const ChatScreen = ({ route, navigation }) => {
         return;
       }
       
-      // Call backend API to get booking details
+      setLoading(true);
+      
+      // Fetch booking details from API
       const response = await bookingsAPI.getById(bookingId);
+      const bookingData = response.data.data;
       
-      // The API returns the booking directly in response.data, not in response.data.booking
-      if (!response.data || !response.data.success) {
-        throw new Error('Booking not found in response');
-      }
-      
-      // Extract booking data directly from response.data
-      const booking = response.data.data;
-      const { astrologer } = booking;
-      
-      setAstrologer(astrologer);
-      setLoading(false);
-      
-      // Start the session
-      await startSession();
+      setBooking(bookingData);
+      setAstrologer(bookingData.astrologer);
+      setUser(bookingData.user);
       
       // Initialize socket connection
-      try {
-        await initializeSocket(astrologer.id);
-      } catch (error) {
-        console.error('ChatScreen: Error initializing socket:', error);
-        Alert.alert('Connection Error', 'Failed to connect to the consultation. Please try again.');
-      }
-    } catch (error) {
-      setLoading(false);
+      await initializeSocket(bookingData.astrologer._id);
       
-      // Show more specific error message
-      if (error.response?.status === 404) {
-        Alert.alert(
-          'Booking Not Found', 
-          'The consultation you are trying to join could not be found. The astrologer may still be preparing for the session. Please try again in a moment.'
-        );
-      } else {
-        Alert.alert('Error', 'Failed to load booking details. Please try again.');
-      }
+      setLoading(false);
+    } catch (error) {
+      console.error('ChatScreen: Error fetching booking details:', error);
+      setLoading(false);
+      Alert.alert('Error', 'Failed to load chat session. Please try again.');
     }
   };
-  
+
   const startSession = async () => {
     try {
-      // Call backend API to start the session
+      console.log('[USER-APP] ChatScreen: Starting session for bookingId:', bookingId);
       const response = await sessionsAPI.start(bookingId, 'chat');
+      const sessionData = response.data.data;
       
-      if (!response.data || !response.data.success) {
-        throw new Error('Failed to start session');
-      }
-      
-      const { sessionId } = response.data;
-      
-      // Store the sessionId for later use (ending the session)
+      console.log('[USER-APP] ChatScreen: Session started successfully:', sessionData);
+      console.log('[USER-APP] ChatScreen: Setting sessionId to:', sessionData._id);
+      setSessionId(sessionData._id);
       setSessionActive(true);
-      return sessionId;
+      
+      console.log('[USER-APP] ChatScreen: Returning sessionId:', sessionData._id);
+      return sessionData._id;
     } catch (error) {
-      console.error('Error starting session:', error);
-      Alert.alert('Error', 'Failed to start chat session. Please try again.');
-      navigation.goBack();
+      console.error('[USER-APP] ChatScreen: Error starting session:', error);
+      Alert.alert('Error', 'Failed to start session. Please try again.');
+      return null;
     }
   };
 
@@ -155,14 +136,14 @@ const ChatScreen = ({ route, navigation }) => {
     
     const socketOptions = {
       query: {
-        userId: user.id,
+        userId: authUser.id,
         astrologerId,
         bookingId,
         sessionType: 'chat',
       },
       auth: {
         token: userToken,
-        id: user.id,
+        id: authUser.id,
         role: 'user'
       },
       path: '/ws', // Match the path used in astrologer-app
@@ -188,37 +169,44 @@ const ChatScreen = ({ route, navigation }) => {
     });
     
     // Set up socket event listeners
-    socketRef.current.on('connect', () => {
+    socketRef.current.on('connect', async () => {
       console.log('ChatScreen: Socket connected successfully');
       setConnecting(false);
       
       // Join the room for this booking
-      socketRef.current.emit('join_room', { bookingId }, (response) => {
+      socketRef.current.emit('join_room', { bookingId }, async (response) => {
         if (response && response.success) {
           // Emit user joined consultation event
           socketRef.current.emit('user_joined_consultation', {
             bookingId,
-            userId: user.id,
+            userId: authUser.id,
             astrologerId
           });
           
           // Also emit the alternate event name as a fallback
           socketRef.current.emit('join_consultation', {
             bookingId,
-            userId: user.id,
+            userId: authUser.id,
             astrologerId
           });
           
           // Send a direct notification to the astrologer
           socketRef.current.emit('direct_astrologer_notification', {
             bookingId,
-            userId: user.id,
+            userId: authUser.id,
             astrologerId,
             message: 'User has joined the consultation'
           });
           
-          // Explicitly request timer start
-          socketRef.current.emit('start_session_timer', { bookingId });
+          // Start session API call to create session and capture sessionId
+          const sessionResponse = await startSession();
+          if (sessionResponse) {
+            console.log('[USER-APP] Session response received:', sessionResponse);
+            // sessionId is already set in startSession function, no need to set it again
+            console.log('[USER-APP] SessionId already set in startSession function');
+            // Explicitly request timer start
+            socketRef.current.emit('start_session_timer', { bookingId, sessionId: sessionResponse });
+          }
         }
       });
     });
@@ -232,8 +220,8 @@ const ChatScreen = ({ route, navigation }) => {
       // Received message from server
       if (message.roomId === bookingId) {
         // Check if this is our own message (sent by current user)
-        const isOwnMessage = message.sender === user.id || 
-                           message.senderId === user.id || 
+        const isOwnMessage = message.sender === authUser.id || 
+                           message.senderId === authUser.id || 
                            message.senderRole === 'user';
         
         // Skip adding our own messages as they're already added when sending
@@ -323,6 +311,13 @@ const ChatScreen = ({ route, navigation }) => {
       }
     });
     
+    // Listen for consultation ended event
+    socketRef.current.on('consultation_ended', (data) => {
+      if (data.bookingId === bookingId) {
+        handleSessionEnd(data);
+      }
+    });
+    
     // Set session as active
     setSessionActive(true);
     
@@ -344,9 +339,9 @@ const ChatScreen = ({ route, navigation }) => {
     // Create the message object
     const newMessage = {
       id: messageId,
-      senderId: user.id,  // Use consistent field name
+      senderId: authUser.id,  // Use consistent field name
       sender: 'user',     // Keep for backward compatibility
-      senderName: user?.name || 'User',
+      senderName: authUser?.name || 'User',
       text: inputText.trim(),
       timestamp: new Date().toISOString(),
       status: 'sending' // Initial status is 'sending'
@@ -366,8 +361,8 @@ const ChatScreen = ({ route, navigation }) => {
       await socketService.sendChatMessage(
         bookingId,
         newMessage.text,
-        user.id,
-        user.name || 'User',
+        authUser.id,
+        authUser.name || 'User',
         messageId
       );
       
@@ -425,6 +420,35 @@ const ChatScreen = ({ route, navigation }) => {
     }, 1000);
   };
 
+  const handleSessionEnd = (data) => {
+    // Handle consultation ended event from astrologer
+    console.log('Consultation ended by astrologer:', data);
+    setSessionActive(false);
+    setSessionActive(false);
+    
+    // Clean up any timers
+    if (timerRef.current) clearInterval(timerRef.current);
+    
+    // Show alert to user
+    Alert.alert(
+      'Consultation Ended',
+      `The consultation has ended.\n\nSession Duration: ${data.sessionData?.duration || 0} minutes\nTotal Amount: ₹${data.sessionData?.totalAmount || 0}`,
+      [
+        {
+          text: 'Rate Consultation',
+          onPress: () => {
+            navigation.navigate('Rating', {
+              bookingId: data.bookingId,
+              sessionId: data.sessionId,
+              sessionData: data.sessionData
+            });
+          }
+        }
+      ],
+      { cancelable: false }
+    );
+  };
+
   const endSession = () => {
     Alert.alert(
       'End Session',
@@ -441,12 +465,23 @@ const ChatScreen = ({ route, navigation }) => {
             try {
               setLoading(true);
               
-              // Call backend API to end the session directly with bookingId
-              await sessionsAPI.end(bookingId);
+              console.log('[USER-APP] Attempting to end session. SessionId:', sessionId);
+              console.log('[USER-APP] BookingId:', bookingId);
+              
+              // Call backend API to end the session with proper sessionId
+              if (sessionId) {
+                console.log('[USER-APP] Calling sessionsAPI.end with sessionId:', sessionId);
+                await sessionsAPI.end(sessionId);
+              } else {
+                console.warn('[USER-APP] No sessionId available, cannot end session properly');
+                Alert.alert('Error', 'Session ID not found. Please try again.');
+                setLoading(false);
+                return;
+              }
               
               // Emit end_session event to socket
               if (socketRef.current) {
-                socketRef.current.emit('end_session', { bookingId });
+                socketRef.current.emit('end_session', { bookingId, sessionId });
                 socketRef.current.disconnect();
               }
               
@@ -463,6 +498,7 @@ const ChatScreen = ({ route, navigation }) => {
                 sessionType: 'chat',
                 sessionDuration: sessionTime,
                 bookingId,
+                sessionId,
               });
             } catch (error) {
               console.error('Error ending session:', error);
@@ -475,37 +511,9 @@ const ChatScreen = ({ route, navigation }) => {
     );
   };
   
-  const handleSessionEnd = (data) => {
-    // Clear timer
-    if (timerRef.current) {
-      clearInterval(timerRef.current);
-    }
-    
-    // Show session ended alert
-    Alert.alert(
-      'Session Ended',
-      `Your session has ended. Duration: ${formatTime(data.duration || sessionTime)}`,
-      [
-        {
-          text: 'Rate & Review',
-          onPress: () => {
-            navigation.replace('Rating', {
-              astrologer,
-              bookingId,
-              astrologerId: astrologer?.id,
-              sessionType: 'chat',
-              duration: sessionTime,
-              charges,
-            });
-          },
-        },
-      ]
-    );
-  };
-
   const renderMessage = ({ item }) => {
     // Check if message is from the current user (more reliable check)
-    const isUser = item.senderId === user.id || item.sender === 'user';
+    const isUser = item.senderId === authUser.id || item.sender === 'user';
     
     // Render status indicators for user messages
     const renderStatusIndicator = () => {
@@ -546,7 +554,7 @@ const ChatScreen = ({ route, navigation }) => {
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#8A2BE2" />
+        <ActivityIndicator size="large" color="#F97316" />
       </View>
     );
   }
@@ -570,14 +578,14 @@ const ChatScreen = ({ route, navigation }) => {
         </View>
         
         <View style={styles.timerContainer}>
-          <Ionicons name="time-outline" size={16} color="#8A2BE2" />
+          <Ionicons name="time-outline" size={16} color="#F97316" />
           <Text style={styles.timerText}>{formatTime(sessionTime)}</Text>
         </View>
       </View>
       
       {connecting ? (
         <View style={styles.connectingContainer}>
-          <ActivityIndicator size="large" color="#8A2BE2" />
+          <ActivityIndicator size="large" color="#F97316" />
           <Text style={styles.connectingText}>Connecting to astrologer...</Text>
         </View>
       ) : (

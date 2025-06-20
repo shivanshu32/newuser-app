@@ -174,7 +174,7 @@ const ProfileScreen = ({ navigation }) => {
       
       {loading && (
         <View style={styles.loadingOverlay}>
-          <ActivityIndicator size="large" color="#8A2BE2" />
+          <ActivityIndicator size="large" color="#F97316" />
         </View>
       )}
     </ScrollView>

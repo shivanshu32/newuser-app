@@ -137,7 +137,7 @@ const AstrologerProfileScreen = () => {
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#673AB7" />
+        <ActivityIndicator size="large" color="#F97316" />
         <Text style={styles.loadingText}>Loading astrologer profile...</Text>
       </View>
     );
@@ -178,13 +178,13 @@ const AstrologerProfileScreen = () => {
             </Text>
           </View>
           <View style={styles.specialtyContainer}>
-            <Icon name="category" size={16} color="#673AB7" />
+            <Icon name="category" size={16} color="#F97316" />
             <Text style={styles.specialty}>
               {astrologer.specialties ? astrologer.specialties.join(', ') : 'Vedic Astrology'}
             </Text>
           </View>
           <View style={styles.experienceContainer}>
-            <Icon name="history" size={16} color="#673AB7" />
+            <Icon name="history" size={16} color="#F97316" />
             <Text style={styles.experience}>
               {astrologer.experience || '5'} years experience
             </Text>

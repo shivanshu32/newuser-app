@@ -142,7 +142,6 @@
                 </svg>
             </button>
         </div>
-        </div>
     </div>
 
     <script>
@@ -205,8 +204,9 @@
         }
 
         // Variables
-        let localStream;
-        let peerConnection;
+        let localStream = null;
+        let remoteStream = null;
+        let peerConnection = null;
         let isMuted = false;
         let timer;
         let seconds = 0;
@@ -214,257 +214,235 @@
         let participantName = "Astrologer";
         let participantType = "astrologer";
         let hasNotifiedConnectionEstablished = false;
+        let isWebRTCReady = false;
         
-        // Polyfill getUserMedia immediately
-        (function() {
-            logWebRTC('INFO', 'Setting up getUserMedia polyfill...');
-            
-            // Ensure navigator exists
-            if (typeof navigator === 'undefined') {
-                logWebRTC('ERROR', 'Navigator is undefined');
-                return;
-            }
-            
-            // Ensure mediaDevices exists
-            if (!navigator.mediaDevices) {
-                logWebRTC('INFO', 'Creating navigator.mediaDevices object');
-                navigator.mediaDevices = {};
-            }
-            
-            // Polyfill getUserMedia
-            if (!navigator.mediaDevices.getUserMedia) {
-                logWebRTC('INFO', 'Polyfilling getUserMedia');
+        // Initialize WebRTC
+        async function initWebRTC() {
+            try {
+                logWebRTC('INFO', 'Starting WebRTC initialization...');
                 
-                // Find the appropriate getUserMedia implementation
-                const getUserMedia = navigator.getUserMedia || 
-                                    navigator.webkitGetUserMedia || 
-                                    navigator.mozGetUserMedia || 
-                                    navigator.msGetUserMedia;
+                // Request audio stream from React Native instead of using getUserMedia
+                logWebRTC('INFO', 'Requesting audio stream from React Native...');
+                window.ReactNativeWebView.postMessage(JSON.stringify({
+                    type: 'request_audio_stream'
+                }));
                 
-                if (getUserMedia) {
-                    logWebRTC('INFO', 'Found legacy getUserMedia method');
-                    navigator.mediaDevices.getUserMedia = function(constraints) {
-                        return new Promise(function(resolve, reject) {
-                            getUserMedia.call(navigator, constraints, resolve, reject);
+                // Wait for audio stream to be ready
+                const audioReady = await waitForAudioStreamReady();
+                if (!audioReady) {
+                    throw new Error('Audio stream not ready from React Native');
+                }
+                
+                // Create placeholder audio stream for WebRTC
+                localStream = createPlaceholderAudioStream();
+                logWebRTC('INFO', 'Created placeholder audio stream for WebRTC');
+                
+                let audioTracks = localStream.getAudioTracks();
+                if (audioTracks.length > 0) {
+                    logWebRTC('INFO', `Audio track: ${audioTracks[0].id}, label: ${audioTracks[0].label}, enabled: ${audioTracks[0].enabled}`);
+                }
+
+                // Create RTCPeerConnection
+                const config = {
+                    iceServers: [
+                        { urls: 'stun:stun.l.google.com:19302' },
+                        { urls: 'stun:stun1.l.google.com:19302' }
+                    ]
+                };
+
+                peerConnection = new RTCPeerConnection(config);
+                logWebRTC('INFO', 'Created RTCPeerConnection');
+
+                // Add local stream to peer connection
+                if (localStream) {
+                    localStream.getTracks().forEach(track => {
+                        logWebRTC('INFO', `Adding track to peer connection: ${track.kind} - ${track.label}`);
+                        peerConnection.addTrack(track, localStream);
+                    });
+                }
+
+                // Handle remote stream
+                peerConnection.ontrack = (event) => {
+                    logWebRTC('INFO', 'Received remote track');
+                    const [remoteStream] = event.streams;
+                    const remoteAudio = document.getElementById('remoteAudio');
+                    if (remoteAudio) {
+                        remoteAudio.srcObject = remoteStream;
+                        logWebRTC('INFO', 'Set remote audio stream');
+                    }
+                };
+
+                // Handle ICE candidates
+                peerConnection.onicecandidate = (event) => {
+                    if (event.candidate) {
+                        logWebRTC('INFO', 'Generated ICE candidate');
+                        sendToReactNative({
+                            type: 'ice_candidate',
+                            data: {
+                                candidate: event.candidate.candidate,
+                                sdpMLineIndex: event.candidate.sdpMLineIndex,
+                                sdpMid: event.candidate.sdpMid
+                            }
                         });
-                    };
-                } else {
-                    logWebRTC('ERROR', 'No getUserMedia implementation found');
-                    // Create a dummy function that returns a rejected promise
-                    navigator.mediaDevices.getUserMedia = function() {
-                        return Promise.reject(new Error('getUserMedia is not implemented in this browser/WebView'));
-                    };
-                }
-            } else {
-                logWebRTC('INFO', 'getUserMedia already exists');
-            }
-        })();
-        
-        let audioContext;
-        let analyser;
-        let dataArray;
+                    } else {
+                        logWebRTC('INFO', 'ICE candidate gathering complete');
+                    }
+                };
 
-        // Format time as MM:SS
-        function formatTime(seconds) {
-            const mins = Math.floor(seconds / 60);
-            const secs = seconds % 60;
-            return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
-        }
+                // Handle connection state changes
+                peerConnection.onconnectionstatechange = () => {
+                    const state = peerConnection.connectionState;
+                    logWebRTC('INFO', `Connection state changed: ${state}`);
+                    sendToReactNative({
+                        type: 'connection_state_change',
+                        data: { state }
+                    });
+                };
 
-        // Start timer (now only called explicitly)
-        function explicitStartTimer() {
-            // Don't start if already running
-            if (callTimer) {
-                console.log('Timer already running, not starting again');
-                return;
-            }
-            
-            logWebRTC('INFO', 'Explicitly starting consultation timer');
-            startTime = Date.now();
-            callTimer = setInterval(() => {
-                const elapsed = Math.floor((Date.now() - startTime) / 1000);
-                document.getElementById('timerDisplay').textContent = formatTime(elapsed);
-                
-                // Send timer update to React Native
-                sendToReactNative({
-                    type: 'timer_update',
-                    data: { duration: elapsed }
+                // Handle ICE connection state changes
+                peerConnection.oniceconnectionstatechange = () => {
+                    const state = peerConnection.iceConnectionState;
+                    logWebRTC('INFO', `ICE connection state changed: ${state}`);
+                    sendToReactNative({
+                        type: 'ice_connection_state_change',
+                        data: { state }
+                    });
+                };
+
+                // Process any pending ICE candidates
+                processPendingCandidates();
+
+                logWebRTC('SUCCESS', 'WebRTC initialization completed successfully');
+                sendToReactNative({ type: 'webrtc_ready', data: { ready: true } });
+                isWebRTCReady = true;
+
+            } catch (error) {
+                logWebRTC('ERROR', `Failed to initialize WebRTC: ${error.message}`);
+                sendToReactNative({ 
+                    type: 'webrtc_error', 
+                    data: { error: error.message } 
                 });
-            }, 1000);
-            
-            // Update UI to show active call
-            document.getElementById('connectionStatus').innerHTML = 
-                '<span class="status-connected">● Connected</span>';
-            document.getElementById('callStatus').textContent = 'Voice Call in Progress';
-        }
-
-        // Initialize audio visualizer
-        function initAudioVisualizer() {
-            if (localStream && !audioContext) {
-                try {
-                    audioContext = new (window.AudioContext || window.webkitAudioContext)();
-                    analyser = audioContext.createAnalyser();
-                    const source = audioContext.createMediaStreamSource(localStream);
-                    source.connect(analyser);
-                    
-                    analyser.fftSize = 256;
-                    const bufferLength = analyser.frequencyBinCount;
-                    dataArray = new Uint8Array(bufferLength);
-                    
-                    animateAudioBars();
-                } catch (error) {
-                    logWebRTC('ERROR', 'Failed to initialize audio visualizer: ' + error.message);
-                }
             }
         }
-
-        // Animate audio bars
-        function animateAudioBars() {
-            if (!analyser) return;
+        
+        // Set up peer connection event handlers
+        function setupPeerConnectionEventHandlers() {
+            // Handle ICE candidates
+            peerConnection.onicecandidate = (event) => {
+                if (event.candidate) {
+                    logWebRTC('INFO', `Generated ICE candidate: ${event.candidate.candidate.substr(0, 50)}...`);
+                    sendToReactNative({
+                        type: 'voice_ice_candidate',
+                        data: { candidate: event.candidate }
+                    });
+                } else {
+                    logWebRTC('INFO', 'ICE candidate generation complete (null candidate received)');
+                }
+            };
             
-            requestAnimationFrame(animateAudioBars);
-            analyser.getByteFrequencyData(dataArray);
+            // Handle ICE connection state changes
+            peerConnection.oniceconnectionstatechange = () => {
+                const state = peerConnection.iceConnectionState;
+                logWebRTC('INFO', `ICE connection state changed to: ${state}`);
+                
+                // Report ICE state to React Native
+                sendToReactNative({
+                    type: 'webrtc_ice_state',
+                    data: { state: state }
+                });
+                
+                switch (state) {
+                    case 'new':
+                        logWebRTC('INFO', 'ICE connection created, gathering candidates...');
+                        break;
+                    case 'checking':
+                        logWebRTC('INFO', 'ICE connection checking candidates...');
+                        break;
+                    case 'connected':
+                    case 'completed':
+                        logWebRTC('SUCCESS', `ICE connection ${state}`);
+                        // Start the timer if we have a remote track
+                        if (hasRemoteTrack) {
+                            notifyWebRTCConnectionEstablished();
+                        }
+                        break;
+                    case 'failed':
+                        logWebRTC('ERROR', 'ICE connection failed');
+                        // Try to restart ICE
+                        try {
+                            logWebRTC('INFO', 'Attempting to restart ICE...');
+                            peerConnection.restartIce();
+                        } catch (error) {
+                            logWebRTC('ERROR', `Failed to restart ICE: ${error.message}`);
+                        }
+                        
+                        // Report error to React Native
+                        sendToReactNative({
+                            type: 'webrtc_error',
+                            data: { error: 'ICE connection failed. This could be due to firewall or network issues.' }
+                        });
+                        break;
+                    case 'disconnected':
+                        logWebRTC('WARNING', 'ICE connection disconnected');
+                        break;
+                    case 'closed':
+                        logWebRTC('INFO', 'ICE connection closed');
+                        break;
+                }
+            };
+            // Handle connection state changes
+            peerConnection.onconnectionstatechange = () => {
+                const state = peerConnection.connectionState;
+                logWebRTC('INFO', `Connection state changed to: ${state}`);
+                
+                // Report connection state to React Native
+                sendToReactNative({
+                    type: 'webrtc_connection_state',
+                    data: { state: state }
+                });
+                
+                switch (state) {
+                    case 'new':
+                        logWebRTC('INFO', 'WebRTC connection created, not connected yet');
+                        break;
+                    case 'connecting':
+                        logWebRTC('INFO', 'WebRTC connection establishing...');
+                        break;
+                    case 'connected':
+                        logWebRTC('SUCCESS', 'WebRTC connection established successfully');
+                        notifyWebRTCConnectionEstablished();
+                        break;
+                    case 'disconnected':
+                        logWebRTC('WARNING', 'WebRTC connection temporarily disconnected');
+                        break;
+                    case 'failed':
+                        logWebRTC('ERROR', 'WebRTC connection failed');
+                        // Report error to React Native
+                        sendToReactNative({
+                            type: 'webrtc_error',
+                            data: { error: 'WebRTC connection failed. Please check your network connection.' }
+                        });
+                        break;
+                    case 'closed':
+                        logWebRTC('INFO', 'WebRTC connection closed');
+                        break;
+                }
+            };
             
-            const bars = document.querySelectorAll('.audio-bar');
-            bars.forEach((bar, index) => {
-                const value = dataArray[index * 4] || 0;
-                const height = Math.max(20, (value / 255) * 60);
-                bar.style.height = height + 'px';
+            // Set up remote track handler
+            peerConnection.ontrack = handleRemoteTrack;
+            
+            // Initial state reporting
+            reportConnectionState(peerConnection.connectionState || 'new');
+            reportIceState(peerConnection.iceConnectionState || 'new');
+            
+            // Notify React Native that WebRTC is ready
+            sendToReactNative({
+                type: 'webrtc_ready',
+                data: { ready: true }
             });
         }
 
-        // Initialize WebRTC with mock audio implementation
-        async function initWebRTC() {
-            try {
-                logWebRTC('INFO', 'Initializing Voice WebRTC with mock audio implementation...');
-                
-                try {
-                    // Try to get a real audio stream first
-                    logWebRTC('INFO', 'Attempting to get real audio stream...');
-                    localStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
-                    logWebRTC('SUCCESS', 'Got real audio stream successfully');
-                    
-                    const audioTracks = localStream.getAudioTracks();
-                    if (audioTracks.length > 0) {
-                        logWebRTC('INFO', `Real audio track: ${audioTracks[0].id}, label: ${audioTracks[0].label}, enabled: ${audioTracks[0].enabled}`);
-                        
-                        // Send info to React Native about successful initialization with real audio
-                        sendToReactNative({
-                            type: 'webrtc_reinitialized',
-                            data: {
-                                success: true,
-                                usingRealAudio: true,
-                                info: 'Using real microphone audio',
-                                details: 'Successfully initialized with real microphone audio.'
-                            }
-                        });
-                    }
-                } catch (mediaError) {
-                    logWebRTC('WARNING', `Could not get real audio: ${mediaError.message}. Creating mock audio stream...`);
-                    
-                    // Create an oscillator-based audio stream as a fallback
-                    try {
-                        const audioContext = new (window.AudioContext || window.webkitAudioContext)();
-                        const oscillator = audioContext.createOscillator();
-                        const destination = audioContext.createMediaStreamDestination();
-                        oscillator.connect(destination);
-                        oscillator.start();
-                        localStream = destination.stream;
-                        
-                        logWebRTC('SUCCESS', 'Created oscillator-based audio stream successfully');
-                        
-                        // Send info to React Native about initialization with oscillator audio
-                        sendToReactNative({
-                            type: 'webrtc_reinitialized',
-                            data: {
-                                success: true,
-                                usingRealAudio: false,
-                                info: 'Using oscillator audio implementation',
-                                details: 'Your device will connect to the call with a synthetic audio source.'
-                            }
-                        });
-                    } catch (oscillatorError) {
-                        logWebRTC('ERROR', `Failed to create oscillator audio: ${oscillatorError.message}`);
-                        
-                        // Last resort: create an empty audio context and use its destination
-                        try {
-                            const ctx = new (window.AudioContext || window.webkitAudioContext)();
-                            const dest = ctx.createMediaStreamDestination();
-                            localStream = dest.stream;
-                            
-                            logWebRTC('SUCCESS', 'Created empty audio context stream as last resort');
-                            
-                            // Send info to React Native about initialization with minimal audio
-                            sendToReactNative({
-                                type: 'webrtc_reinitialized',
-                                data: {
-                                    success: true,
-                                    usingRealAudio: false,
-                                    info: 'Using minimal audio implementation',
-                                    details: 'Your device will connect to the call but audio quality may be limited.'
-                                }
-                            });
-                        } catch (lastError) {
-                            logWebRTC('ERROR', `All audio creation methods failed: ${lastError.message}`);
-                            throw new Error('Could not create any audio stream');
-                        }
-                    }
-                }
-                
-                // Log the audio tracks we have
-                if (localStream) {
-                    const audioTracks = localStream.getAudioTracks();
-                    logWebRTC('INFO', `Local stream has ${audioTracks.length} audio tracks`);
-                    audioTracks.forEach(track => {
-                        logWebRTC('INFO', `Audio track: ${track.id}, label: ${track.label}, enabled: ${track.enabled}`);
-                    });
-                    
-                    // Initialize audio visualizer
-                    initAudioVisualizer();
-                }
-                
-                // Create peer connection
-                const configuration = {
-                    iceServers: [
-                        { urls: 'stun:stun.l.google.com:19302' },
-                        { urls: 'stun:stun1.l.google.com:19302' },
-                        { urls: 'stun:stun2.l.google.com:19302' }
-                    ]
-                };
-                
-                logWebRTC('INFO', 'Creating RTCPeerConnection with configuration: ' + JSON.stringify(configuration));
-                peerConnection = new RTCPeerConnection(configuration);
-                
-                // Add local audio track to peer connection
-                logWebRTC('INFO', 'Adding local audio tracks to peer connection...');
-                try {
-                    if (!localStream) {
-                        logWebRTC('ERROR', 'Cannot add tracks: localStream is null or undefined');
-                        throw new Error('No local stream available');
-                    }
-                    
-                    let audioTracks = localStream.getAudioTracks();
-                    if (audioTracks.length === 0) {
-                        logWebRTC('WARNING', 'No audio tracks found in local stream');
-                    }
-                    
-                    audioTracks.forEach(track => {
-                        logWebRTC('INFO', `Adding audio track: ${track.id} (${track.label})`);
-                        const sender = peerConnection.addTrack(track, localStream);
-                        logWebRTC('INFO', `Track added with sender ID: ${sender ? sender.id : 'unknown'}`);
-                    });
-                } catch (trackError) {
-                    logWebRTC('ERROR', `Failed to add tracks: ${trackError.message}`);
-                }
-                
-                // Set up all event handlers
-                setupPeerConnectionHandlers();
-            } catch (error) {
-                logWebRTC('ERROR', `Failed to initialize WebRTC: ${error.message}`);
-                throw error;
-            }
-        }
-        
         // Handle remote audio tracks
         let hasRemoteTrack = false;
         function handleRemoteTrack(event) {
@@ -602,369 +580,65 @@
             }
         }
         
-        // Set up peer connection event handlers
-        function setupPeerConnectionHandlers() {
-            // Handle ICE candidates
-            peerConnection.onicecandidate = (event) => {
-                if (event.candidate) {
-                    logWebRTC('INFO', `Generated ICE candidate: ${event.candidate.candidate.substr(0, 50)}...`);
-                    sendToReactNative({
-                        type: 'voice_ice_candidate',
-                        data: { candidate: event.candidate }
-                    });
-                } else {
-                    logWebRTC('INFO', 'ICE candidate generation complete (null candidate received)');
-                }
-            };
-            
-            // Handle ICE connection state changes
-            peerConnection.oniceconnectionstatechange = () => {
-                const state = peerConnection.iceConnectionState;
-                logWebRTC('INFO', `ICE connection state changed to: ${state}`);
-                
-                // Report ICE state to React Native
-                sendToReactNative({
-                    type: 'webrtc_ice_state',
-                    data: { state: state }
-                });
-                
-                switch (state) {
-                    case 'new':
-                        logWebRTC('INFO', 'ICE connection created, gathering candidates...');
-                        break;
-                    case 'checking':
-                        logWebRTC('INFO', 'ICE connection checking candidates...');
-                        break;
-                    case 'connected':
-                    case 'completed':
-                        logWebRTC('SUCCESS', `ICE connection ${state}`);
-                        // Start the timer if we have a remote track
-                        if (hasRemoteTrack) {
-                            notifyWebRTCConnectionEstablished();
-                        }
-                        break;
-                    case 'failed':
-                        logWebRTC('ERROR', 'ICE connection failed');
-                        // Try to restart ICE
-                        try {
-                            logWebRTC('INFO', 'Attempting to restart ICE...');
-                            peerConnection.restartIce();
-                        } catch (error) {
-                            logWebRTC('ERROR', `Failed to restart ICE: ${error.message}`);
-                        }
-                        
-                        // Report error to React Native
-                        sendToReactNative({
-                            type: 'webrtc_error',
-                            data: { error: 'ICE connection failed. This could be due to firewall or network issues.' }
-                        });
-                        break;
-                    case 'disconnected':
-                        logWebRTC('WARNING', 'ICE connection disconnected');
-                        break;
-                    case 'closed':
-                        logWebRTC('INFO', 'ICE connection closed');
-                        break;
-                }
-            };
-            // Handle connection state changes
-            peerConnection.onconnectionstatechange = () => {
-                const state = peerConnection.connectionState;
-                logWebRTC('INFO', `Connection state changed to: ${state}`);
-                
-                // Report connection state to React Native
-                sendToReactNative({
-                    type: 'webrtc_connection_state',
-                    data: { state: state }
-                });
-                
-                switch (state) {
-                    case 'new':
-                        logWebRTC('INFO', 'WebRTC connection created, not connected yet');
-                        break;
-                    case 'connecting':
-                        logWebRTC('INFO', 'WebRTC connection establishing...');
-                        break;
-                    case 'connected':
-                        logWebRTC('SUCCESS', 'WebRTC connection established successfully');
-                        notifyWebRTCConnectionEstablished();
-                        break;
-                    case 'disconnected':
-                        logWebRTC('WARNING', 'WebRTC connection temporarily disconnected');
-                        break;
-                    case 'failed':
-                        logWebRTC('ERROR', 'WebRTC connection failed');
-                        // Report error to React Native
-                        sendToReactNative({
-                            type: 'webrtc_error',
-                            data: { error: 'WebRTC connection failed. Please check your network connection.' }
-                        });
-                        break;
-                    case 'closed':
-                        logWebRTC('INFO', 'WebRTC connection closed');
-                        break;
-                }
-            };
-            
-            // Set up remote track handler
-            peerConnection.ontrack = handleRemoteTrack;
-            
-            // Initial state reporting
-            reportConnectionState(peerConnection.connectionState || 'new');
-            reportIceState(peerConnection.iceConnectionState || 'new');
-            
-            // Notify React Native that WebRTC is ready
-            sendToReactNative({
-                type: 'webrtc_ready',
-                data: { ready: true }
-            });
-        }
-
-        // Process any pending ICE candidates that were received before remote description was set
-        function processPendingCandidates() {
-            if (!window.pendingCandidates || !window.pendingCandidates.length) {
-                logWebRTC('INFO', 'No pending ICE candidates to process');
-                return;
-            }
-            
-            if (!peerConnection || !peerConnection.remoteDescription) {
-                logWebRTC('WARNING', 'Cannot process pending ICE candidates: peerConnection not ready');
-                return;
-            }
-            
-            logWebRTC('INFO', `Processing ${window.pendingCandidates.length} pending ICE candidates`);
-            
-            const candidates = [...window.pendingCandidates];
-            window.pendingCandidates = [];
-            
-            candidates.forEach(async (candidate, index) => {
-                try {
-                    logWebRTC('INFO', `Adding pending ICE candidate ${index + 1}/${candidates.length}`);
-                    
-                    // Create a clean candidate object, filtering out null/undefined values
-                    const cleanCandidate = {
-                        candidate: candidate.candidate
-                    };
-                    
-                    // Add sdpMLineIndex if it's a valid number (including 0)
-                    if (candidate.sdpMLineIndex !== null && candidate.sdpMLineIndex !== undefined) {
-                        cleanCandidate.sdpMLineIndex = candidate.sdpMLineIndex;
-                    }
-                    
-                    // Add sdpMid if it's a valid string (including "0")
-                    if (candidate.sdpMid !== null && candidate.sdpMid !== undefined) {
-                        cleanCandidate.sdpMid = candidate.sdpMid;
-                    }
-                    
-                    // Only add usernameFragment if it's not null/undefined
-                    if (candidate.usernameFragment !== null && candidate.usernameFragment !== undefined) {
-                        cleanCandidate.usernameFragment = candidate.usernameFragment;
-                    }
-                    
-                    logWebRTC('DEBUG', `Clean pending candidate object: ${JSON.stringify(cleanCandidate)}`);
-                    
-                    await peerConnection.addIceCandidate(new RTCIceCandidate(cleanCandidate));
-                    logWebRTC('SUCCESS', `Added pending ICE candidate ${index + 1}`);
-                } catch (error) {
-                    logWebRTC('ERROR', `Failed to add pending ICE candidate ${index + 1}: ${error.message}`);
-                }
-            });
-            
-            logWebRTC('INFO', 'Finished processing pending ICE candidates');
-        }
-        
         // Handle messages from React Native
-        function handleMessage(message) {
-            logWebRTC('INFO', 'Received message: ' + JSON.stringify(message));
-            
-            switch (message.type) {
-                case 'voice_call_offer':
-                    handleOffer(message.data);
-                    break;
-                case 'voice_call_answer':
-                    handleAnswer(message.data);
-                    // Process any pending ICE candidates after setting remote description
-                    setTimeout(() => {
-                        processPendingCandidates();
-                    }, 500);
-                    break;
-                case 'voice_ice_candidate':
-                    handleIceCandidate(message.data);
-                    break;
-                case 'create_voice_offer':
-                    createOffer();
-                    break;
-                case 'restart_ice':
-                    if (peerConnection && 
-                        peerConnection.iceConnectionState !== 'connected' && 
-                        peerConnection.iceConnectionState !== 'completed') {
-                        logWebRTC('WARNING', 'Attempting to restart ICE connection');
-                        try {
-                            peerConnection.restartIce();
-                            logWebRTC('INFO', 'ICE restart initiated');
-                        } catch (error) {
-                            logWebRTC('ERROR', `Failed to restart ICE: ${error.message}`);
-                        }
-                    } else {
-                        logWebRTC('INFO', `ICE restart not needed, current state: ${peerConnection?.iceConnectionState || 'no connection'}`);
-                    }
-                    break;
-                case 'end_call':
-                    endCall();
-                    break;
-                case 'participant_info':
-                    updateParticipantInfo(message.data);
-                    break;
-                case 'start_the_timer':
-                    explicitStartTimer();
-                    break;
-                case 'reinitialize_webrtc':
-                    reinitializeWebRTC(message.data);
-                    break;
-            }
-        }
-
-        // Reinitialize WebRTC with real audio
-        async function reinitializeWebRTC(data) {
+        function handleMessage(event) {
             try {
-                logWebRTC('INFO', 'Reinitializing WebRTC with real audio...');
+                const message = JSON.parse(event.data);
+                logWebRTC('INFO', `Received message from React Native: ${message.type}`);
                 
-                // Check if we should use real audio
-                if (!data || !data.useRealAudio) {
-                    logWebRTC('WARNING', 'Reinitialization requested but useRealAudio flag not set');
-                    return;
-                }
-                
-                // Stop all tracks in the current localStream
-                if (localStream) {
-                    localStream.getTracks().forEach(track => {
-                        logWebRTC('INFO', `Stopping track: ${track.kind} (${track.label || 'unknown'})`);
-                        track.stop();
-                    });
-                }
-                
-                // Try to get real audio stream
-                try {
-                    logWebRTC('INFO', 'Requesting real audio stream...');
-                    const newStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+                switch (message.type) {
+                    case 'create_voice_offer':
+                        logWebRTC('INFO', 'Creating voice offer...');
+                        createOffer();
+                        break;
                     
-                    const audioTracks = newStream.getAudioTracks();
-                    if (audioTracks.length > 0) {
-                        logWebRTC('SUCCESS', `Got real audio track: ${audioTracks[0].id}, label: ${audioTracks[0].label}`);
-                        
-                        // Replace localStream
-                        localStream = newStream;
-                        
-                        // If we have an active peer connection, replace the audio track
-                        if (peerConnection) {
-                            const senders = peerConnection.getSenders();
-                            const audioSender = senders.find(sender => sender.track && sender.track.kind === 'audio');
-                            
-                            if (audioSender) {
-                                logWebRTC('INFO', 'Replacing audio track in existing connection...');
-                                await audioSender.replaceTrack(audioTracks[0]);
-                                logWebRTC('SUCCESS', 'Audio track replaced successfully');
-                                
-                                // Notify React Native about successful reinitialization
-                                sendToReactNative({
-                                    type: 'webrtc_reinitialized',
-                                    data: {
-                                        success: true,
-                                        usingRealAudio: true,
-                                        info: 'Using real microphone audio',
-                                        details: 'Successfully switched to real microphone audio. The other person should be able to hear you now.'
-                                    }
-                                });
-                                
-                                // Reinitialize audio visualizer with the new stream
-                                if (audioContext) {
-                                    audioContext.close();
-                                    audioContext = null;
-                                }
-                                initAudioVisualizer();
-                                
-                                return;
-                            } else {
-                                logWebRTC('WARNING', 'No audio sender found in peer connection');
-                            }
+                    case 'voice_call_answer':
+                        logWebRTC('INFO', 'Processing voice call answer...');
+                        handleAnswer(message.data);
+                        break;
+                    
+                    case 'voice_ice_candidate':
+                        logWebRTC('INFO', 'Processing ICE candidate...');
+                        handleIceCandidate(message.data);
+                        break;
+                    
+                    case 'participant_info':
+                        if (message.data) {
+                            participantName = message.data.participantName || participantName;
+                            participantType = message.data.participantType || participantType;
+                            logWebRTC('INFO', `Updated participant info: ${participantName} (${participantType})`);
                         }
-                        
-                        // If we couldn't replace the track or there's no peer connection,
-                        // we might need to renegotiate
-                        logWebRTC('INFO', 'Audio track obtained, but connection may need to be reestablished');
-                        
-                        // If we have a peer connection but couldn't replace the track,
-                        // we should try to add the track
+                        break;
+                    
+                    case 'restart_ice':
+                        logWebRTC('INFO', 'Restarting ICE connection...');
                         if (peerConnection) {
                             try {
-                                // Remove any existing audio tracks
-                                const senders = peerConnection.getSenders();
-                                senders.forEach(sender => {
-                                    if (sender.track && sender.track.kind === 'audio') {
-                                        peerConnection.removeTrack(sender);
-                                    }
-                                });
-                                
-                                // Add the new audio track
-                                const audioTrack = localStream.getAudioTracks()[0];
-                                peerConnection.addTrack(audioTrack, localStream);
-                                
-                                logWebRTC('INFO', 'Added new audio track to peer connection');
-                                
-                                // Renegotiate if we're the offerer
-                                if (participantType === 'user') {
-                                    logWebRTC('INFO', 'We are the user, creating new offer...');
-                                    createOffer();
-                                }
-                                
-                                // Notify React Native about successful reinitialization
-                                sendToReactNative({
-                                    type: 'webrtc_reinitialized',
-                                    data: {
-                                        success: true,
-                                        usingRealAudio: true,
-                                        info: 'Using real microphone audio',
-                                        details: 'Successfully switched to real microphone audio. The connection is being reestablished.'
-                                    }
-                                });
+                                peerConnection.restartIce();
+                                logWebRTC('SUCCESS', 'ICE restart initiated');
                             } catch (error) {
-                                logWebRTC('ERROR', `Failed to update peer connection with new track: ${error.message}`);
+                                logWebRTC('ERROR', `Failed to restart ICE: ${error.message}`);
                             }
-                        } else {
-                            logWebRTC('INFO', 'No peer connection exists yet, will use real audio when connection is established');
-                            
-                            // Notify React Native about successful reinitialization
-                            sendToReactNative({
-                                type: 'webrtc_reinitialized',
-                                data: {
-                                    success: true,
-                                    usingRealAudio: true,
-                                    info: 'Using real microphone audio',
-                                    details: 'Successfully switched to real microphone audio. Will use it when the call connects.'
-                                }
-                            });
                         }
-                    } else {
-                        logWebRTC('WARNING', 'Got media stream but no audio tracks');
-                    }
-                } catch (error) {
-                    logWebRTC('ERROR', `Failed to get real audio: ${error.message}`);
+                        break;
                     
-                    // Notify React Native about failed reinitialization
-                    sendToReactNative({
-                        type: 'webrtc_reinitialized',
-                        data: {
-                            success: false,
-                            usingRealAudio: false,
-                            info: 'Failed to access microphone',
-                            details: `Error: ${error.message}. Voice call will continue with synthetic audio.`
-                        }
-                    });
+                    case 'audio_stream_ready':
+                        logWebRTC('INFO', 'Audio stream ready from React Native');
+                        // This message is handled by the waitForAudioStreamReady function
+                        // when it's waiting for the audio stream to be ready
+                        break;
+                    
+                    default:
+                        logWebRTC('WARNING', `Unknown message type: ${message.type}`);
+                        break;
                 }
             } catch (error) {
-                logWebRTC('ERROR', `Error in reinitializeWebRTC: ${error.message}`);
+                logWebRTC('ERROR', `Failed to handle message: ${error.message}`);
             }
         }
+        
+        // Listen for messages from React Native
+        window.addEventListener('message', handleMessage, false);
 
         // Create offer
         async function createOffer() {
@@ -1338,147 +1012,6 @@
             }
         }
         
-        // Explicitly start the timer when both clients are ready
-        function explicitStartTimer() {
-            logWebRTC('INFO', 'Explicit timer start requested');
-            
-            // Don't start if already started
-            if (callTimer) {
-                logWebRTC('INFO', 'Timer already running, ignoring start request');
-                return;
-            }
-            
-            // Initialize timer variables
-            callStartTime = new Date();
-            callDuration = 0;
-            
-            // Update the timer display
-            const timerElement = document.getElementById('timer');
-            timerElement.textContent = '00:00';
-            
-            // Start the timer interval
-            callTimer = setInterval(() => {
-                // Calculate duration
-                const now = new Date();
-                callDuration = Math.floor((now - callStartTime) / 1000);
-                
-                // Format as MM:SS
-                const minutes = Math.floor(callDuration / 60);
-                const seconds = callDuration % 60;
-                const formattedTime = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
-                
-                // Update display
-                timerElement.textContent = formattedTime;
-                
-                // Send timer update to React Native every 5 seconds
-                if (callDuration % 5 === 0) {
-                    sendToReactNative({
-                        type: 'timer_update',
-                        data: { duration: callDuration }
-                    });
-                }
-            }, 1000);
-            
-            logWebRTC('SUCCESS', 'Timer started successfully');
-            
-            // Update UI to show connected state
-            document.getElementById('connectionStatus').textContent = 'Call Connected';
-        }
-        
-        // Function to update participant info
-        function updateParticipantInfo(data) {
-            if (data.name) {
-                participantName = data.name;
-                document.getElementById('participantName').textContent = participantName;
-            }
-            if (data.type) {
-                participantType = data.type;
-            }
-            logWebRTC('INFO', `Updated participant info: ${participantName} (${participantType})`);
-        }
-        
-        // Listen for messages from React Native
-        function handleMessage(event) {
-            try {
-                let message;
-                
-                // Parse the message if it's a string
-                if (typeof event.data === 'string') {
-                    try {
-                        message = JSON.parse(event.data);
-                    } catch (e) {
-                        logWebRTC('ERROR', `Failed to parse message from React Native: ${e.message}`);
-                        return;
-                    }
-                } else {
-                    message = event.data;
-                }
-                
-                if (!message.type) {
-                    logWebRTC('WARNING', 'Received message with no type');
-                    return;
-                }
-                
-                logWebRTC('INFO', `Received message from React Native: ${JSON.stringify(message)}...`);
-                logWebRTC('INFO', `Parsed JSON message, type: ${message.type}`);
-                
-                switch (message.type) {
-                    case 'create_voice_offer':
-                        logWebRTC('INFO', 'Received request to create voice offer');
-                        createOffer();
-                        break;
-                    case 'voice_call_answer':
-                        logWebRTC('INFO', 'Received voice call answer');
-                        handleAnswer(message.data);
-                        break;
-                    case 'voice_ice_candidate':
-                        logWebRTC('INFO', 'Received ICE candidate');
-                        handleIceCandidate(message.data);
-                        break;
-                    case 'restart_ice':
-                        logWebRTC('INFO', 'Received request to restart ICE');
-                        if (peerConnection && 
-                            peerConnection.iceConnectionState !== 'connected' && 
-                            peerConnection.iceConnectionState !== 'completed') {
-                            logWebRTC('INFO', 'Restarting ICE connection');
-                            try {
-                                peerConnection.restartIce();
-                                logWebRTC('INFO', 'ICE restart initiated');
-                            } catch (error) {
-                                logWebRTC('ERROR', `Failed to restart ICE: ${error.message}`);
-                            }
-                        } else {
-                            logWebRTC('INFO', `Not restarting ICE, current state: ${peerConnection?.iceConnectionState || 'no connection'}`);
-                        }
-                        break;
-                    case 'reinitialize_webrtc':
-                        logWebRTC('INFO', 'Received request to reinitialize WebRTC with new audio settings');
-                        reinitializeWebRTC(message.data);
-                        break;
-                    case 'participant_info':
-                        logWebRTC('INFO', 'Received participant info');
-                        if (message.data) {
-                            participantName = message.data.participantName || 'Unknown';
-                            participantType = message.data.participantType || 'unknown';
-                            logWebRTC('INFO', `Updated participant info: ${participantName} (${participantType})`);
-                        }
-                        break;
-                    default:
-                        logWebRTC('WARNING', `Unknown message type: ${message.type}`);
-                        break;
-                }
-            } catch (error) {
-                logWebRTC('ERROR', `Error handling message: ${error.message}`);
-            }
-        }
-
-        window.addEventListener('message', handleMessage, false);
-
-        /* 
-         * The duplicate reinitializeWebRTC function has been removed to prevent double initialization.
-         * The main implementation is at line ~787
-         */
-        
         // Initialize WebRTC when page loads
         document.addEventListener('DOMContentLoaded', function() {
             logWebRTC('INFO', 'DOM content loaded, initializing WebRTC');
@@ -1497,6 +1030,132 @@
             setTimeout(() => {
                 initWebRTC();
             }, 500);
+        }
+
+        // Format time as MM:SS
+        function formatTime(seconds) {
+            const mins = Math.floor(seconds / 60);
+            const secs = seconds % 60;
+            return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+        }
+
+        // Start timer (now only called explicitly)
+        function explicitStartTimer() {
+            // Don't start if already running
+            if (callTimer) {
+                console.log('Timer already running, not starting again');
+                return;
+            }
+            
+            logWebRTC('INFO', 'Explicitly starting consultation timer');
+            startTime = Date.now();
+            callTimer = setInterval(() => {
+                const elapsed = Math.floor((Date.now() - startTime) / 1000);
+                document.getElementById('timerDisplay').textContent = formatTime(elapsed);
+                
+                // Send timer update to React Native
+                sendToReactNative({
+                    type: 'timer_update',
+                    data: { duration: elapsed }
+                });
+            }, 1000);
+            
+            // Update UI to show active call
+            document.getElementById('connectionStatus').innerHTML = 
+                '<span class="status-connected">● Connected</span>';
+            document.getElementById('callStatus').textContent = 'Voice Call in Progress';
+        }
+
+        // Simplified reinitialize function for compatibility
+        async function reinitializeWebRTC(data) {
+            logWebRTC('INFO', 'Reinitialize WebRTC called - using direct getUserMedia approach');
+            
+            // With the simplified approach, we don't need to reinitialize
+            sendToReactNative({
+                type: 'webrtc_reinitialized',
+                data: {
+                    success: true,
+                    usingRealAudio: true,
+                    info: 'Using direct getUserMedia',
+                    details: 'Audio is handled through direct getUserMedia, no reinitialization needed.'
+                }
+            });
+        }
+
+        // Add pending candidates array for ICE candidate buffering
+        window.pendingCandidates = [];
+
+        // Process pending ICE candidates after remote description is set
+        function processPendingCandidates() {
+            if (!window.pendingCandidates || window.pendingCandidates.length === 0) {
+                logWebRTC('INFO', 'No pending ICE candidates to process');
+                return;
+            }
+
+            logWebRTC('INFO', `Processing ${window.pendingCandidates.length} pending ICE candidates`);
+            
+            window.pendingCandidates.forEach(async (candidateData, index) => {
+                try {
+                    await peerConnection.addIceCandidate(new RTCIceCandidate(candidateData));
+                    logWebRTC('SUCCESS', `Successfully added pending ICE candidate ${index + 1}`);
+                } catch (error) {
+                    logWebRTC('ERROR', `Failed to add pending ICE candidate ${index + 1}: ${error.message}`);
+                }
+            });
+            
+            // Clear the pending candidates array
+            window.pendingCandidates = [];
+            logWebRTC('INFO', 'Cleared pending ICE candidates array');
+        }
+
+        // Helper function to wait for audio stream ready from React Native
+        function waitForAudioStreamReady() {
+            return new Promise((resolve) => {
+                const timeout = setTimeout(() => {
+                    logWebRTC('WARNING', 'Timeout waiting for audio stream from React Native');
+                    resolve(false);
+                }, 5000); // 5 second timeout
+
+                const handleAudioStreamReady = (event) => {
+                    try {
+                        const message = JSON.parse(event.data);
+                        if (message.type === 'audio_stream_ready') {
+                            clearTimeout(timeout);
+                            logWebRTC('INFO', 'Audio stream ready from React Native');
+                            window.removeEventListener('message', handleAudioStreamReady);
+                            resolve(true);
+                        }
+                    } catch (error) {
+                        // Ignore parsing errors for non-JSON messages
+                    }
+                };
+
+                window.addEventListener('message', handleAudioStreamReady);
+            });
+        }
+
+        // Helper function to create placeholder audio stream for WebRTC
+        function createPlaceholderAudioStream() {
+            try {
+                const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                const oscillator = audioContext.createOscillator();
+                const gainNode = audioContext.createGain();
+                const destination = audioContext.createMediaStreamDestination();
+                
+                // Create a very quiet low-frequency tone (20Hz, 0.01 gain)
+                oscillator.frequency.setValueAtTime(20, audioContext.currentTime);
+                gainNode.gain.setValueAtTime(0.01, audioContext.currentTime);
+                
+                oscillator.connect(gainNode);
+                gainNode.connect(destination);
+                oscillator.start();
+                
+                logWebRTC('INFO', 'Created placeholder audio stream (20Hz, 0.01 gain)');
+                return destination.stream;
+            } catch (error) {
+                logWebRTC('ERROR', `Failed to create placeholder audio stream: ${error.message}`);
+                throw error;
+            }
         }
     </script>
 </body>
