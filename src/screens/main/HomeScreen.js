@@ -35,7 +35,12 @@ const HomeScreen = ({ navigation }) => {
     try {
       // Only attempt to fetch if user is logged in
       if (user && user._id) {
-        const API_URL = `http://192.168.29.107:5000/api/v1/wallet/balance`;
+        // API URL Configuration - Comment/Uncomment as needed
+        // Local Development
+        // const API_URL = `http://192.168.29.107:5000/api/v1/wallet/balance`;
+        
+        // Production
+        const API_URL = `http://3.110.171.85/api/v1/wallet/balance`;
         
         const response = await fetch(API_URL, {
           method: 'GET',
@@ -85,7 +90,12 @@ const HomeScreen = ({ navigation }) => {
         setLoadingMore(true);
       }
       
-      const API_URL = `http://192.168.29.107:5000/api/v1/astrologers?page=${pageNumber}&limit=10`;
+      // API URL Configuration - Comment/Uncomment as needed
+      // Local Development
+      // const API_URL = `http://192.168.29.107:5000/api/v1/astrologers?page=${pageNumber}&limit=10`;
+      
+      // Production
+      const API_URL = `http://3.110.171.85/api/v1/astrologers?page=${pageNumber}&limit=10`;
       
       const response = await fetch(API_URL, {
         method: 'GET',

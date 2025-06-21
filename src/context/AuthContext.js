@@ -1,12 +1,17 @@
 import React, { createContext, useState, useContext, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
+import { Alert } from 'react-native';
 
 // Create context
 const AuthContext = createContext();
 
-// API URL
-const API_URL = 'http://192.168.29.107:5000/api/v1';
+// API URL Configuration - Comment/Uncomment as needed
+// Local Development
+// const API_URL = 'http://192.168.29.107:5000/api/v1';
+
+// Production
+const API_URL = 'http://3.110.171.85/api/v1';
 
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
@@ -56,6 +61,15 @@ export const AuthProvider = ({ children }) => {
       console.log('OTP request response:', response.data);
       
       if (response.data.success) {
+        // Display OTP in alert - Backend returns OTP in response.data.data.otp
+        if (response.data.data && response.data.data.otp) {
+          Alert.alert(
+            'OTP Generated', 
+            `Your OTP is: ${response.data.data.otp}`,
+            [{ text: 'OK' }]
+          );
+        }
+        
         setLoading(false);
         return { success: true, message: 'OTP sent successfully' };
       } else {

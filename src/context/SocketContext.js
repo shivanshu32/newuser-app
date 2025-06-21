@@ -1,11 +1,15 @@
-import React, { createContext, useContext, useEffect, useRef, useState } from 'react';
+import React, { createContext, useContext, useEffect, useState, useRef } from 'react';
 import { AppState } from 'react-native';
 import { io } from 'socket.io-client';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAuth } from './AuthContext';
 
-// Socket server URL - extract base URL from API_URL in api.js
-const SOCKET_SERVER_URL = 'http://192.168.29.107:5000';
+// Socket Server URL Configuration - Comment/Uncomment as needed
+// Local Development
+// const SOCKET_SERVER_URL = 'http://192.168.29.107:5000';
+
+// Production
+const SOCKET_SERVER_URL = 'http://3.110.171.85';
 
 // Create context
 const SocketContext = createContext(null);

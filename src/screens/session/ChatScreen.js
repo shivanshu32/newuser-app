@@ -131,7 +131,11 @@ const ChatScreen = ({ route, navigation }) => {
     }
     
     // Connect to the Socket.IO server
-    const socketUrl = 'http://192.168.29.107:5000';
+    // Local Development
+    // const socketUrl = 'http://192.168.29.107:5000';
+    
+    // Production
+    const socketUrl = 'http://3.110.171.85';
     console.log('ChatScreen: Connecting to socket server at:', socketUrl);
     
     const socketOptions = {

@@ -2,7 +2,7 @@
   "expo": {
     "jsEngine": "hermes",
     "name": "Jyotish Call - User",
-    "slug": "jyotish-call-user",
+    "slug": "jyotishcall-user-app",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon-square.png",
@@ -28,7 +28,11 @@
         "backgroundColor": "#ffffff"
       },
       "package": "com.jyotishcall.user",
-      "permissions": ["RECORD_AUDIO", "MODIFY_AUDIO_SETTINGS"]
+      "permissions": [
+        "RECORD_AUDIO",
+        "MODIFY_AUDIO_SETTINGS"
+      ],
+      "usesCleartextTraffic": true
     },
     "web": {
       "favicon": "./assets/splash.png"
@@ -45,13 +49,12 @@
     "updates": {
       "url": "https://u.expo.dev/your-project-id"
     },
-    "runtimeVersion": {
-      "policy": "appVersion"
-    },
+    "runtimeVersion": "1.0.0",
     "extra": {
       "eas": {
-        "projectId": "your-project-id"
+        "projectId": "19ce1c4d-7c68-407f-96a0-d41bedaa3d55"
       }
-    }
+    },
+    "owner": "shivanshu32"
   }
 }

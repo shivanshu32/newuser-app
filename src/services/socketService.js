@@ -4,8 +4,13 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 // Constants for typing indicator
 const TYPING_DEBOUNCE_TIME = 1000; // 1 second
 
-// API URL (should match the backend URL) - Using local network IP instead of localhost for device/emulator access
-const API_URL = 'http://192.168.29.107:5000';
+// API URL Configuration - Comment/Uncomment as needed
+// Local Development (commented out for production)
+// const API_URL = 'http://192.168.29.107:5000';
+
+// Production - New backend URL
+const API_URL = 'https://jyotishcallbackend-2uxrv.ondigitalocean.app';
+// Old production URL: const API_URL = 'http://3.110.171.85';
 
 let socket = null;
 

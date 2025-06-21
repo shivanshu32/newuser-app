@@ -1,9 +1,29 @@
 import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import Constants from 'expo-constants';
 
-// API URL - Using local network IP instead of localhost for device/emulator access
-const API_URL = 'http://192.168.29.107:5000';
+// API URL Configuration based on environment
+const getApiUrl = () => {
+  // Check if we're in development (Expo Go)
+  const isDevelopment = __DEV__ || Constants.appOwnership === 'expo';
+  
+  if (isDevelopment) {
+    // Local development - use your local IP (commented out for production)
+    // return 'http://192.168.29.107:5000';
+    
+    // Production URL for development testing
+    return 'https://jyotishcallbackend-2uxrv.ondigitalocean.app';
+  } else {
+    // Production - use new production URL
+    // Old production URL: return 'https://3.110.171.85';
+    return 'https://jyotishcallbackend-2uxrv.ondigitalocean.app';
+  }
+};
+
+const API_URL = getApiUrl();
 const API_BASE = `${API_URL}/api/v1`;
+
+console.log('API Configuration:', { API_URL, isDev: __DEV__, appOwnership: Constants.appOwnership });
 
 // Create axios instance
 const API = axios.create({
