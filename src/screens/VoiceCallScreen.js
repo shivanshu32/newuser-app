@@ -139,8 +139,7 @@ const VoiceCallScreenInner = () => {
       
       // Set up a one-time listener for when socket connects
       const handleConnect = () => {
-        console.log('[USER-APP] Socket connected event fired');
-        setSocketReady(true);
+        console.log('[USER-APP] Socket connected for voice call');
       };
       
       socket.on('connect', handleConnect);
@@ -163,36 +162,26 @@ const VoiceCallScreenInner = () => {
       return;
     }
     
-    console.log('[USER-APP] Setting up socket event listeners for voice call');
-    console.log('[USER-APP] Socket ID:', socket.id);
-    console.log('[USER-APP] Socket connected:', socket.connected);
-
-    const handleVoiceCallOffer = (data) => {
-      console.log('[USER-APP] Received voice call offer:', data);
-      if (webViewRef.current) {
+    console.log('[USER-APP] Setting up voice call socket listeners');
+    
+    // Use unified signal protocol to match backend and astrologer-app
+    const handleSignal = (data) => {
+      console.log('[USER-APP] Received unified signal:', data);
+      if (webViewRef.current && data.signal) {
+        // Forward the signal to WebView with appropriate type based on signal content
+        let messageType = 'signal';
+        if (data.signal.type === 'offer') {
+          messageType = 'offer';
+        } else if (data.signal.type === 'answer') {
+          messageType = 'answer';
+        } else if (data.signal.candidate) {
+          messageType = 'ice-candidate';
+        }
+        
         webViewRef.current.postMessage(JSON.stringify({
-          type: 'voice_call_offer',
-          data: data
-        }));
-      }
-    };
-
-    const handleVoiceCallAnswer = (data) => {
-      console.log('[USER-APP] Received voice call answer:', data);
-      if (webViewRef.current) {
-        webViewRef.current.postMessage(JSON.stringify({
-          type: 'voice_call_answer',
-          data: data
-        }));
-      }
-    };
-
-    const handleVoiceIceCandidate = (data) => {
-      console.log('[USER-APP] Received voice ICE candidate:', data);
-      if (webViewRef.current) {
-        webViewRef.current.postMessage(JSON.stringify({
-          type: 'voice_ice_candidate',
-          data: data
+          type: messageType,
+          [messageType === 'ice-candidate' ? 'candidate' : messageType]: data.signal,
+          sessionId: data.sessionId
         }));
       }
     };
@@ -262,88 +251,60 @@ const VoiceCallScreenInner = () => {
       }
     };
 
-    // Add socket listeners with confirmation logging
-    socket.on('voice_call_offer', handleVoiceCallOffer);
-    console.log('[USER-APP] Registered voice_call_offer listener');
-    
-    socket.on('voice_call_answer', handleVoiceCallAnswer);
-    console.log('[USER-APP] Registered voice_call_answer listener');
-    
-    socket.on('voice_ice_candidate', handleVoiceIceCandidate);
-    console.log('[USER-APP] Registered voice_ice_candidate listener');
-    
-    socket.on('start_voice_call', handleStartVoiceCall);
-    console.log('[USER-APP] Registered start_voice_call listener');
-    
-    socket.on('webrtc_client_ready_for_timer', handleWebRTCClientReadyForTimer);
-    console.log('[USER-APP] Registered webrtc_client_ready_for_timer listener');
-    
-    socket.on('ice_restart_initiated', handleIceRestartInitiated);
-    console.log('[USER-APP] Registered ice_restart_initiated listener');
-    
-    // Now that all socket listeners are registered, join consultation room and emit user_joined_consultation
-    console.log('[USER-APP] All socket listeners registered, now joining consultation room');
-    console.log('[USER-APP] Room details:', { bookingId, roomId, socketConnected: socket.connected });
-    
-    // Get astrologerId from eventData if available
-    const astrologerId = eventData?.astrologerId || '67ffe412a96474bf13f80a14'; // Fallback ID if not available
-    
-    const roomIdToJoin = roomId || `consultation:${bookingId}`;
-    socket.emit('join_consultation_room', {
-      bookingId: bookingId,
-      roomId: roomIdToJoin
-    }, (response) => {
-      console.log('[USER-APP] join_consultation_room response:', response);
-      if (response?.success) {
-        console.log('[USER-APP] Successfully joined consultation room:', roomIdToJoin);
-        
-        const userJoinedData = {
-          bookingId: bookingId,
-          userId: user?.id,
-          astrologerId: astrologerId,
-          sessionId: sessionId,
-          roomId: roomIdToJoin,
-          type: 'voice',
-          consultationType: 'voice',
-          bookingDetails: {
-            _id: bookingId,
-            type: 'voice',
-            consultationType: 'voice',
-            sessionId: sessionId,
-            astrologer: astrologerId
-          }
-        };
-        
-        console.log('[USER-APP] Emitting user_joined_consultation with data:', JSON.stringify(userJoinedData));
-        
-        socket.emit('user_joined_consultation', userJoinedData, (joinResponse) => {
-          if (joinResponse && joinResponse.success) {
-            console.log('[USER-APP] Successfully notified astrologer about joining voice call');
-          } else {
-            console.error('[USER-APP] Failed to notify astrologer:', joinResponse?.error || 'Unknown error');
-          }
-        });
-      } else {
-        console.error('[USER-APP] Failed to join consultation room:', response);
-        setError('Failed to join consultation room');
+    const handleVoiceCallOffer = (data) => {
+      console.log('[USER-APP] Received voice call offer (legacy):', data);
+      if (webViewRef.current) {
+        webViewRef.current.postMessage(JSON.stringify({
+          type: 'offer',
+          offer: data.signal || data,
+          sessionId: data.sessionId
+        }));
       }
-    });
+    };
 
-    // Add a timeout to detect if the callback never fires
-    setTimeout(() => {
-      console.log('[USER-APP] join_consultation_room timeout check - if no response logged above, the server may not be responding');
-    }, 5000);
+    const handleVoiceCallAnswer = (data) => {
+      console.log('[USER-APP] Received voice call answer (legacy):', data);
+      if (webViewRef.current) {
+        webViewRef.current.postMessage(JSON.stringify({
+          type: 'answer',
+          answer: data.signal || data,
+          sessionId: data.sessionId
+        }));
+      }
+    };
+
+    const handleVoiceIceCandidate = (data) => {
+      console.log('[USER-APP] Received voice ICE candidate (legacy):', data);
+      if (webViewRef.current) {
+        webViewRef.current.postMessage(JSON.stringify({
+          type: 'ice-candidate',
+          candidate: data.signal || data.candidate || data,
+          sessionId: data.sessionId
+        }));
+      }
+    };
+
+    socket.on('signal', handleSignal);
+    socket.on('start_voice_call', handleStartVoiceCall);
+    socket.on('voice_call_ended', handleVoiceCallEnded);
+    socket.on('webrtc_client_ready_for_timer', handleWebRTCClientReadyForTimer);
+    socket.on('ice_restart_initiated', handleIceRestartInitiated);
+    socket.on('voice_call_offer', handleVoiceCallOffer);
+    socket.on('voice_call_answer', handleVoiceCallAnswer);
+    socket.on('voice_ice_candidate', handleVoiceIceCandidate);
 
     // Cleanup listeners
     return () => {
+      socket.off('signal', handleSignal);
+      socket.off('start_voice_call', handleStartVoiceCall);
+      socket.off('voice_call_ended', handleVoiceCallEnded);
+      socket.off('webrtc_client_ready_for_timer', handleWebRTCClientReadyForTimer);
+      socket.off('ice_restart_initiated', handleIceRestartInitiated);
       socket.off('voice_call_offer', handleVoiceCallOffer);
       socket.off('voice_call_answer', handleVoiceCallAnswer);
       socket.off('voice_ice_candidate', handleVoiceIceCandidate);
-      socket.off('start_voice_call', handleStartVoiceCall);
-      socket.off('webrtc_client_ready_for_timer', handleWebRTCClientReadyForTimer);
-      socket.off('ice_restart_initiated', handleIceRestartInitiated);
     };
-  }, [socket, bookingId, sessionId, roomId, user, socketReady]);
+  }, [socket, socketReady, bookingId, sessionId, roomId, user]);
 
   // Track WebRTC connection state changes
   useEffect(() => {
@@ -464,41 +425,56 @@ const VoiceCallScreenInner = () => {
           break;
 
         case 'voice_call_offer':
-          // Send offer to astrologer via socket
-          socket.emit('voice_call_offer', {
-            signal: message.data.signal, // Use the signal data directly, not wrapped
-            bookingId: bookingId,
-            sessionId: sessionId,
-            roomId: roomId,
-            fromUser: true,
-            to: 'astrologer' // Add routing information for backend
-          });
+          // Send offer to astrologer via socket using unified signal protocol
+          if (socket && socket.connected) {
+            console.log('[USER-APP] Sending voice call offer via unified signal protocol');
+            socket.emit('signal', {
+              signal: message.data, // Use the complete signal data
+              bookingId: bookingId,
+              sessionId: sessionId,
+              roomId: roomId,
+              fromUser: true,
+              to: 'astrologer' // Add routing information for backend
+            });
+          } else {
+            console.error('[USER-APP] Socket not connected, cannot send voice call offer');
+          }
           break;
 
         case 'voice_call_answer':
-          // Send answer to astrologer via socket
-          socket.emit('voice_call_answer', {
-            signal: message.data.signal, // Use the signal data directly, not wrapped
-            bookingId: bookingId,
-            sessionId: sessionId,
-            roomId: roomId,
-            fromUser: true,
-            to: 'astrologer' // Add routing information for backend
-          });
+          // Send answer to astrologer via socket using unified signal protocol
+          if (socket && socket.connected) {
+            console.log('[USER-APP] Sending voice call answer via unified signal protocol');
+            socket.emit('signal', {
+              signal: message.data, // Use the complete signal data
+              bookingId: bookingId,
+              sessionId: sessionId,
+              roomId: roomId,
+              fromUser: true,
+              to: 'astrologer' // Add routing information for backend
+            });
+          } else {
+            console.error('[USER-APP] Socket not connected, cannot send voice call answer');
+          }
           break;
 
         case 'voice_ice_candidate':
-          // Send ICE candidate to astrologer via socket
-          socket.emit('voice_ice_candidate', {
-            signal: message.data.candidate, // Use the candidate data directly for ICE candidates
-            bookingId: bookingId,
-            sessionId: sessionId,
-            roomId: roomId,
-            fromUser: true,
-            to: 'astrologer' // Add routing information for backend
-          });
+          // Send ICE candidate to astrologer via socket using unified signal protocol
+          if (socket && socket.connected) {
+            console.log('[USER-APP] Sending voice ICE candidate via unified signal protocol');
+            socket.emit('signal', {
+              signal: message.data, // Use the complete candidate data
+              bookingId: bookingId,
+              sessionId: sessionId,
+              roomId: roomId,
+              fromUser: true,
+              to: 'astrologer' // Add routing information for backend
+            });
+          } else {
+            console.error('[USER-APP] Socket not connected, cannot send voice ICE candidate');
+          }
           break;
-          
+
         case 'webrtc_local_connection_established':
           console.log('[USER-APP] Local WebRTC connection established');
           setIsLocalWebRTCConnected(true);

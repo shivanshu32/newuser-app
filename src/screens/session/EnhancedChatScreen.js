@@ -1,0 +1,846 @@
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import {
+  StyleSheet,
+  View,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  FlatList,
+  KeyboardAvoidingView,
+  Platform,
+  Alert,
+  ActivityIndicator,
+  Image,
+  StatusBar,
+} from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Ionicons } from '@expo/vector-icons';
+import { useAuth } from '../../context/AuthContext';
+import { bookingsAPI } from '../../services/api';
+import ChatConnectionManager from '../../utils/ChatConnectionManager';
+
+const EnhancedChatScreen = ({ route, navigation }) => {
+  // Extract and validate bookingId from route params
+  const routeParams = route.params || {};
+  const bookingId = routeParams.bookingId || (routeParams.booking && routeParams.booking._id);
+  const astrologerFromRoute = routeParams.astrologer;
+  const userInfoFromRoute = routeParams.userInfo;
+  
+  // State variables
+  const [messages, setMessages] = useState([]);
+  const [inputText, setInputText] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [connectionStatus, setConnectionStatus] = useState('initializing');
+  const [connectionMessage, setConnectionMessage] = useState('');
+  const [sessionActive, setSessionActive] = useState(false);
+  const [sessionTime, setSessionTime] = useState(0);
+  const [sessionId, setSessionId] = useState(null);
+  const [astrologer, setAstrologer] = useState(astrologerFromRoute || null);
+  const [user, setUser] = useState(null);
+  const [booking, setBooking] = useState(null);
+  const [userInfo, setUserInfo] = useState(userInfoFromRoute || null);
+  const [isAstrologerTyping, setIsAstrologerTyping] = useState(false);
+  const [messageText, setMessageText] = useState('');
+  const [showConnectionBanner, setShowConnectionBanner] = useState(false);
+  const { user: authUser } = useAuth();
+  const flatListRef = useRef(null);
+  const timerRef = useRef(null);
+  const typingTimeoutRef = useRef(null);
+  const connectionManagerRef = useRef(null);
+  const typingTimerRef = useRef(null);
+
+  // Format time as MM:SS
+  const formatTime = (seconds) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+  };
+
+  // Initialize component
+  useEffect(() => {
+    if (!bookingId) {
+      Alert.alert('Error', 'No booking ID provided. Please go back and try again.');
+      setLoading(false);
+      return;
+    }
+
+    fetchBookingDetails();
+    
+    return () => {
+      // Cleanup
+      if (connectionManagerRef.current) {
+        connectionManagerRef.current.disconnect();
+      }
+      if (timerRef.current) clearInterval(timerRef.current);
+      if (typingTimerRef.current) clearTimeout(typingTimerRef.current);
+    };
+  }, []);
+
+  // Fetch booking details and initialize connection
+  const fetchBookingDetails = async () => {
+    try {
+      setLoading(true);
+      
+      console.log('🔍 EnhancedChatScreen: Fetching booking details for ID:', bookingId);
+      const response = await bookingsAPI.getById(bookingId);
+      console.log('📦 EnhancedChatScreen: API Response:', JSON.stringify(response, null, 2));
+      
+      // API interceptor returns response.data, so booking data is in response.data
+      const bookingData = response.data;
+      console.log('📋 EnhancedChatScreen: Booking data:', JSON.stringify(bookingData, null, 2));
+      
+      if (!bookingData) {
+        throw new Error('No booking data received from API');
+      }
+      
+      setBooking(bookingData);
+      
+      // Handle different possible astrologer data structures
+      let astrologerData = null;
+      let astrologerId = null;
+      
+      if (bookingData.astrologer) {
+        astrologerData = bookingData.astrologer;
+        astrologerId = bookingData.astrologer._id || bookingData.astrologer.id || bookingData.astrologer;
+      } else if (bookingData.astrologerId) {
+        astrologerId = bookingData.astrologerId;
+      } else if (routeParams.astrologerId) {
+        astrologerId = routeParams.astrologerId;
+      }
+      
+      console.log('👨‍⚕️ EnhancedChatScreen: Astrologer data:', astrologerData);
+      console.log('🆔 EnhancedChatScreen: Astrologer ID:', astrologerId);
+      
+      if (!astrologerId) {
+        throw new Error('No astrologer ID found in booking data or route params');
+      }
+      
+      setAstrologer(astrologerData);
+      setUser(bookingData.user);
+      
+      // Initialize connection manager with astrologer ID
+      await initializeConnectionManager(astrologerId);
+      
+      setLoading(false);
+      console.log('✅ EnhancedChatScreen: Booking details loaded successfully');
+    } catch (error) {
+      console.error('❌ EnhancedChatScreen: Error fetching booking details:', error);
+      console.error('❌ EnhancedChatScreen: Error details:', {
+        message: error.message,
+        stack: error.stack,
+        bookingId,
+        routeParams
+      });
+      setLoading(false);
+      Alert.alert('Error', `Failed to load chat session: ${error.message}`);
+    }
+  };
+
+  // Initialize connection manager
+  const initializeConnectionManager = (astrologerId) => {
+    try {
+      console.log('🔍 EnhancedChatScreen: Initializing connection manager with astrologer ID:', astrologerId);
+      
+      connectionManagerRef.current = new ChatConnectionManager();
+      
+      // Set up event listeners
+      connectionManagerRef.current.onMessage(handleNewMessage);
+      connectionManagerRef.current.onConnectionStatus(handleConnectionStatus);
+      connectionManagerRef.current.onStatusUpdate(handleStatusUpdate);
+      connectionManagerRef.current.onTyping(handleTypingStatus);
+      
+      // Initialize connection
+      connectionManagerRef.current.initialize(bookingId, authUser?.id, astrologerId);
+      
+      setConnectionStatus('connecting');
+    } catch (error) {
+      console.error('🔍 EnhancedChatScreen: Failed to initialize connection manager:', error);
+      setConnectionStatus('error');
+      setConnectionMessage('Failed to initialize chat connection');
+      console.error('EnhancedChatScreen: Error initializing connection manager:', error);
+      Alert.alert('Connection Error', 'Failed to establish connection. Please try again.');
+    }
+  };
+
+
+
+  // Handle status updates (timer, session end, etc.)
+  const handleStatusUpdate = useCallback((data) => {
+    console.log('🔴 [USER-APP] EnhancedChatScreen: Status update received:', data);
+    
+    if (data.type === 'timer') {
+      console.log('🔴 [USER-APP] Timer update:', data.durationSeconds);
+      setSessionTime(data.durationSeconds);
+      
+      // If we're receiving timer updates but session isn't active, activate it
+      setSessionActive(prevActive => {
+        if (!prevActive && data.durationSeconds > 0) {
+          console.log('🔴 [USER-APP] Timer running but session not active - activating session');
+          setConnectionStatus('session_active');
+          setSessionId(data.sessionId || bookingId);
+          return true;
+        }
+        return prevActive;
+      });
+    } else if (data.type === 'session_end') {
+      console.log('🔴 [USER-APP] Session end received');
+      handleSessionEnd(data);
+    } else if (data.type === 'session_started') {
+      console.log('🔴 [USER-APP] Session started, activating chat');
+      console.log('🔴 [USER-APP] Session data:', data);
+      
+      setSessionActive(prevActive => {
+        console.log('🔴 [USER-APP] Current sessionActive:', prevActive);
+        setSessionId(data.data?.sessionId || data.sessionId || bookingId);
+        setConnectionStatus('session_active');
+        console.log('🔴 [USER-APP] Session activated via session_started event');
+        return true;
+      });
+    } else if (data.type === 'astrologer_joined') {
+      console.log('🔴 [USER-APP] Astrologer joined, session should be ready');
+      setConnectionStatus('astrologer_joined');
+      
+      // If we already have timer updates, activate the session immediately
+      setSessionActive(prevActive => {
+        if (sessionTime > 0 && !prevActive) {
+          console.log('🔴 [USER-APP] Astrologer joined and timer is running - activating session');
+          setConnectionStatus('session_active');
+          return true;
+        }
+        return prevActive;
+      });
+    }
+  }, [bookingId, sessionTime]);
+
+  // Handle new messages
+  const handleNewMessage = useCallback((message) => {
+    console.log('🔴 [USER-APP] Received message:', message);
+    
+    setMessages(prevMessages => {
+      // Avoid duplicate messages
+      const exists = prevMessages.some(msg => msg.id === message.id);
+      if (exists) {
+        console.log('🔴 [USER-APP] Duplicate message ignored:', message.id);
+        return prevMessages;
+      }
+      
+      const newMessages = [...prevMessages, message].sort((a, b) => 
+        new Date(a.timestamp) - new Date(b.timestamp)
+      );
+      
+      console.log('🔴 [USER-APP] Messages state updated. Total messages:', newMessages.length);
+      console.log('🔴 [USER-APP] Latest message content check:', {
+        id: message.id,
+        content: message.content,
+        text: message.text,
+        message: message.message
+      });
+      
+      // Auto-scroll to bottom
+      setTimeout(() => {
+        flatListRef.current?.scrollToEnd({ animated: true });
+      }, 100);
+      
+      return newMessages;
+    });
+  }, []);
+
+  // Handle typing status
+  const handleTypingStatus = useCallback((data) => {
+    console.log('🔴 [USER-APP] Typing status:', data);
+    if (data.senderId !== authUser?.id) {
+      setIsAstrologerTyping(data.isTyping);
+    }
+  }, [authUser?.id]);
+
+  // Handle sending messages
+  const handleSendMessage = useCallback(async () => {
+    if (!messageText.trim() || !connectionManagerRef.current) {
+      return;
+    }
+
+    const tempMessage = {
+      id: Date.now().toString(),
+      content: messageText.trim(),
+      text: messageText.trim(),
+      message: messageText.trim(),
+      sender: 'user',
+      senderId: authUser?.id,
+      timestamp: new Date().toISOString(),
+      status: 'sending'
+    };
+
+    console.log('🔴 [USER-APP] Sending message:', tempMessage);
+
+    // Add message to UI immediately
+    setMessages(prevMessages => [...prevMessages, tempMessage]);
+    setMessageText('');
+
+    // Auto-scroll to bottom
+    setTimeout(() => {
+      flatListRef.current?.scrollToEnd({ animated: true });
+    }, 100);
+
+    try {
+      // Send message via connection manager
+      await connectionManagerRef.current.sendMessage({
+        roomId: bookingId, // Backend expects roomId parameter
+        content: tempMessage.content,
+        text: tempMessage.text,
+        message: tempMessage.message,
+        bookingId: bookingId,
+        sessionId: sessionId || bookingId,
+        senderId: authUser?.id,
+        senderName: authUser?.name || 'User',
+        sender: 'user',
+        messageId: tempMessage.id,
+        timestamp: tempMessage.timestamp
+      });
+
+      // Update message status to sent
+      setMessages(prevMessages => 
+        prevMessages.map(msg => 
+          msg.id === tempMessage.id 
+            ? { ...msg, status: 'sent' }
+            : msg
+        )
+      );
+
+      console.log('🔴 [USER-APP] Message sent successfully');
+    } catch (error) {
+      console.error('🔴 [USER-APP] Failed to send message:', error);
+      
+      // Update message status to failed
+      setMessages(prevMessages => 
+        prevMessages.map(msg => 
+          msg.id === tempMessage.id 
+            ? { ...msg, status: 'failed' }
+            : msg
+        )
+      );
+    }
+  }, [messageText, authUser?.id, bookingId, sessionId]);
+
+  // Handle typing input
+  const handleTypingInput = useCallback((text) => {
+    setMessageText(text);
+    
+    // Send typing indicator
+    if (connectionManagerRef.current) {
+      connectionManagerRef.current.sendTypingStatus(true);
+      
+      // Clear typing indicator after 2 seconds
+      clearTimeout(typingTimeoutRef.current);
+      typingTimeoutRef.current = setTimeout(() => {
+        if (connectionManagerRef.current) {
+          connectionManagerRef.current.sendTypingStatus(false);
+        }
+      }, 2000);
+    }
+  }, []);
+
+  // Handle connection status
+  const handleConnectionStatus = useCallback((status) => {
+    console.log('🔴 [USER-APP] Connection status:', status);
+    setConnectionStatus(status.status);
+    setConnectionMessage(status.message || '');
+    setShowConnectionBanner(status.status !== 'connected');
+  }, []);
+
+  // Handle session end
+  const handleSessionEnd = (data) => {
+    console.log('Session ended:', data);
+    setSessionActive(false);
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+    }
+    
+    Alert.alert(
+      'Session Ended',
+      'The consultation session has ended.',
+      [
+        {
+          text: 'OK',
+          onPress: () => navigation.goBack(),
+        },
+      ]
+    );
+  };
+
+  // Handle manual session end
+  const handleEndSession = () => {
+    Alert.alert(
+      'End Session',
+      'Are you sure you want to end this consultation session?',
+      [
+        {
+          text: 'Cancel',
+          style: 'cancel',
+        },
+        {
+          text: 'End Session',
+          style: 'destructive',
+          onPress: () => {
+            if (connectionManagerRef.current && connectionManagerRef.current.endSession) {
+              console.log('🔴 [USER-APP] Ending session with sessionId:', sessionId || bookingId);
+              connectionManagerRef.current.endSession(sessionId || bookingId);
+            }
+            navigation.goBack();
+          },
+        },
+      ]
+    );
+  };
+
+
+
+  // Get connection status color
+  const getConnectionStatusColor = () => {
+    switch (connectionStatus) {
+      case 'connected': return '#4CAF50';
+      case 'connecting':
+      case 'reconnecting': return '#FF9800';
+      case 'error':
+      case 'failed': return '#F44336';
+      case 'queued': return '#2196F3';
+      default: return '#9E9E9E';
+    }
+  };
+
+  // Get connection status text
+  const getConnectionStatusText = () => {
+    // If session is active, show session status instead of connection status
+    if (sessionActive) {
+      return 'In Session';
+    }
+    
+    switch (connectionStatus) {
+      case 'connected': return 'Connected';
+      case 'connecting': return 'Connecting...';
+      case 'reconnecting': return connectionMessage || 'Reconnecting...';
+      case 'error': return 'Connection Error';
+      case 'failed': return 'Connection Failed';
+      case 'queued': return 'Message Queued';
+      case 'flushed': return 'Messages Sent';
+      case 'disconnected': return loading ? 'Connecting...' : 'Disconnected';
+      case 'initializing': return 'Initializing...';
+      case 'session_active': return 'Session Active';
+      case 'astrologer_joined': return 'Astrologer Joined - Starting Session...';
+      case 'joining': return 'Joining Consultation...';
+      case 'user_joined': return 'You Joined - Waiting for Astrologer';
+      default: 
+        console.log('EnhancedChatScreen: Unknown connection status:', connectionStatus);
+        return loading ? 'Connecting...' : 'Waiting for Astrologer';
+    }
+  };
+
+
+
+  // Render message item
+  const renderMessage = ({ item }) => {
+    const isUser = item.sender === 'user' || item.senderId === authUser.id;
+    const messageContent = item.content || item.text || item.message || 'Message content unavailable';
+    
+    console.log('🔴 [USER-APP] Rendering message:', {
+      id: item.id,
+      sender: item.sender,
+      senderId: item.senderId,
+      authUserId: authUser?.id,
+      isUser: isUser,
+      content: item.content,
+      text: item.text,
+      message: item.message,
+      messageContent: messageContent
+    });
+    
+    return (
+      <View style={[styles.messageContainer, isUser ? styles.userMessage : styles.astrologerMessage]}>
+        <View style={[styles.messageBubble, isUser ? styles.userBubble : styles.astrologerBubble]}>
+          <Text style={[styles.messageText, isUser ? styles.userMessageText : styles.astrologerMessageText]}>
+            {messageContent}
+          </Text>
+          <View style={styles.messageFooter}>
+            <Text style={[styles.messageTime, isUser ? styles.userMessageTime : styles.astrologerMessageTime]}>
+              {new Date(item.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+            </Text>
+            {isUser && (
+              <View style={styles.messageStatus}>
+                {item.status === 'sending' && <ActivityIndicator size="small" color="#666" />}
+                {item.status === 'sent' && <Ionicons name="checkmark" size={12} color="#666" />}
+                {item.status === 'read' && <Ionicons name="checkmark-done" size={12} color="#4CAF50" />}
+              </View>
+            )}
+          </View>
+        </View>
+      </View>
+    );
+  };
+
+  // Render typing indicator
+  const renderTypingIndicator = () => {
+    if (!isAstrologerTyping) return null;
+    
+    return (
+      <View style={[styles.messageContainer, styles.astrologerMessage]}>
+        <View style={[styles.messageBubble, styles.astrologerBubble, styles.typingBubble]}>
+          <Text style={styles.typingText}>Astrologer is typing...</Text>
+          <ActivityIndicator size="small" color="#666" style={styles.typingIndicator} />
+        </View>
+      </View>
+    );
+  };
+
+  // Render connection banner
+  const renderConnectionBanner = () => {
+    if (!showConnectionBanner) return null;
+    
+    return (
+      <View style={[styles.connectionBanner, { backgroundColor: getConnectionStatusColor() }]}>
+        <Text style={styles.connectionBannerText}>
+          {getConnectionStatusText()}
+        </Text>
+        {(connectionStatus === 'connecting' || connectionStatus === 'reconnecting') && (
+          <ActivityIndicator size="small" color="#FFF" style={styles.bannerIndicator} />
+        )}
+      </View>
+    );
+  };
+
+  if (loading) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color="#6B46C1" />
+        <Text style={styles.loadingText}>Loading chat session...</Text>
+      </View>
+    );
+  }
+
+  return (
+    <KeyboardAvoidingView 
+      style={styles.container}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
+    >
+      <StatusBar barStyle="light-content" backgroundColor="#6B46C1" />
+      
+      {/* Header */}
+      <View style={styles.header}>
+        <TouchableOpacity 
+          style={styles.backButton} 
+          onPress={() => navigation.goBack()}
+        >
+          <Ionicons name="arrow-back" size={24} color="#FFF" />
+        </TouchableOpacity>
+        
+        <View style={styles.headerInfo}>
+          <Image 
+            source={{ uri: astrologer?.profileImage || astrologer?.imageUrl || 'https://via.placeholder.com/40' }}
+            style={styles.astrologerImage}
+          />
+          <View style={styles.headerText}>
+            <Text style={styles.astrologerName}>
+              {astrologer?.displayName || astrologer?.name || 'Astrologer'}
+            </Text>
+            <View style={styles.statusContainer}>
+              <View style={[styles.statusDot, { backgroundColor: getConnectionStatusColor() }]} />
+              <Text style={styles.statusText}>{getConnectionStatusText()}</Text>
+            </View>
+          </View>
+        </View>
+        
+        {sessionActive && (
+          <View style={styles.headerRight}>
+            <View style={styles.timerContainer}>
+              <Text style={styles.timerText}>{formatTime(sessionTime)}</Text>
+            </View>
+            {sessionActive && (
+              <TouchableOpacity 
+                style={styles.endButton}
+                onPress={handleEndSession}
+              >
+                <Text style={styles.endButtonText}>End</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+        )}
+      </View>
+
+      {/* Connection Banner */}
+      {renderConnectionBanner()}
+
+      {/* Chat Messages */}
+      <FlatList
+        ref={flatListRef}
+        data={messages}
+        keyExtractor={(item) => item.id?.toString() || item.timestamp}
+        renderItem={renderMessage}
+        style={styles.messagesList}
+        contentContainerStyle={styles.messagesContainer}
+        showsVerticalScrollIndicator={false}
+        ListFooterComponent={renderTypingIndicator}
+      />
+
+      {/* Message Input */}
+      <View style={styles.inputContainer}>
+        <TextInput
+          style={styles.messageInput}
+          value={messageText}
+          onChangeText={handleTypingInput}
+          placeholder="Type your message..."
+          placeholderTextColor="#999"
+          multiline
+          maxLength={500}
+        />
+        <TouchableOpacity
+          style={[styles.sendButton, { opacity: messageText.trim() ? 1 : 0.5 }]}
+          onPress={handleSendMessage}
+          disabled={!messageText.trim()}
+        >
+          <Ionicons name="send" size={20} color="#FFF" />
+        </TouchableOpacity>
+      </View>
+    </KeyboardAvoidingView>
+  );
+};
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#f8f8f8',
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#f8f8f8',
+  },
+  loadingText: {
+    marginTop: 16,
+    fontSize: 16,
+    color: '#666',
+  },
+  header: {
+    backgroundColor: '#6B46C1',
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingTop: 44,
+    paddingBottom: 16,
+    paddingHorizontal: 16,
+  },
+  backButton: {
+    marginRight: 16,
+  },
+  headerInfo: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  astrologerImage: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    marginRight: 12,
+  },
+  headerText: {
+    flex: 1,
+  },
+  astrologerName: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#FFF',
+  },
+  statusContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 2,
+  },
+  statusDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    marginRight: 6,
+  },
+  statusText: {
+    fontSize: 12,
+    color: '#E0E0E0',
+  },
+  headerRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  timerContainer: {
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+  },
+  timerText: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: '#FFF',
+  },
+  endButton: {
+    backgroundColor: '#EF4444',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 15,
+  },
+  endButtonText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: 'bold',
+  },
+  inputContainer: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    backgroundColor: '#FFF',
+    borderTopWidth: 1,
+    borderTopColor: '#E0E0E0',
+  },
+  messageInput: {
+    flex: 1,
+    borderWidth: 1,
+    borderColor: '#E0E0E0',
+    borderRadius: 20,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    marginRight: 12,
+    maxHeight: 100,
+    fontSize: 16,
+    color: '#333',
+  },
+  sendButton: {
+    backgroundColor: '#6B46C1',
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  connectionBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+  },
+  connectionBannerText: {
+    color: '#FFF',
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  bannerIndicator: {
+    marginLeft: 8,
+  },
+  chatContainer: {
+    flex: 1,
+  },
+  messagesList: {
+    flex: 1,
+    paddingHorizontal: 16,
+  },
+  messagesContainer: {
+    paddingVertical: 16,
+  },
+  messageContainer: {
+    marginVertical: 4,
+  },
+  userMessage: {
+    alignItems: 'flex-end',
+  },
+  astrologerMessage: {
+    alignItems: 'flex-start',
+  },
+  messageBubble: {
+    maxWidth: '80%',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 20,
+  },
+  userBubble: {
+    backgroundColor: '#6B46C1',
+    borderBottomRightRadius: 4,
+  },
+  astrologerBubble: {
+    backgroundColor: '#FFF',
+    borderBottomLeftRadius: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  typingBubble: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  messageText: {
+    fontSize: 16,
+    lineHeight: 20,
+  },
+  userMessageText: {
+    color: '#FFF',
+  },
+  astrologerMessageText: {
+    color: '#333',
+  },
+  messageFooter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 4,
+  },
+  messageTime: {
+    fontSize: 12,
+  },
+  userMessageTime: {
+    color: 'rgba(255,255,255,0.7)',
+  },
+  astrologerMessageTime: {
+    color: '#999',
+  },
+  messageStatus: {
+    marginLeft: 8,
+  },
+  typingText: {
+    fontSize: 14,
+    color: '#666',
+    fontStyle: 'italic',
+  },
+  typingIndicator: {
+    marginLeft: 8,
+  },
+  inputContainer: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    backgroundColor: '#FFF',
+    borderTopWidth: 1,
+    borderTopColor: '#E0E0E0',
+  },
+  textInput: {
+    flex: 1,
+    borderWidth: 1,
+    borderColor: '#E0E0E0',
+    borderRadius: 20,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    marginRight: 12,
+    maxHeight: 100,
+    fontSize: 16,
+  },
+  sendButton: {
+    backgroundColor: '#6B46C1',
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+});
+
+export default EnhancedChatScreen;

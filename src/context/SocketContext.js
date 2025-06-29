@@ -9,7 +9,11 @@ import { useAuth } from './AuthContext';
 // const SOCKET_SERVER_URL = 'http://192.168.29.107:5000';
 
 // Production
-const SOCKET_SERVER_URL = 'http://3.110.171.85';
+//const SOCKET_SERVER_URL = 'http://3.110.171.85';
+
+const SOCKET_SERVER_URL = 'https://jyotishcallbackend-2uxrv.ondigitalocean.app';
+
+
 
 // Create context
 const SocketContext = createContext(null);

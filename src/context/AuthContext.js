@@ -2,6 +2,7 @@ import React, { createContext, useState, useContext, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
 import { Alert } from 'react-native';
+// import LogRocket from '@logrocket/react-native'; // Temporarily disabled due to build issues
 
 // Create context
 const AuthContext = createContext();
@@ -11,7 +12,9 @@ const AuthContext = createContext();
 // const API_URL = 'http://192.168.29.107:5000/api/v1';
 
 // Production
-const API_URL = 'http://3.110.171.85/api/v1';
+//const API_URL = 'http://3.110.171.85/api/v1';
+
+const API_URL = 'https://jyotishcallbackend-2uxrv.ondigitalocean.app/api/v1';
 
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
@@ -28,8 +31,12 @@ export const AuthProvider = ({ children }) => {
         const storedUser = await AsyncStorage.getItem('userData');
         
         if (storedToken && storedUser) {
+          const parsedUser = JSON.parse(storedUser);
           setToken(storedToken);
-          setUser(JSON.parse(storedUser));
+          setUser(parsedUser);
+          
+          // Identify user with LogRocket
+          identifyUserToLogRocket(parsedUser);
           
           // Set axios default header
           axios.defaults.headers.common['Authorization'] = `Bearer ${storedToken}`;
@@ -44,6 +51,23 @@ export const AuthProvider = ({ children }) => {
 
     loadStoredData();
   }, []);
+
+  // Identify user to LogRocket safely
+  const identifyUserToLogRocket = (user) => {
+    try {
+      if (false && __DEV__) { // Temporarily disabled
+        // LogRocket.identify(user._id || user.id, {
+        //   name: user.name,
+        //   email: user.email,
+        //   mobile: user.mobile,
+        //   role: 'user'
+        // });
+        console.log('LogRocket identify disabled temporarily:', user._id || user.id);
+      }
+    } catch (error) {
+      console.warn('LogRocket identify failed:', error);
+    }
+  };
 
   // Request OTP
   const requestOtp = async (phoneNumber) => {
@@ -81,9 +105,27 @@ export const AuthProvider = ({ children }) => {
     } catch (error) {
       console.log('OTP request error:', error);
       console.log('Error details:', error.response?.data || error.message);
+      console.log('Error status:', error.response?.status);
+      console.log('Error config:', error.config);
+      console.log('Network error:', error.code);
+      
       setLoading(false);
-      setError(error.response?.data?.message || 'Failed to send OTP');
-      return { success: false, message: error.response?.data?.message || 'Failed to send OTP' };
+      
+      // More detailed error message for debugging
+      let errorMessage = 'Failed to send OTP';
+      if (error.response) {
+        // Server responded with error status
+        errorMessage = error.response.data?.message || `Server error: ${error.response.status}`;
+      } else if (error.request) {
+        // Network error - request was made but no response received
+        errorMessage = 'Network error: Unable to connect to server. Please check your internet connection.';
+      } else {
+        // Something else happened
+        errorMessage = error.message || 'Unknown error occurred';
+      }
+      
+      setError(errorMessage);
+      return { success: false, message: errorMessage };
     }
   };
 
@@ -113,6 +155,9 @@ export const AuthProvider = ({ children }) => {
         setUser(userData);
         setToken(authToken);
         
+        // Identify user with LogRocket
+        identifyUserToLogRocket(userData);
+        
         // Set axios default header
         axios.defaults.headers.common['Authorization'] = `Bearer ${authToken}`;
         
@@ -138,9 +183,28 @@ export const AuthProvider = ({ children }) => {
       }
     } catch (error) {
       console.error('Error in verifyOtp:', error);
+      console.log('Error details:', error.response?.data || error.message);
+      console.log('Error status:', error.response?.status);
+      console.log('Error config:', error.config);
+      console.log('Network error:', error.code);
+      
       setLoading(false);
-      setError(error.response?.data?.message || 'Failed to verify OTP');
-      return { success: false, message: error.response?.data?.message || 'Failed to verify OTP' };
+      
+      // More detailed error message for debugging
+      let errorMessage = 'Failed to verify OTP';
+      if (error.response) {
+        // Server responded with error status
+        errorMessage = error.response.data?.message || `Server error: ${error.response.status}`;
+      } else if (error.request) {
+        // Network error - request was made but no response received
+        errorMessage = 'Network error: Unable to connect to server. Please check your internet connection.';
+      } else {
+        // Something else happened
+        errorMessage = error.message || 'Unknown error occurred';
+      }
+      
+      setError(errorMessage);
+      return { success: false, message: errorMessage };
     }
   };
 
@@ -173,6 +237,13 @@ export const AuthProvider = ({ children }) => {
       // Clear state
       setUser(null);
       setToken(null);
+      
+      // Clear LogRocket session
+      try {
+        console.log('LogRocket session URL before logout:', LogRocket.sessionURL);
+      } catch (error) {
+        console.warn('LogRocket session access failed:', error);
+      }
       
       // Clear axios default header
       delete axios.defaults.headers.common['Authorization'];

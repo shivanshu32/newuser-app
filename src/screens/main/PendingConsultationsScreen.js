@@ -1,401 +1,253 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
-  StyleSheet,
   View,
   Text,
-  FlatList,
+  StyleSheet,
   TouchableOpacity,
-  SafeAreaView,
-  Image,
+  FlatList,
+  Alert,
+  RefreshControl,
+  Image
 } from 'react-native';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getPendingConsultations, removePendingConsultation } from '../../utils/pendingConsultationsStore';
-import { useSocket } from '../../context/SocketContext';
-import { useAuth } from '../../context/AuthContext';
 
-const PendingConsultationsScreen = ({ navigation }) => {
+const PendingConsultationsScreen = () => {
+  const navigation = useNavigation();
   const [consultations, setConsultations] = useState([]);
-  const { socket } = useSocket();
-  const { user } = useAuth();
+  const [refreshing, setRefreshing] = useState(false);
+  const [loading, setLoading] = useState(true);
 
-  // Load pending consultations when the screen is focused
-  useEffect(() => {
-    const unsubscribe = navigation.addListener('focus', () => {
-      loadConsultations();
-    });
-
-    return unsubscribe;
-  }, [navigation]);
-
-  // Initial load
-  useEffect(() => {
-    loadConsultations();
-  }, []);
-
-  const loadConsultations = () => {
-    const pendingConsultations = getPendingConsultations();
-    console.log('Loaded pending consultations:', pendingConsultations.length);
-    setConsultations(pendingConsultations);
-  };
-
-  // Initialize socket connection if needed and monitor socket status
-  useEffect(() => {
-    if (!socket && user) {
-      console.log('PendingConsultationsScreen: Socket not initialized, attempting to initialize from context');
-      // The useSocket hook should handle initialization, but we'll log this for debugging
-    } else if (socket) {
-      console.log('PendingConsultationsScreen: Socket is available, connected status:', socket.connected);
-      console.log('PendingConsultationsScreen: Socket ID:', socket.id || 'No ID available');
-    }
-  }, [socket, user]);
-  
-  // Store pending video consultation data for retry mechanism
-  const [pendingVideoConsultation, setPendingVideoConsultation] = useState(null);
-  
-  // Retry emitting user_joined_consultation event when socket becomes available
-  useEffect(() => {
-    if (pendingVideoConsultation && socket && socket.connected) {
-      console.log('PendingConsultationsScreen: Socket now available and connected, attempting to emit pending event');
-      emitUserJoinedConsultation(pendingVideoConsultation);
-    }
-  }, [socket, pendingVideoConsultation]);
-
-  // Function to emit user_joined_consultation event
-  const emitUserJoinedConsultation = (consultationData) => {
-    const { bookingId, eventData, roomId } = consultationData;
-    
-    if (!socket || !socket.connected) {
-      console.error('emitUserJoinedConsultation: Socket not available or not connected, storing for retry');
-      setPendingVideoConsultation(consultationData);
-      return false;
-    }
-    
-    console.log(`emitUserJoinedConsultation: Emitting user_joined_consultation event for booking: ${bookingId}, type: video`);
-    console.log('emitUserJoinedConsultation: Socket connected:', socket.connected);
-    
-    // First join the room
-    console.log(`emitUserJoinedConsultation: Joining room: ${roomId}`);
-    socket.emit('join_room', { bookingId }, (joinResponse) => {
-      if (joinResponse && joinResponse.success) {
-        console.log(`emitUserJoinedConsultation: Successfully joined room for booking: ${bookingId}`);
-        
-        // Now emit the user_joined_consultation event
-        console.log('emitUserJoinedConsultation: Emitting user_joined_consultation event');
-        socket.emit('user_joined_consultation', eventData, (response) => {
-          if (response && response.success) {
-            console.log('emitUserJoinedConsultation: Successfully notified astrologer about joining video consultation');
-            
-            // Also emit the alternate event as a fallback
-            console.log('emitUserJoinedConsultation: Emitting join_consultation event as fallback');
-            socket.emit('join_consultation', eventData);
-            
-            // Also emit direct notification to astrologer
-            console.log('emitUserJoinedConsultation: Emitting direct_astrologer_notification event as fallback');
-            socket.emit('direct_astrologer_notification', eventData);
-            
-            // Clear the pending consultation since we've successfully emitted the event
-            setPendingVideoConsultation(null);
-            
-            // Navigate to VideoCall screen after getting the real sessionId from backend
-            navigation.navigate('VideoCall', {
-              bookingId,
-              sessionId: eventData.sessionId,
-              roomId,
-              eventData
-            });
-          } else {
-            console.error('emitUserJoinedConsultation: Failed to notify astrologer:', response?.error || 'Unknown error');
-          }
-        });
-      } else {
-        console.error('emitUserJoinedConsultation: Failed to join room:', joinResponse?.error || 'Unknown error');
-      }
-    });
-    
-    return true;
-  };
-  
-  const handleJoinConsultation = (consultation) => {
-    console.log('Joining consultation:', consultation.booking._id, 'Type:', consultation.booking.type);
-    // Remove from pending list
-    removePendingConsultation(consultation.booking._id);
-    
-    const bookingId = consultation.booking._id;
-    const sessionId = consultation.sessionId || bookingId; // Fallback to bookingId only if sessionId is missing
-    const roomId = `consultation:${bookingId}`;
-    
-    // Check consultation type and navigate to appropriate screen
-    if (consultation.booking.type === 'video') {
-      // For video consultations, navigate to VideoConsultationScreen
-      
-      // Prepare event data regardless of socket availability
-      const eventData = {
-        bookingId,
-        userId: user?.id,
-        astrologerId: consultation.booking.astrologer,
-        sessionId,
-        roomId,
-        type: 'video',  // Explicitly set the consultation type
-        consultationType: 'video'  // Add this for backward compatibility
-      };
-      
-      console.log('PendingConsultationsScreen: Video call event data:', JSON.stringify(eventData));
-      
-      // Create consultation data object for emission and retry
-      const consultationData = {
-        bookingId,
-        eventData,
-        roomId
-      };
-      
-      // Don't navigate immediately - wait for the real sessionId from backend
-      // The navigation will happen in the emitUserJoinedConsultation callback
-      
-      // Attempt to emit user_joined_consultation event
-      const emitSuccess = emitUserJoinedConsultation(consultationData);
-      
-      if (!emitSuccess) {
-        console.log('PendingConsultationsScreen: Event emission queued for retry when socket is available');
-        // If socket is not available, navigate with the current sessionId as fallback
-        navigation.navigate('VideoCall', {
-          bookingId,
-          sessionId,
-          roomId,
-          eventData
-        });
-      }
-    } else if (consultation.booking.type === 'voice') {
-      // For voice consultations, navigate to VoiceCallScreen
-      console.log('PendingConsultationsScreen: Handling voice call consultation');
-      
-      // Prepare event data for voice call
-      // Extract the correct astrologer ID
-      console.log('PendingConsultationsScreen: Raw consultation data:', JSON.stringify(consultation));
-      console.log('PendingConsultationsScreen: Raw booking data:', JSON.stringify(consultation.booking));
-      
-      // IMPORTANT: Get the astrologer ID from the booking details directly
-      // The logs show that consultation.booking.astrologer is incorrect, but bookingDetails.astrologer is correct
-      let astrologerId;
-      
-      // First attempt: Try to get from the bookingDetails in the consultation data
-      if (consultation.bookingDetails && consultation.bookingDetails.astrologer) {
-        if (typeof consultation.bookingDetails.astrologer === 'string') {
-          astrologerId = consultation.bookingDetails.astrologer;
-          console.log('PendingConsultationsScreen: Using astrologerId from bookingDetails:', astrologerId);
-        } else if (typeof consultation.bookingDetails.astrologer === 'object' && consultation.bookingDetails.astrologer._id) {
-          astrologerId = consultation.bookingDetails.astrologer._id;
-          console.log('PendingConsultationsScreen: Using astrologerId from bookingDetails object:', astrologerId);
-        }
-      }
-      
-      // Second attempt: Try to get from the booking._id field directly
-      if (!astrologerId && consultation.booking && consultation.booking._id) {
-        // Get the booking ID and make an API call to fetch the booking details
-        const bookingId = consultation.booking._id;
-        console.log('PendingConsultationsScreen: Attempting to use booking ID to find astrologer:', bookingId);
-        
-        // Check if we have the astrologer ID in the booking object
-        if (consultation.booking.astrologer) {
-          if (typeof consultation.booking.astrologer === 'string') {
-            astrologerId = consultation.booking.astrologer;
-            console.log('PendingConsultationsScreen: Using astrologerId from booking string:', astrologerId);
-          } else if (typeof consultation.booking.astrologer === 'object') {
-            if (consultation.booking.astrologer._id && consultation.booking.astrologer._id !== 'unknown') {
-              astrologerId = consultation.booking.astrologer._id;
-              console.log('PendingConsultationsScreen: Using astrologerId from booking object:', astrologerId);
-            }
-          }
-        }
-      }
-      
-      // Third attempt: Look for the astrologer ID in the logs from the astrologer-app
-      // The logs showed that bookingDetails.astrologer was "67ffe412a96474bf13f80a14"
-      if (!astrologerId) {
-        astrologerId = '67ffe412a96474bf13f80a14';
-        console.log('PendingConsultationsScreen: Using known astrologerId from logs:', astrologerId);
-      }
-      
-      console.log('PendingConsultationsScreen: Final resolved astrologerId for voice call:', astrologerId);
-      
-      const eventData = {
-        bookingId,
-        userId: user?.id,
-        astrologerId: astrologerId,
-        sessionId,
-        roomId,
-        type: 'voice',
-        consultationType: 'voice'
-      };
-      
-      console.log('PendingConsultationsScreen: Voice call event data:', JSON.stringify(eventData));
-      
-      // IMPORTANT CHANGE: Navigate to VoiceCallScreen FIRST, then handle socket events
-      // This ensures the navigation happens regardless of socket callback issues
-      console.log('PendingConsultationsScreen: Navigating to VoiceCall screen FIRST');
-      try {
-        navigation.navigate('VoiceCall', {
-          bookingId,
-          sessionId,
-          roomId,
-          eventData
-        });
-        console.log('PendingConsultationsScreen: Navigation to VoiceCall initiated successfully');
-        
-        // After navigation, handle socket events if socket is available
-        if (socket && socket.connected) {
-          console.log(`PendingConsultationsScreen: Joining consultation room for voice call: ${bookingId}`);
-          
-          // Join the consultation room
-          console.log(`PendingConsultationsScreen: Emitting join_consultation_room with bookingId: ${bookingId}, roomId: ${roomId}`);
-          socket.emit('join_consultation_room', { bookingId, roomId }, (joinResponse) => {
-            if (joinResponse && joinResponse.success) {
-              console.log(`PendingConsultationsScreen: Successfully joined room for voice call: ${bookingId}`);
-              
-              // Note: user_joined_consultation will be emitted from VoiceCallScreen after socket listeners are ready
-              console.log('PendingConsultationsScreen: Room joined successfully, VoiceCallScreen will handle user_joined_consultation');
-            } else {
-              console.error('PendingConsultationsScreen: Failed to join room for voice call:', joinResponse?.error || 'Unknown error');
-            }
-          });
-        }
-      } catch (navError) {
-        console.error('PendingConsultationsScreen: Error navigating to VoiceCall:', navError);
-      }
-    } else {
-      // For chat consultations, navigate to ChatScreen
-      navigation.navigate('Chat', {
-        booking: consultation.booking,
-        bookingId: consultation.booking._id
+  const loadConsultations = async () => {
+    try {
+      console.log('📱 [PendingConsultations] Loading consultations...');
+      const pendingConsultations = await getPendingConsultations();
+      console.log('📱 [PendingConsultations] Loaded consultations:', {
+        count: pendingConsultations.length,
+        consultations: pendingConsultations.map(c => ({
+          id: c.booking._id,
+          astrologer: c.booking.astrologer.displayName,
+          type: c.booking.type,
+          status: c.booking.status
+        }))
       });
+      setConsultations(pendingConsultations);
+    } catch (error) {
+      console.error('❌ [PendingConsultations] Error loading consultations:', error);
+      Alert.alert('Error', 'Failed to load pending consultations');
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  };
+
+  const onRefresh = () => {
+    setRefreshing(true);
+    loadConsultations();
+  };
+
+  // Load consultations when screen comes into focus
+  useFocusEffect(
+    useCallback(() => {
+      loadConsultations();
+    }, [])
+  );
+
+  const handleJoinConsultation = async (consultation) => {
+    try {
+      console.log('📱 [PendingConsultations] Joining consultation:', {
+        bookingId: consultation.booking._id,
+        type: consultation.booking.type,
+        astrologer: consultation.booking.astrologer.displayName
+      });
+
+      const astrologerId = consultation.booking.astrologer?._id || consultation.booking.astrologer;
+      
+      if (!astrologerId || astrologerId === 'unknown') {
+        console.error('❌ [PendingConsultations] Invalid astrologer ID:', astrologerId);
+        Alert.alert('Error', 'Cannot join consultation: Invalid astrologer information');
+        return;
+      }
+
+      // Navigate to appropriate consultation screen based on type
+      if (consultation.booking.type === 'chat') {
+        navigation.navigate('EnhancedConsultationRoom', {
+          sessionId: consultation.sessionId,
+          roomId: consultation.roomId,
+          astrologer: consultation.booking.astrologer,
+          bookingId: consultation.booking._id
+        });
+      } else if (consultation.booking.type === 'video') {
+        navigation.navigate('VideoCall', {
+          sessionId: consultation.sessionId,
+          roomId: consultation.roomId,
+          astrologer: consultation.booking.astrologer,
+          bookingId: consultation.booking._id,
+          astrologerId: astrologerId
+        });
+      } else if (consultation.booking.type === 'voice') {
+        navigation.navigate('VoiceCall', {
+          sessionId: consultation.sessionId,
+          roomId: consultation.roomId,
+          astrologer: consultation.booking.astrologer,
+          bookingId: consultation.booking._id,
+          astrologerId: astrologerId
+        });
+      }
+
+      // Remove from pending consultations after joining
+      await removePendingConsultation(consultation.booking._id);
+      loadConsultations(); // Refresh the list
+    } catch (error) {
+      console.error('❌ [PendingConsultations] Error joining consultation:', error);
+      Alert.alert('Error', 'Failed to join consultation. Please try again.');
     }
   };
 
   const renderConsultationItem = ({ item }) => {
-    const astrologer = item.astrologer || {};
-    const booking = item.booking || {};
+    const consultation = item;
+    const astrologer = consultation.booking.astrologer;
+    const bookingType = consultation.booking.type;
 
     return (
       <View style={styles.consultationCard}>
         <View style={styles.consultationHeader}>
-          <Image
-            source={
-              astrologer.imageUrl
-                ? { uri: astrologer.imageUrl }
-                : require('../../../assets/images/default-astrologer.png')
-            }
+          <Image 
+            source={{ uri: astrologer.profileImage || 'https://via.placeholder.com/50' }}
             style={styles.astrologerImage}
           />
-          <View style={styles.headerInfo}>
-            <Text style={styles.astrologerName}>{astrologer.displayName || 'Astrologer'}</Text>
-            <Text style={styles.consultationType}>
-              {booking.type === 'chat' ? 'Chat Consultation' :
-                booking.type === 'voice' ? 'Voice Call' : 'Video Call'}
+          <View style={styles.consultationInfo}>
+            <Text style={styles.astrologerName}>
+              {astrologer.displayName || astrologer.name || 'Astrologer'}
             </Text>
+            <Text style={styles.consultationType}>
+              {bookingType.charAt(0).toUpperCase() + bookingType.slice(1)} Consultation
+            </Text>
+            <Text style={styles.consultationStatus}>Ready to join</Text>
+          </View>
+          <View style={styles.typeIcon}>
+            <Ionicons 
+              name={bookingType === 'chat' ? 'chatbubble' : bookingType === 'video' ? 'videocam' : 'call'} 
+              size={24} 
+              color="#007AFF" 
+            />
           </View>
         </View>
 
-        <View style={styles.consultationDetails}>
-          <Text style={styles.detailLabel}>Status:</Text>
-          <Text style={styles.detailValue}>Ready to Join</Text>
+        <View style={styles.consultationActions}>
+          <TouchableOpacity 
+            style={styles.joinButton}
+            onPress={() => handleJoinConsultation(consultation)}
+          >
+            <Text style={styles.joinButtonText}>Join Now</Text>
+          </TouchableOpacity>
         </View>
-
-        <TouchableOpacity
-          style={styles.joinButton}
-          onPress={() => handleJoinConsultation(item)}
-        >
-          <Text style={styles.joinButtonText}>Join Now</Text>
-        </TouchableOpacity>
       </View>
     );
   };
 
+  const renderEmptyState = () => (
+    <View style={styles.emptyState}>
+      <Ionicons name="calendar-outline" size={64} color="#C7C7CC" />
+      <Text style={styles.emptyStateTitle}>No Pending Consultations</Text>
+      <Text style={styles.emptyStateSubtitle}>
+        Your accepted booking requests will appear here
+      </Text>
+      <TouchableOpacity 
+        style={styles.browseButton}
+        onPress={() => navigation.navigate('Home')}
+      >
+        <Text style={styles.browseButtonText}>Browse Astrologers</Text>
+      </TouchableOpacity>
+    </View>
+  );
+
   return (
-    <SafeAreaView style={styles.container}>
+    <View style={styles.container}>
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()}>
+        <TouchableOpacity 
+          style={styles.backButton}
+          onPress={() => navigation.goBack()}
+        >
           <Ionicons name="arrow-back" size={24} color="#333" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Pending Consultations</Text>
-        <View style={{ width: 24 }} />
+        <TouchableOpacity 
+          style={styles.refreshButton}
+          onPress={onRefresh}
+        >
+          <Ionicons name="refresh" size={24} color="#007AFF" />
+        </TouchableOpacity>
       </View>
 
-      {consultations.length === 0 ? (
-        <View style={styles.emptyContainer}>
-          <Ionicons name="calendar-outline" size={64} color="#ccc" />
-          <Text style={styles.emptyText}>No pending consultations</Text>
-          <Text style={styles.emptySubtext}>
-            When an astrologer accepts your booking request, it will appear here
-          </Text>
-        </View>
-      ) : (
-        <FlatList
-          data={consultations}
-          renderItem={renderConsultationItem}
-          keyExtractor={(item) => item.booking._id}
-          contentContainerStyle={styles.listContainer}
-        />
-      )}
-    </SafeAreaView>
+      <FlatList
+        data={consultations}
+        renderItem={renderConsultationItem}
+        keyExtractor={(item) => item.booking._id}
+        contentContainerStyle={consultations.length === 0 ? styles.emptyContainer : styles.listContainer}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+        }
+        ListEmptyComponent={renderEmptyState}
+        showsVerticalScrollIndicator={false}
+      />
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f8f8f8',
+    backgroundColor: '#F8F9FA',
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    backgroundColor: '#fff',
+    paddingTop: 50,
+    paddingHorizontal: 20,
+    paddingBottom: 20,
+    backgroundColor: '#FFFFFF',
     borderBottomWidth: 1,
-    borderBottomColor: '#eee',
+    borderBottomColor: '#E5E5E7',
+  },
+  backButton: {
+    padding: 8,
   },
   headerTitle: {
     fontSize: 18,
-    fontWeight: 'bold',
-    color: '#333',
+    fontWeight: '600',
+    color: '#1C1C1E',
+  },
+  refreshButton: {
+    padding: 8,
   },
   listContainer: {
-    padding: 16,
+    padding: 20,
   },
   emptyContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    padding: 24,
-  },
-  emptyText: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#555',
-    marginTop: 16,
-  },
-  emptySubtext: {
-    fontSize: 14,
-    color: '#888',
-    textAlign: 'center',
-    marginTop: 8,
-    paddingHorizontal: 32,
+    padding: 20,
   },
   consultationCard: {
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    padding: 16,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 20,
     marginBottom: 16,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2,
+    shadowRadius: 8,
+    elevation: 4,
   },
   consultationHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 12,
+    marginBottom: 16,
   },
   astrologerImage: {
     width: 50,
@@ -403,44 +255,71 @@ const styles = StyleSheet.create({
     borderRadius: 25,
     marginRight: 12,
   },
-  headerInfo: {
+  consultationInfo: {
     flex: 1,
   },
   astrologerName: {
     fontSize: 16,
-    fontWeight: 'bold',
-    color: '#333',
+    fontWeight: '600',
+    color: '#1C1C1E',
+    marginBottom: 2,
   },
   consultationType: {
     fontSize: 14,
-    color: '#666',
-    marginTop: 2,
+    color: '#8E8E93',
+    marginBottom: 2,
   },
-  consultationDetails: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  detailLabel: {
-    fontSize: 14,
-    color: '#666',
-    marginRight: 4,
-  },
-  detailValue: {
-    fontSize: 14,
+  consultationStatus: {
+    fontSize: 12,
+    color: '#34C759',
     fontWeight: '500',
-    color: '#4CAF50',
+  },
+  typeIcon: {
+    marginLeft: 12,
+  },
+  consultationActions: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
   },
   joinButton: {
-    backgroundColor: '#6A5ACD',
-    borderRadius: 8,
+    backgroundColor: '#007AFF',
+    paddingHorizontal: 24,
     paddingVertical: 12,
-    alignItems: 'center',
+    borderRadius: 8,
   },
   joinButtonText: {
-    color: '#fff',
-    fontWeight: 'bold',
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  emptyState: {
+    alignItems: 'center',
+    paddingVertical: 40,
+  },
+  emptyStateTitle: {
+    fontSize: 20,
+    fontWeight: '600',
+    color: '#1C1C1E',
+    marginTop: 16,
+    marginBottom: 8,
+  },
+  emptyStateSubtitle: {
     fontSize: 16,
+    color: '#8E8E93',
+    textAlign: 'center',
+    lineHeight: 22,
+    marginBottom: 32,
+  },
+  browseButton: {
+    backgroundColor: '#007AFF',
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 8,
+  },
+  browseButtonText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '600',
   },
 });
 

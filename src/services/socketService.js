@@ -36,10 +36,13 @@ export const initSocket = async () => {
       userId = await AsyncStorage.getItem('userId');
     }
     
-    console.log('🔧 [socketService] Authentication data - token exists:', !!token, 'userId:', userId);
+    console.log(' [socketService] Authentication data - token exists:', !!token, 'userId:', userId);
+    console.log(' [socketService] Token preview:', token ? token.substring(0, 20) + '...' : 'null');
+    console.log(' [socketService] Connecting to:', API_URL);
     
     if (!token || !userId) {
-      console.error('Token or userId not found. Cannot initialize socket.');
+      console.error(' [socketService] Token or userId not found. Cannot initialize socket.');
+      console.error(' [socketService] Token:', !!token, 'UserId:', !!userId);
       return null;
     }
     
@@ -58,6 +61,131 @@ export const initSocket = async () => {
       reconnectionDelayMax: 5000,
       timeout: 20000
     });
+
+    // Add comprehensive event listeners for debugging
+    socketInstance.on('connect', () => {
+      console.log(' [socketService] Socket connected successfully:', socketInstance.id);
+      console.log(' [socketService] Socket auth data sent:', {
+        token: !!token,
+        id: userId,
+        role: 'user'
+      });
+      
+      // Register listeners after connection is established
+      console.log(' [socketService] Registering booking_status_update listener after connection');
+      
+      // Add global listener for booking_status_update events
+      socketInstance.on('booking_status_update', (data) => {
+        console.log(' [socketService] booking_status_update event received! ');
+        console.log(' [socketService] Raw event data:', JSON.stringify(data, null, 2));
+        console.log(' [socketService] Socket ID:', socketInstance?.id);
+        console.log(' [socketService] Socket connected:', socketInstance?.connected);
+        console.log(' [socketService] Event timestamp:', new Date().toISOString());
+        console.log(' [socketService] GLOBAL booking_status_update received:', {
+          bookingId: data.bookingId,
+          status: data.status,
+          sessionId: data.sessionId,
+          roomId: data.roomId,
+          message: data.message,
+          timestamp: new Date().toISOString(),
+          socketId: socketInstance.id
+        });
+        
+        // Handle booking acceptance with popup
+        if (data.status === 'accepted') {
+          console.log(' [socketService] Booking accepted - triggering popup');
+          console.log(' [socketService] Raw booking status data:', JSON.stringify(data, null, 2));
+          
+          // Debug consultation type detection
+          const consultationType = data.consultationType || data.type || data.bookingDetails?.type || data.bookingDetails?.consultationType;
+          console.log(' [socketService] Consultation type detection:');
+          console.log('   - data.consultationType:', data.consultationType);
+          console.log('   - data.type:', data.type);
+          console.log('   - data.bookingDetails?.type:', data.bookingDetails?.type);
+          console.log('   - data.bookingDetails?.consultationType:', data.bookingDetails?.consultationType);
+          console.log('   - Final consultationType:', consultationType);
+          
+          // Emit event to show booking accepted popup
+          if (global.eventEmitter) {
+            const popupData = {
+              bookingId: data.bookingId,
+              sessionId: data.sessionId,
+              roomId: data.roomId,
+              astrologerId: data.astrologerId,
+              type: consultationType || 'video', // Use comprehensive detection
+              rate: data.rate,
+              astrologerName: data.astrologerName,
+              message: data.message
+            };
+            
+            console.log(' [socketService] Emitting showBookingAcceptedPopup with data:', JSON.stringify(popupData, null, 2));
+            global.eventEmitter.emit('showBookingAcceptedPopup', popupData);
+          }
+          
+          // Also show alert as fallback (avoiding ToastAndroid for Expo Go compatibility)
+          import('react-native').then((RN) => {
+            const { Alert } = RN;
+            Alert.alert('Booking Accepted', 'Check the popup to join your session!');
+          }).catch(err => {
+            console.error('Error showing fallback alert:', err);
+          });
+        } else if (data.status === 'rejected') {
+          console.log(' [socketService] Booking rejected - showing notification');
+          
+          // Show rejection notification (avoiding ToastAndroid for Expo Go compatibility)
+          import('react-native').then((RN) => {
+            const { Alert } = RN;
+            Alert.alert('Booking Rejected', 'Your booking request was declined.');
+          }).catch(err => {
+            console.error('Error showing rejection alert:', err);
+          });
+        }
+      });
+    });
+
+    socketInstance.on('connect_error', (error) => {
+      console.error(' [socketService] Socket connection error:', error);
+      console.error(' [socketService] Error message:', error.message);
+      console.error(' [socketService] Error type:', error.type);
+      console.error(' [socketService] Error description:', error.description);
+      
+      // Check if it's an authentication error
+      if (error.message && error.message.includes('Authentication error')) {
+        console.error(' [socketService] Authentication failed - check token and userId');
+      }
+    });
+
+    socketInstance.on('disconnect', (reason) => {
+      console.log(' [socketService] Socket disconnected:', reason);
+    });
+
+    socketInstance.on('reconnect', (attemptNumber) => {
+      console.log(' [socketService] Socket reconnected after', attemptNumber, 'attempts');
+    });
+
+    socketInstance.on('reconnect_error', (error) => {
+      console.error(' [socketService] Socket reconnection error:', error);
+    });
+
+    socketInstance.on('error', (error) => {
+      console.error(' [socketService] Socket error:', error);
+      if (!socketInstance.connected) {
+        // Return a promise that resolves when the socket is connected
+        return new Promise((resolve, reject) => {
+          // Set a connection timeout
+          const connectionTimeout = setTimeout(() => {
+            reject(new Error('Socket connection timeout'));
+          }, 10000); // 10 seconds timeout
+          
+          // Set up event listeners
+          socketInstance.on('connect', () => {
+            clearTimeout(connectionTimeout);
+            socket = socketInstance; // Store the socket instance globally
+            resolve(socketInstance);
+          });
+        });
+      }
+    });
     
     // Return a promise that resolves when the socket is connected
     return new Promise((resolve, reject) => {
@@ -74,24 +202,16 @@ export const initSocket = async () => {
       });
       
       socketInstance.on('connect_error', (error) => {
-        console.error('Socket connection error:', error);
+        console.error(' [socketService] Socket connection error:', error);
         // Don't reject here, let the timeout handle it or wait for connect
       });
       
       socketInstance.on('disconnect', (reason) => {
         socket = null; // Clear the socket reference on disconnect
       });
-      
-      socketInstance.on('error', (error) => {
-        console.error('Socket error:', error);
-        if (!socketInstance.connected) {
-          clearTimeout(connectionTimeout);
-          reject(error);
-        }
-      });
     });
   } catch (error) {
-    console.error('Socket initialization error:', error);
+    console.error(' [socketService] Socket initialization error:', error);
     return null;
   }
 };
@@ -142,6 +262,8 @@ export const initiateRealTimeBooking = async (bookingData) => {
       // Set up timeout for booking request
       const timeout = setTimeout(() => {
         socketInstance.off('booking_status_update'); // Remove listeners to prevent memory leaks
+        socketInstance.off('booking_initiated'); // Remove listeners to prevent memory leaks
+        socketInstance.off('booking_error'); // Remove listeners to prevent memory leaks
         socketInstance.off('error');
         reject(new Error('Booking request timed out. Astrologer may be unavailable.'));
       }, 60000); // 60 seconds timeout
@@ -152,18 +274,31 @@ export const initiateRealTimeBooking = async (bookingData) => {
         resolve(data);
       });
       
-      // Listen for errors
+      // Listen for booking initiation success
+      socketInstance.once('booking_initiated', (data) => {
+        clearTimeout(timeout);
+        resolve(data);
+      });
+      
+      // Listen for booking errors (new specific error event)
+      socketInstance.once('booking_error', (error) => {
+        console.error(' [socketService] Booking error:', error);
+        clearTimeout(timeout);
+        reject(new Error(error.message || 'Failed to initiate booking'));
+      });
+      
+      // Listen for general errors (fallback)
       socketInstance.once('error', (error) => {
-        console.error('Socket error during booking request:', error);
+        console.error(' [socketService] Socket error during booking request:', error);
         clearTimeout(timeout);
         
         // Handle specific error codes
         if (error.code === 'USER_NOT_FOUND' && error.action === 'CLEAR_AUTH_DATA') {
-          console.log('🔧 Invalid user data detected, clearing auth data...');
+          console.log(' [socketService] Invalid user data detected, clearing auth data...');
           // Import AsyncStorage and clear auth data
           import('@react-native-async-storage/async-storage').then(({ default: AsyncStorage }) => {
             AsyncStorage.multiRemove(['userToken', 'userData']).then(() => {
-              console.log('🔧 Auth data cleared. Please log in again.');
+              console.log(' [socketService] Auth data cleared. Please log in again.');
               // You could also trigger a logout here if needed
             });
           });
@@ -176,33 +311,69 @@ export const initiateRealTimeBooking = async (bookingData) => {
       socketInstance.emit('initiate_booking', bookingData);
     });
   } catch (error) {
-    console.error('Booking request error:', error);
+    console.error(' [socketService] Booking request error:', error);
     throw error;
   }
 };
 
 /**
  * Join a consultation room
- * @param {String} bookingId - Booking ID
- * @param {String} roomId - Room ID
+ * @param {Object} consultationData - Consultation data object
+ * @param {String} consultationData.bookingId - Booking ID
+ * @param {String} consultationData.roomId - Room ID
+ * @param {String} consultationData.sessionId - Session ID (optional)
+ * @param {String} consultationData.astrologerId - Astrologer ID
+ * @param {String} consultationData.consultationType - Type of consultation (video/voice/chat)
  * @returns {Promise<void>}
  */
-export const joinConsultationRoom = async (bookingId, roomId) => {
+export const joinConsultationRoom = async (consultationData) => {
   const socketInstance = await getSocket();
   
   if (!socketInstance) {
     throw new Error('Socket not connected');
   }
   
+  // Extract parameters from consultationData object
+  const bookingId = consultationData.bookingId;
+  const roomId = consultationData.roomId;
+  const astrologerId = consultationData.astrologerId;
+  const consultationType = consultationData.consultationType;
+  const sessionId = consultationData.sessionId;
+  
+  // Validate required parameters
+  if (!bookingId) {
+    throw new Error('Missing required parameter: bookingId');
+  }
+  
+  console.log(' [socketService] Joining consultation room:', {
+    bookingId,
+    roomId,
+    astrologerId,
+    consultationType,
+    sessionId
+  });
+  
   return new Promise((resolve, reject) => {
-    socketInstance.emit('join_consultation_room', { bookingId, roomId });
+    // Emit user_joined_consultation event with proper data structure
+    socketInstance.emit('user_joined_consultation', {
+      bookingId,
+      roomId,
+      astrologerId,
+      consultationType,
+      sessionId
+    });
     
-    socketInstance.once('joined_consultation_room', (response) => {
-      if (response.success) {
-        resolve(response);
-      } else {
-        reject(new Error(response.message || 'Failed to join consultation room'));
-      }
+    // Listen for confirmation (if backend sends one)
+    const timeoutId = setTimeout(() => {
+      console.log(' [socketService] Join consultation room completed (no confirmation expected)');
+      resolve({ success: true });
+    }, 1000);
+    
+    // Optional: Listen for any error response
+    socketInstance.once('consultation_join_error', (response) => {
+      clearTimeout(timeoutId);
+      console.error(' [socketService] Failed to join consultation room:', response);
+      reject(new Error(response.message || 'Failed to join consultation room'));
     });
   });
 };
@@ -291,24 +462,39 @@ export const listenForBookingStatusUpdates = async (onStatusUpdate) => {
       throw new Error('Socket not connected');
     }
     
-    // Create handler function
-    const handleStatusUpdate = (data) => {
-      if (onStatusUpdate && typeof onStatusUpdate === 'function') {
-        onStatusUpdate(data);
-      }
+    console.log(' [socketService] Setting up listener for booking_status_update events');
+    console.log(' [socketService] Socket connection state:', {
+      connected: socketInstance.connected,
+      id: socketInstance.id,
+      url: socketInstance.io.uri
+    });
+    
+    // Create a wrapper function to log the event when received
+    const bookingStatusHandler = (data) => {
+      console.log(' [socketService] Received booking_status_update event with data:', data);
+      console.log(' [socketService] Event details:', {
+        bookingId: data.bookingId,
+        status: data.status,
+        sessionId: data.sessionId,
+        roomId: data.roomId,
+        message: data.message,
+        timestamp: new Date().toISOString()
+      });
+      
+      // Call the original handler
+      onStatusUpdate(data);
+      
+      console.log(' [socketService] booking_status_update event processed by handler');
     };
     
-    // Register event listener
-    socketInstance.on('booking_status_update', handleStatusUpdate);
+    socketInstance.on('booking_status_update', bookingStatusHandler);
     
-    // Return cleanup function
     return () => {
-      if (socketInstance && socketInstance.connected) {
-        socketInstance.off('booking_status_update', handleStatusUpdate);
-      }
+      console.log(' [socketService] Removing listener for booking_status_update');
+      socketInstance.off('booking_status_update', bookingStatusHandler);
     };
   } catch (error) {
-    console.error('Error setting up booking status listener:', error);
+    console.error(' [socketService] Error setting up booking status listener:', error);
     return () => {}; // Return empty cleanup function
   }
 };
@@ -333,7 +519,7 @@ export const sendChatMessage = async (roomId, message, senderId, senderName, mes
   return new Promise((resolve, reject) => {
     // Ensure we have a valid messageId
     if (!messageId) {
-      console.error('Missing messageId when sending message');
+      console.error(' [socketService] Missing messageId when sending message');
       messageId = Date.now().toString();
     }
     
@@ -379,7 +565,7 @@ export const listenForChatMessages = async (onChatMessage) => {
   const messageHandler = (data) => {
     // Ensure message has an ID to maintain consistency across apps
     if (!data.id) {
-      console.error('Received message without ID');
+      console.error(' [socketService] Received message without ID');
     }
     
     if (onChatMessage && typeof onChatMessage === 'function') {
@@ -407,17 +593,17 @@ export const sendTypingStatus = async (roomId, isTyping) => {
     const socketInstance = await getSocket();
     
     if (!socketInstance) {
-      console.error('[USER-APP] Socket not connected for typing status');
+      console.error(' [socketService] Socket not connected for typing status');
       throw new Error('Socket not connected');
     }
     
     const eventName = isTyping ? 'typing_started' : 'typing_stopped';
-    console.log(`[USER-APP] Emitting ${eventName} event with payload:`, { bookingId: roomId });
+    console.log(' [socketService] Emitting', eventName, 'event with payload:', { bookingId: roomId });
     socketInstance.emit(eventName, { bookingId: roomId });
     
     return Promise.resolve();
   } catch (error) {
-    console.error('Error sending typing status:', error);
+    console.error(' [socketService] Error sending typing status:', error);
     return Promise.reject(error);
   }
 };
@@ -446,7 +632,7 @@ export const listenForTypingStatus = async (onTypingStarted, onTypingStopped) =>
       }
     };
   } catch (error) {
-    console.error('Error setting up typing status listeners:', error);
+    console.error(' [socketService] Error setting up typing status listeners:', error);
     return () => {};
   }
 };
@@ -468,7 +654,7 @@ export const markMessageAsRead = async (roomId, messageId) => {
     socketInstance.emit('message_read', { bookingId: roomId, messageId });
     return Promise.resolve();
   } catch (error) {
-    console.error('Error marking message as read:', error);
+    console.error(' [socketService] Error marking message as read:', error);
     return Promise.reject(error);
   }
 };
@@ -494,7 +680,7 @@ export const listenForMessageStatusUpdates = async (onMessageStatusUpdate) => {
       }
     };
   } catch (error) {
-    console.error('Error setting up message status listeners:', error);
+    console.error(' [socketService] Error setting up message status listeners:', error);
     return () => {};
   }
 };

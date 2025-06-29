@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   StyleSheet,
   View,
@@ -17,7 +17,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { astrologersAPI } from '../../services/api';
 import { initiateRealTimeBooking, listenForBookingStatusUpdates } from '../../services/socketService';
-import { addPendingConsultation } from '../../utils/pendingConsultationsStore';
+import { addPendingConsultation, getPendingConsultations } from '../../utils/pendingConsultationsStore';
 
 const AstrologerProfileScreen = ({ route, navigation }) => {
   const [astrologer, setAstrologer] = useState(null);
@@ -35,8 +35,26 @@ const AstrologerProfileScreen = ({ route, navigation }) => {
   const [showNotificationBanner, setShowNotificationBanner] = useState(false);
   const [consultationData, setConsultationData] = useState(null);
   
-  // Get astrologer ID from navigation params
-  const { astrologerId } = route.params;
+  // Get astrologer ID from navigation params - handle both astrologerId and astrologer object
+  const { astrologerId, astrologer: passedAstrologer } = route.params || {};
+  const actualAstrologerId = astrologerId || passedAstrologer?._id || passedAstrologer?.id;
+  
+  console.log('🔍 [USER-APP] AstrologerProfileScreen: Route params:', route.params);
+  console.log('🔍 [USER-APP] AstrologerProfileScreen: Extracted astrologer ID:', actualAstrologerId);
+
+  // Handle chat booking - navigate to PreChatForm for user info collection
+  const handleBookChat = () => {
+    if (!astrologer) {
+      Alert.alert('Error', 'Astrologer information not available. Please try again.');
+      return;
+    }
+
+    console.log('🚀 [USER-APP] AstrologerProfileScreen: Navigating to PreChatForm for chat booking');
+    navigation.navigate('PreChatForm', {
+      astrologer: astrologer,
+      bookingType: 'chat'
+    });
+  };
 
   useEffect(() => {
     fetchAstrologerDetails();
@@ -51,6 +69,36 @@ const AstrologerProfileScreen = ({ route, navigation }) => {
       }
     };
   }, []);
+  
+  // Add timeout for booking requests
+  useEffect(() => {
+    let timeoutId;
+    
+    if (bookingStatus === 'pending') {
+      console.log('⏰ [USER-APP] AstrologerProfileScreen: Starting 2-minute timeout for booking request');
+      
+      // Set 2-minute timeout for booking request
+      timeoutId = setTimeout(() => {
+        console.log('⏰ [USER-APP] AstrologerProfileScreen: Booking request timed out');
+        setBookingStatus(null);
+        setCurrentBookingId(null);
+        currentBookingIdRef.current = null;
+        currentBookingTypeRef.current = null;
+        
+        Alert.alert(
+          'Request Timeout',
+          'The astrologer did not respond to your booking request. Please try again.',
+          [{ text: 'OK' }]
+        );
+      }, 120000); // 2 minutes
+    }
+    
+    return () => {
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+      }
+    };
+  }, [bookingStatus]);
   
   // Reset booking state when booking status changes to accepted or rejected
   useEffect(() => {
@@ -75,49 +123,107 @@ const AstrologerProfileScreen = ({ route, navigation }) => {
   // Set up listener for booking status updates
   const setupBookingStatusListener = async () => {
     try {
+      console.log('🔧 [USER-APP] AstrologerProfileScreen: Setting up booking status listener...');
       const cleanup = await listenForBookingStatusUpdates(handleBookingStatusUpdate);
       statusListenerCleanup.current = cleanup;
+      console.log('✅ [USER-APP] AstrologerProfileScreen: Booking status listener setup complete');
     } catch (error) {
-      console.error('Failed to set up booking status listener:', error);
+      console.error('❌ [USER-APP] AstrologerProfileScreen: Failed to set up booking status listener:', error);
     }
   };
   
   // Handler for booking status updates
-  const handleBookingStatusUpdate = (data) => {
-    console.log('Received booking status update:', data.status);
+  const handleBookingStatusUpdate = useCallback(async (data) => {
+    console.log('🔔 [USER-APP] AstrologerProfileScreen: *** RECEIVED BOOKING STATUS UPDATE ***');
+    console.log('🔔 [USER-APP] AstrologerProfileScreen: Raw data received:', JSON.stringify(data, null, 2));
+    console.log('📊 [USER-APP] AstrologerProfileScreen: Processing booking status update details:', {
+      bookingId: data.bookingId,
+      status: data.status,
+      sessionId: data.sessionId,
+      roomId: data.roomId,
+      message: data.message,
+      currentBookingId: currentBookingId,
+      currentBookingStatus: bookingStatus,
+      timestamp: new Date().toISOString()
+    });
+    
+    // IMMEDIATELY dismiss the waiting popup regardless of booking ID match
+    console.log('🚨 [USER-APP] AstrologerProfileScreen: IMMEDIATELY dismissing waiting popup');
+    setBookingStatus(data.status);
     
     // Check ref first, then state for booking ID
     const effectiveBookingId = currentBookingIdRef.current || currentBookingId;
     
-    // Only process updates for the current booking
-    if (effectiveBookingId && data.bookingId === effectiveBookingId) {
-      setBookingStatus(data.status);
+    console.log('🔍 [USER-APP] AstrologerProfileScreen: Booking ID comparison debug:', {
+      receivedBookingId: data.bookingId,
+      receivedBookingIdType: typeof data.bookingId,
+      effectiveBookingId: effectiveBookingId,
+      effectiveBookingIdType: typeof effectiveBookingId,
+      currentBookingIdRef: currentBookingIdRef.current,
+      currentBookingIdState: currentBookingId,
+      stringComparison: data.bookingId === effectiveBookingId,
+      stringifiedComparison: String(data.bookingId) === String(effectiveBookingId)
+    });
+    
+    // Only process updates for the current booking - use string comparison to handle ObjectId vs string
+    const bookingIdMatch = effectiveBookingId && (
+      data.bookingId === effectiveBookingId || 
+      String(data.bookingId) === String(effectiveBookingId)
+    );
+    
+    if (bookingIdMatch) {
+      console.log('✅ [USER-APP] AstrologerProfileScreen: Booking status update matches current booking');
       
       if (data.status === 'accepted') {
+        console.log('🎉 [USER-APP] AstrologerProfileScreen: Booking accepted! Processing acceptance...');
+        
         try {
           // Create a safe version of the astrologer object with fallbacks for all properties
+          let astrologerId = astrologer?._id;
+          if (!astrologerId) {
+            astrologerId = data.astrologerId;
+            if (!astrologerId) {
+              console.error('No astrologer ID available in booking status update or astrologer data');
+              throw new Error('No astrologer ID available');
+            }
+          }
+          console.log('Using astrologer ID:', astrologerId);
+          
           const safeAstrologer = {
-            _id: astrologer?._id || data.astrologerId || 'unknown',
+            _id: astrologerId,
             displayName: astrologer?.displayName || 'Astrologer',
             imageUrl: astrologer?.imageUrl || null,
             rates: astrologer?.rates || { chat: 0, voice: 0, video: 0 }
           };
           
           // Use the ref value which is immune to stale closures
-          const bookingType = currentBookingTypeRef.current || data.type || 'chat';
+          const bookingType = currentBookingTypeRef.current || data.type || 'video'; // Default to video for video consultations
           console.log('Using booking type for consultation:', bookingType);
           
           // Store consultation data for later use with safe values
           const consultationData = {
+            astrologer: safeAstrologer, // Move astrologer to top level for PendingConsultationsScreen
             booking: {
-              _id: data.bookingId,
-              astrologer: safeAstrologer,
-              type: bookingType, // Use the tracked booking type from ref
-              rate: safeAstrologer.rates[bookingType] || 0
+              _id: String(data.bookingId), // Ensure booking ID is a string
+              astrologer: safeAstrologer, // Keep for backward compatibility
+              type: bookingType,
+              rate: safeAstrologer.rates[bookingType] || 0,
+              status: 'accepted',
+              createdAt: new Date().toISOString()
             },
             roomId: data.roomId,
-            sessionId: data.sessionId
+            sessionId: String(data.sessionId), // Ensure session ID is a string
+            acceptedAt: new Date().toISOString()
           };
+          
+          console.log('🔄 [USER-APP] AstrologerProfileScreen: Created consultation data for pending store:', {
+            bookingId: consultationData.booking._id,
+            astrologerName: consultationData.booking.astrologer.displayName,
+            consultationType: consultationData.booking.type,
+            sessionId: consultationData.sessionId,
+            roomId: consultationData.roomId,
+            fullData: JSON.stringify(consultationData, null, 2)
+          });
           
           // Save consultation data to state or global for access when user decides to join
           global.pendingConsultation = consultationData;
@@ -125,27 +231,103 @@ const AstrologerProfileScreen = ({ route, navigation }) => {
           // Store the consultation in our global pending consultations store
           setConsultationData(consultationData);
           
-          // Add to pending consultations store
-          addPendingConsultation(consultationData);
+          // Add to pending consultations store with validation
+          console.log('📝 [USER-APP] AstrologerProfileScreen: About to call addPendingConsultation...');
+          console.log('📝 [USER-APP] AstrologerProfileScreen: Consultation data validation:', {
+            hasBooking: !!consultationData.booking,
+            hasBookingId: !!consultationData.booking._id,
+            hasAstrologer: !!consultationData.booking.astrologer,
+            hasSessionId: !!consultationData.sessionId,
+            hasRoomId: !!consultationData.roomId
+          });
+          
+          const addResult = await addPendingConsultation(consultationData);
+          console.log('✅ [USER-APP] AstrologerProfileScreen: addPendingConsultation result:', addResult);
+          
+          // Verify the consultation was added by checking the store
+          const allPendingConsultations = await getPendingConsultations();
+          console.log('🔍 [USER-APP] AstrologerProfileScreen: Verification - All pending consultations after add:', {
+            count: allPendingConsultations.length,
+            consultationIds: allPendingConsultations.map(c => c.booking._id),
+            justAddedExists: allPendingConsultations.some(c => c.booking._id === consultationData.booking._id)
+          });
+          
         } catch (error) {
-          console.error('Error creating consultation data:', error);
+          console.error('❌ [USER-APP] AstrologerProfileScreen: Error creating consultation data:', error);
+          console.error('❌ [USER-APP] AstrologerProfileScreen: Error stack:', error.stack);
         }
         
         // Use direct navigation as a reliable notification method
         try {
-          // Navigate to the pending consultations screen
-          navigation.navigate('PendingConsultations');
+          console.log('🚀 [USER-APP] AstrologerProfileScreen: Starting navigation to Home...');
           
-          // Also show toast as a secondary notification
-          if (Platform.OS === 'android') {
-            ToastAndroid.showWithGravity(
-              'Booking accepted! Check notifications to join.',
-              ToastAndroid.LONG,
-              ToastAndroid.CENTER
-            );
-          }
+          // Show immediate alert with navigation
+          Alert.alert(
+            'Booking Accepted!',
+            'Your consultation has been accepted. You will be redirected to the Home screen where you can join the session.',
+            [
+              {
+                text: 'Go to Home',
+                onPress: () => {
+                  console.log('🚀 [USER-APP] AstrologerProfileScreen: User pressed Go to Home button');
+                  
+                  // Reset navigation stack and go to Home
+                  navigation.reset({
+                    index: 0,
+                    routes: [
+                      {
+                        name: 'Main',
+                        state: {
+                          routes: [
+                            { name: 'Home' },
+                            { name: 'Bookings' },
+                            { name: 'Wallet' },
+                            { name: 'Profile' }
+                          ],
+                          index: 0, // Set Home as active tab
+                        },
+                      },
+                    ],
+                  });
+                  
+                  // Also show toast as confirmation
+                  if (Platform.OS === 'android') {
+                    ToastAndroid.showWithGravity(
+                      'Check your booking card on Home screen!',
+                      ToastAndroid.LONG,
+                      ToastAndroid.CENTER
+                    );
+                  }
+                }
+              }
+            ]
+          );
+          
         } catch (navErr) {
           console.error('Navigation error:', navErr);
+          
+          // Fallback navigation
+          try {
+            navigation.reset({
+              index: 0,
+              routes: [
+                {
+                  name: 'Main',
+                  state: {
+                    routes: [
+                      { name: 'Home' },
+                      { name: 'Bookings' },
+                      { name: 'Wallet' },
+                      { name: 'Profile' }
+                    ],
+                    index: 0, // Set Home as active tab
+                  },
+                },
+              ],
+            });
+          } catch (fallbackErr) {
+            console.error('Fallback navigation error:', fallbackErr);
+          }
         }
         
         // Notify the user that they have a pending consultation
@@ -160,17 +342,11 @@ const AstrologerProfileScreen = ({ route, navigation }) => {
           console.error('Error emitting event:', err);
         }
         
-        // Show a simple alert
-        try {
-          Alert.alert(
-            'Booking Accepted',
-            'Your booking has been accepted! You will be redirected to the pending consultations screen.',
-            [{ text: 'OK' }]
-          );
-        } catch (alertErr) {
-          console.error('Error showing alert:', alertErr);
-        }
+        // Alert removed - users now get BookingAcceptedPopup instead
+        console.log('✅ [USER-APP] AstrologerProfileScreen: Booking accepted - popup will be shown via BookingPopupContext');
       } else if (data.status === 'rejected') {
+        console.log('❌ [USER-APP] AstrologerProfileScreen: Booking rejected');
+        
         // Show rejection message
         try {
           Alert.alert(
@@ -183,75 +359,82 @@ const AstrologerProfileScreen = ({ route, navigation }) => {
         }
         
         // Reset booking state
-        setBookingStatus(null);
         setCurrentBookingId(null);
+        currentBookingIdRef.current = null;
+        currentBookingTypeRef.current = null;
       }
     } else {
-      // Process anyway if we don't have a current booking ID but received a status update
-      if ((!currentBookingId || currentBookingId !== data.bookingId) && data.status) {
-        console.log('Processing booking status update for non-current booking ID');
-        setCurrentBookingId(data.bookingId);
-        setBookingStatus(data.status);
+      console.log('⚠️ [USER-APP] AstrologerProfileScreen: Booking status update does not match current booking');
+      console.log('⚠️ [USER-APP] AstrologerProfileScreen: However, still dismissing popup and processing as fallback');
+      
+      // Even if booking ID doesn't match, still process acceptance/rejection as fallback
+      if (data.status === 'accepted') {
+        console.log('🔄 [USER-APP] AstrologerProfileScreen: Processing acceptance as fallback...');
         
-        if (data.status === 'accepted') {
-          console.log('Booking accepted! Showing notification to join consultation...');
-          // Store consultation data for later use
-          const consultationData = {
-            booking: {
-              _id: data.bookingId,
-              astrologer: astrologer,
-              type: data.type || 'chat', // Default to chat if type is not provided
-              rate: astrologer.rates ? astrologer.rates[data.type || 'chat'] : 0
+        // Alert removed - users now get BookingAcceptedPopup instead
+        console.log('✅ [USER-APP] AstrologerProfileScreen: Fallback booking accepted - popup will be shown via BookingPopupContext');
+        
+        // Reset navigation stack and go to Home
+        navigation.reset({
+          index: 0,
+          routes: [
+            {
+              name: 'Main',
+              state: {
+                routes: [
+                  { name: 'Home' },
+                  { name: 'Bookings' },
+                  { name: 'Wallet' },
+                  { name: 'Profile' }
+                ],
+                index: 0, // Set Home as active tab
+              },
             },
-            roomId: data.roomId,
-            sessionId: data.sessionId
-          };
-          
-          // Save consultation data to state or global for access when user decides to join
-          global.pendingConsultation = consultationData;
-          
-          // Store the consultation in our global pending consultations store
-          setConsultationData(consultationData);
-          console.log('Adding consultation to pending consultations store');
-          
-          // Add to pending consultations store
-          const added = addPendingConsultation(consultationData);
-          
-          // Show a simple toast notification that works reliably
-          if (Platform.OS === 'android') {
-            ToastAndroid.show('Booking accepted! Check notifications to join.', ToastAndroid.LONG);
-          } else {
-            // For iOS, we'll rely on the notification badge in the app
-            console.log('Booking accepted on iOS - notification badge should update');
-          }
-          
-          // Notify the user that they have a pending consultation
-          global.pendingConsultationAdded = true;
-          
-          // Emit an event that can be listened to by the app's navigation container
-          if (global.eventEmitter) {
-            console.log('Emitting pendingConsultationAdded event');
-            global.eventEmitter.emit('pendingConsultationAdded', consultationData);
-          }
-        } else if (data.status === 'rejected') {
-          console.log('Booking rejected! Showing alert...');
-          // Show rejection message
+          ],
+        });
+      } else if (data.status === 'rejected') {
+        console.log('❌ [USER-APP] AstrologerProfileScreen: Processing rejection as fallback...');
+        
+        // Show rejection message
+        try {
           Alert.alert(
             'Booking Rejected',
-            data.message || 'Astrologer is not available right now.'
+            data.message || 'Astrologer is not available right now.',
+            [{ text: 'OK' }]
           );
+        } catch (alertErr) {
+          console.error('Error showing fallback rejection alert:', alertErr);
         }
+        
+        // Reset booking state
+        setCurrentBookingId(null);
+        currentBookingIdRef.current = null;
+        currentBookingTypeRef.current = null;
       }
     }
-  };
+  }, [currentBookingId, bookingStatus, astrologer, navigation]);
 
   const fetchAstrologerDetails = async () => {
     try {
       setLoading(true);
       setError(null);
       
+      // If astrologer object is already passed, use it directly
+      if (passedAstrologer && (passedAstrologer._id || passedAstrologer.id)) {
+        console.log('✅ [USER-APP] AstrologerProfileScreen: Using passed astrologer object');
+        setAstrologer(passedAstrologer);
+        setLoading(false);
+        return;
+      }
+      
+      // Otherwise, fetch from API using the extracted ID
+      if (!actualAstrologerId) {
+        throw new Error('No astrologer ID available');
+      }
+      
+      console.log('🔄 [USER-APP] AstrologerProfileScreen: Fetching astrologer details for ID:', actualAstrologerId);
       // Use the astrologersAPI service for consistent API handling
-      const response = await astrologersAPI.getById(astrologerId);
+      const response = await astrologersAPI.getById(actualAstrologerId);
       
       // Extract the actual astrologer data from the nested response structure
       let astrologerData = null;
@@ -386,6 +569,18 @@ const AstrologerProfileScreen = ({ route, navigation }) => {
                     'Booking Timeout',
                     'The booking request timed out. The astrologer may be unavailable at the moment.'
                   );
+                } else if (error.message && error.message.includes('chat consultations, please provide')) {
+                  console.log('User info required for chat consultation');
+                  Alert.alert(
+                    'Information Required',
+                    'For chat consultations, please provide your name, date of birth, and place of birth through the pre-chat form.'
+                  );
+                } else if (error.message && error.message.includes('validation')) {
+                  console.log('Validation error detected');
+                  Alert.alert(
+                    'Validation Error',
+                    error.message || 'Please check your booking details and try again.'
+                  );
                 } else {
                   Alert.alert(
                     'Booking Error',
@@ -408,10 +603,6 @@ const AstrologerProfileScreen = ({ route, navigation }) => {
   };
   
   // Legacy booking handlers - replaced with real-time booking
-  const handleBookChat = () => {
-    handleBookNow('chat');
-  };
-
   const handleBookVoiceCall = () => {
     handleBookNow('voice');
   };
@@ -517,7 +708,7 @@ const AstrologerProfileScreen = ({ route, navigation }) => {
         <View style={styles.notificationContent}>
           <Text style={styles.notificationTitle}>Booking Accepted!</Text>
           <Text style={styles.notificationText}>
-            Your consultation is ready to start.
+            Your consultation is ready! Check the Home screen to join.
           </Text>
         </View>
         <View style={styles.notificationButtonsContainer}>
@@ -525,12 +716,28 @@ const AstrologerProfileScreen = ({ route, navigation }) => {
             style={styles.joinButton}
             onPress={() => {
               setShowNotificationBanner(false);
-              if (consultationData) {
-                navigation.navigate('ConsultationRoom', consultationData);
-              }
+              
+              // Navigate to Home screen using reset to ensure proper navigation
+              navigation.reset({
+                index: 0,
+                routes: [
+                  {
+                    name: 'Main',
+                    state: {
+                      routes: [
+                        { name: 'Home' },
+                        { name: 'Bookings' },
+                        { name: 'Wallet' },
+                        { name: 'Profile' }
+                      ],
+                      index: 0, // Set Home as active tab
+                    },
+                  },
+                ],
+              });
             }}
           >
-            <Text style={styles.joinButtonText}>Join Now</Text>
+            <Text style={styles.joinButtonText}>Go to Home</Text>
           </TouchableOpacity>
           <TouchableOpacity 
             style={styles.laterButton}

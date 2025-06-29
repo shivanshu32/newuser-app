@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   StyleSheet,
   View,
@@ -9,7 +9,6 @@ import {
   Platform,
   ActivityIndicator,
   Alert,
-  ScrollView,
   StatusBar,
   SafeAreaView,
 } from 'react-native';
@@ -22,24 +21,55 @@ const OtpVerificationScreen = ({ route, navigation }) => {
   const [timer, setTimer] = useState(30);
   const [canResend, setCanResend] = useState(false);
   const [localLoading, setLocalLoading] = useState(false);
-  const { verifyOtp, requestOtp, loading } = useAuth();
+  const [isVerifying, setIsVerifying] = useState(false);
+  const [hasVerified, setHasVerified] = useState(false);
+  const { verifyOtp, requestOtp, loading, token } = useAuth();
   
   const inputRefs = useRef([]);
+  const isMountedRef = useRef(true);
+  const timerRef = useRef(null);
 
+  // Handle navigation when token is set (successful verification)
   useEffect(() => {
-    // Start countdown timer
-    if (timer > 0 && !canResend) {
-      const interval = setInterval(() => {
-        setTimer((prevTimer) => prevTimer - 1);
+    if (token && hasVerified) {
+      console.log('OTP verification successful, token received');
+    }
+  }, [token, hasVerified]);
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      isMountedRef.current = false;
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
+      }
+    };
+  }, []);
+
+  // Timer effect with proper cleanup
+  useEffect(() => {
+    if (timer > 0 && !canResend && isMountedRef.current) {
+      timerRef.current = setInterval(() => {
+        if (isMountedRef.current) {
+          setTimer((prevTimer) => {
+            if (prevTimer <= 1) {
+              setCanResend(true);
+              return 0;
+            }
+            return prevTimer - 1;
+          });
+        }
       }, 1000);
       
-      return () => clearInterval(interval);
-    } else if (timer === 0 && !canResend) {
-      setCanResend(true);
+      return () => {
+        if (timerRef.current) {
+          clearInterval(timerRef.current);
+        }
+      };
     }
   }, [timer, canResend]);
 
-  const handleOtpChange = (text, index) => {
+  const handleOtpChange = useCallback((text, index) => {
     // Update OTP array
     const newOtp = [...otp];
     newOtp[index] = text;
@@ -47,62 +77,77 @@ const OtpVerificationScreen = ({ route, navigation }) => {
     
     // Auto-focus next input
     if (text && index < 3) {
-      inputRefs.current[index + 1].focus();
+      inputRefs.current[index + 1]?.focus();
     }
-  };
+  }, [otp]);
 
-  const handleKeyPress = (e, index) => {
+  const handleKeyPress = useCallback((e, index) => {
     // Handle backspace to move to previous input
     if (e.nativeEvent.key === 'Backspace' && !otp[index] && index > 0) {
-      inputRefs.current[index - 1].focus();
+      inputRefs.current[index - 1]?.focus();
     }
-  };
+  }, [otp]);
 
-  const handleVerifyOtp = async () => {
-    // Prevent double submission
-    if (localLoading || loading) {
+  const handleVerifyOtp = useCallback(async () => {
+    // Prevent multiple verification attempts
+    if (isVerifying || localLoading || loading) {
       return;
     }
-    
+
     const otpString = otp.join('');
-    
-    // Validate OTP
     if (otpString.length !== 4) {
-      Alert.alert('Invalid OTP', 'Please enter a valid 4-digit OTP');
+      Alert.alert('Error', 'Please enter a complete 4-digit OTP');
       return;
     }
-    
-    // Set local loading state immediately to prevent double clicks
+
+    setIsVerifying(true);
     setLocalLoading(true);
-    
+
     try {
       const result = await verifyOtp(phoneNumber, otpString);
       
       if (result.success) {
-        // OTP verification successful, user will be redirected automatically
-        // due to the isLoggedIn check in App.js
+        setHasVerified(true);
+        console.log('OTP verification successful');
+        // Navigation will be handled by App.js when token is set
       } else {
-        Alert.alert('Error', result.message || 'Failed to verify OTP');
+        Alert.alert('Error', result.message || 'Invalid OTP. Please try again.');
+        // Clear OTP inputs on error
+        setOtp(['', '', '', '']);
+        inputRefs.current[0]?.focus();
       }
     } catch (error) {
+      console.error('OTP verification error:', error);
       Alert.alert('Error', 'Failed to verify OTP. Please try again.');
+      setOtp(['', '', '', '']);
+      inputRefs.current[0]?.focus();
     } finally {
-      setLocalLoading(false);
+      if (isMountedRef.current) {
+        setIsVerifying(false);
+        setLocalLoading(false);
+      }
     }
-  };
+  }, [otp, isVerifying, localLoading, loading, phoneNumber, verifyOtp]);
 
-  const handleResendOtp = async () => {
-    const result = await requestOtp(phoneNumber);
-    
+  const handleResendOtp = useCallback(async () => {
+    if (!canResend || loading) return;
+
+    setLocalLoading(true);
+    const result = await requestOtp(phoneNumber, 'user');
+    setLocalLoading(false);
+
     if (result.success) {
-      // Reset timer and canResend flag
       setTimer(30);
       setCanResend(false);
       Alert.alert('Success', 'OTP sent successfully');
     } else {
       Alert.alert('Error', result.message || 'Failed to resend OTP');
     }
-  };
+  }, [canResend, loading, phoneNumber, requestOtp]);
+
+  const handleGoBack = useCallback(() => {
+    navigation.goBack();
+  }, [navigation]);
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -111,7 +156,7 @@ const OtpVerificationScreen = ({ route, navigation }) => {
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity
-          onPress={() => navigation.goBack()}
+          onPress={handleGoBack}
           style={styles.backButton}
         >
           <Ionicons name="chevron-back" size={28} color="#F97316" />
@@ -123,59 +168,55 @@ const OtpVerificationScreen = ({ route, navigation }) => {
         style={styles.container}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       >
-        <ScrollView
-          contentContainerStyle={styles.scrollContent}
-          keyboardShouldPersistTaps="handled"
-        >
-          <View style={styles.content}>
-            <Text style={styles.title}>Enter OTP</Text>
-            
-            <View style={styles.subtitleContainer}>
-              <Text style={styles.subtitle}>Enter the 4-digit code sent to</Text>
-              <Text style={styles.phoneNumber}>+91 {phoneNumber}</Text>
-            </View>
-
-            <View style={styles.otpContainer}>
-              {[0, 1, 2, 3].map((index) => (
-                <TextInput
-                  key={index}
-                  ref={(ref) => (inputRefs.current[index] = ref)}
-                  style={styles.otpInput}
-                  keyboardType="number-pad"
-                  maxLength={1}
-                  value={otp[index]}
-                  onChangeText={(text) => handleOtpChange(text, index)}
-                  onKeyPress={(e) => handleKeyPress(e, index)}
-                  placeholderTextColor="#9CA3AF"
-                />
-              ))}
-            </View>
-
-            <TouchableOpacity
-              style={[styles.button, (loading || localLoading) && styles.buttonDisabled]}
-              onPress={handleVerifyOtp}
-              disabled={loading || localLoading}
-              activeOpacity={0.8}
-            >
-              {loading || localLoading ? (
-                <ActivityIndicator color="#fff" size="small" />
-              ) : (
-                <Text style={styles.buttonText}>Verify OTP</Text>
-              )}
-            </TouchableOpacity>
-
-            <View style={styles.resendContainer}>
-              <Text style={styles.resendText}>Didn't receive the code? </Text>
-              {canResend ? (
-                <TouchableOpacity onPress={handleResendOtp} disabled={loading}>
-                  <Text style={styles.resendButton}>Resend OTP</Text>
-                </TouchableOpacity>
-              ) : (
-                <Text style={styles.timer}>Resend in {timer}s</Text>
-              )}
-            </View>
+        <View style={styles.content}>
+          <Text style={styles.title}>Enter OTP</Text>
+          
+          <View style={styles.subtitleContainer}>
+            <Text style={styles.subtitle}>Enter the 4-digit code sent to</Text>
+            <Text style={styles.phoneNumber}>+91 {phoneNumber}</Text>
           </View>
-        </ScrollView>
+
+          <View style={styles.otpContainer}>
+            {[0, 1, 2, 3].map((index) => (
+              <TextInput
+                key={index}
+                ref={(ref) => (inputRefs.current[index] = ref)}
+                style={styles.otpInput}
+                keyboardType="number-pad"
+                maxLength={1}
+                value={otp[index]}
+                onChangeText={(text) => handleOtpChange(text, index)}
+                onKeyPress={(e) => handleKeyPress(e, index)}
+                placeholderTextColor="#9CA3AF"
+                autoFocus={index === 0}
+              />
+            ))}
+          </View>
+
+          <TouchableOpacity
+            style={[styles.button, (loading || localLoading) && styles.buttonDisabled]}
+            onPress={handleVerifyOtp}
+            disabled={loading || localLoading}
+            activeOpacity={0.8}
+          >
+            {loading || localLoading ? (
+              <ActivityIndicator color="#fff" size="small" />
+            ) : (
+              <Text style={styles.buttonText}>Verify OTP</Text>
+            )}
+          </TouchableOpacity>
+
+          <View style={styles.resendContainer}>
+            <Text style={styles.resendText}>Didn't receive the code? </Text>
+            {canResend ? (
+              <TouchableOpacity onPress={handleResendOtp} disabled={loading}>
+                <Text style={styles.resendButton}>Resend OTP</Text>
+              </TouchableOpacity>
+            ) : (
+              <Text style={styles.timer}>Resend in {timer}s</Text>
+            )}
+          </View>
+        </View>
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
@@ -190,9 +231,11 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#ffffff',
   },
-  scrollContent: {
-    flexGrow: 1,
-    paddingHorizontal: 16,
+  content: {
+    flex: 1,
+    paddingVertical: 40,
+    justifyContent: 'center',
+    minHeight: '80%',
   },
   header: {
     flexDirection: 'row',
@@ -217,12 +260,6 @@ const styles = StyleSheet.create({
     color: '#1F2937',
     textAlign: 'center',
     marginLeft: -40, // To center the text properly with the back button present
-  },
-  content: {
-    flex: 1,
-    paddingVertical: 40,
-    justifyContent: 'center',
-    minHeight: '80%',
   },
   title: {
     fontSize: 28,

@@ -3,6 +3,22 @@ import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { NavigationContainer } from '@react-navigation/native';
 import { ActivityIndicator, View } from 'react-native';
+// import LogRocket from '@logrocket/react-native'; // Temporarily disabled due to build issues
+import Constants from 'expo-constants';
+
+// Initialize LogRocket safely - only in development or when safe
+try {
+  // Temporarily disable LogRocket to resolve build issues
+  // TODO: Re-enable once LogRocket Maven repository issue is resolved
+  if (false && (__DEV__ || Constants.debugMode)) {
+    // LogRocket.init('r9ooew/jyotishcalluser-app');
+    console.log('LogRocket initialized successfully');
+  } else {
+    console.log('LogRocket disabled temporarily due to build issues');
+  }
+} catch (error) {
+  console.warn('LogRocket initialization failed:', error);
+}
 
 // Import navigation stacks
 import AuthNavigator from './src/navigation/AuthNavigator';

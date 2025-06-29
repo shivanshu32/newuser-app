@@ -12,58 +12,98 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../context/AuthContext';
+import { bookingsAPI, astrologersAPI } from '../../services/api';
 
 const RatingScreen = ({ route, navigation }) => {
-  const { bookingId, astrologerId, sessionType, duration, charges } = route.params || {};
+  const { bookingId, consultation } = route.params || {};
   const [rating, setRating] = useState(0);
   const [review, setReview] = useState('');
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  const [bookingData, setBookingData] = useState(null);
   const [astrologer, setAstrologer] = useState(null);
   const { user } = useAuth();
   
-  // Format time as HH:MM:SS
-  const formatTime = (seconds) => {
-    const hrs = Math.floor(seconds / 3600);
-    const mins = Math.floor((seconds % 3600) / 60);
-    const secs = seconds % 60;
+  // Format duration from minutes to readable format
+  const formatDuration = (minutes) => {
+    if (!minutes || minutes === 0) return 'N/A';
+    
+    const hrs = Math.floor(minutes / 60);
+    const mins = minutes % 60;
     
     if (hrs > 0) {
-      return `${hrs}h ${mins}m ${secs}s`;
+      return mins > 0 ? `${hrs}h ${mins}m` : `${hrs}h`;
     } else {
-      return `${mins}m ${secs}s`;
+      return `${mins}m`;
+    }
+  };
+
+  // Format consultation type for display
+  const formatConsultationType = (type) => {
+    switch (type) {
+      case 'video':
+        return 'Video Call';
+      case 'voice':
+        return 'Voice Call';
+      case 'chat':
+        return 'Chat';
+      default:
+        return 'Consultation';
     }
   };
 
   useEffect(() => {
-    fetchAstrologerDetails();
+    fetchBookingAndAstrologerDetails();
   }, []);
 
-  const fetchAstrologerDetails = async () => {
+  const fetchBookingAndAstrologerDetails = async () => {
     try {
-      // In a real app, this would call your backend API
-      // const response = await axios.get(`${API_URL}/astrologers/${astrologerId}`);
-      // setAstrologer(response.data);
+      setLoading(true);
       
-      // Simulate API call with dummy data
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      let booking = null;
+      let astrologerData = null;
       
-      const dummyAstrologer = {
-        id: astrologerId || '1',
-        name: astrologerId === '2' ? 'Jyotish Gupta' : 'Pandit Sharma',
-        image: 'https://via.placeholder.com/100',
-        specialties: astrologerId === '2' ? ['Palmistry', 'Tarot'] : ['Vedic', 'Numerology'],
-        experience: astrologerId === '2' ? 10 : 15,
-        rating: astrologerId === '2' ? 4.5 : 4.8,
-        price: astrologerId === '2' ? 20 : 15,
-      };
+      // If consultation object is passed directly, use it
+      if (consultation) {
+        booking = consultation.booking;
+        astrologerData = consultation.astrologer;
+      } else if (bookingId) {
+        // Fetch booking details by ID
+        const bookingResponse = await bookingsAPI.getById(bookingId);
+        if (bookingResponse.data && bookingResponse.data.success) {
+          const fullConsultation = bookingResponse.data.data;
+          booking = fullConsultation.booking;
+          astrologerData = fullConsultation.astrologer;
+        }
+      }
       
-      setAstrologer(dummyAstrologer);
-      setLoading(false);
+      if (!booking) {
+        throw new Error('Booking data not found');
+      }
+      
+      // If we don't have astrologer data, fetch it separately
+      if (!astrologerData && booking.astrologerId) {
+        const astrologerResponse = await astrologersAPI.getById(booking.astrologerId);
+        if (astrologerResponse.data && astrologerResponse.data.success) {
+          astrologerData = astrologerResponse.data.data;
+        }
+      }
+      
+      setBookingData(booking);
+      setAstrologer(astrologerData);
+      
     } catch (error) {
-      console.log('Error fetching astrologer details:', error);
+      console.error('Error fetching booking/astrologer details:', error);
+      Alert.alert(
+        'Error', 
+        'Failed to load consultation details. Please try again.',
+        [
+          { text: 'Retry', onPress: fetchBookingAndAstrologerDetails },
+          { text: 'Go Back', onPress: () => navigation.goBack() }
+        ]
+      );
+    } finally {
       setLoading(false);
-      Alert.alert('Error', 'Failed to load astrologer details. Please try again.');
     }
   };
 
@@ -77,19 +117,40 @@ const RatingScreen = ({ route, navigation }) => {
       return;
     }
     
+    if (!bookingData) {
+      Alert.alert('Error', 'Booking information not available.');
+      return;
+    }
+    
     setSubmitting(true);
     
     try {
-      // In a real app, this would call your backend API
-      // await axios.post(`${API_URL}/ratings`, {
-      //   bookingId,
-      //   astrologerId,
-      //   rating,
-      //   review: review.trim() || null,
-      // });
+      // Submit rating via API
+      const ratingData = {
+        bookingId: bookingData._id,
+        astrologerId: bookingData.astrologerId,
+        rating,
+        review: review.trim() || null,
+        consultationType: bookingData.type,
+        duration: bookingData.actualDuration || bookingData.duration,
+        amount: bookingData.totalAmount || bookingData.amount
+      };
       
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 1500));
+      // Call the ratings API endpoint
+      const response = await fetch(`${process.env.EXPO_PUBLIC_API_URL || 'http://localhost:5000'}/api/ratings`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${user?.token}`
+        },
+        body: JSON.stringify(ratingData)
+      });
+      
+      const result = await response.json();
+      
+      if (!response.ok) {
+        throw new Error(result.message || 'Failed to submit rating');
+      }
       
       setSubmitting(false);
       
@@ -104,9 +165,9 @@ const RatingScreen = ({ route, navigation }) => {
         ]
       );
     } catch (error) {
-      console.log('Error submitting rating:', error);
+      console.error('Error submitting rating:', error);
       setSubmitting(false);
-      Alert.alert('Error', 'Failed to submit rating. Please try again.');
+      Alert.alert('Error', error.message || 'Failed to submit rating. Please try again.');
     }
   };
 
@@ -114,6 +175,25 @@ const RatingScreen = ({ route, navigation }) => {
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color="#F97316" />
+        <Text style={styles.loadingText}>Loading consultation details...</Text>
+      </View>
+    );
+  }
+
+  if (!bookingData || !astrologer) {
+    return (
+      <View style={styles.errorContainer}>
+        <Ionicons name="alert-circle-outline" size={64} color="#F44336" />
+        <Text style={styles.errorTitle}>Unable to Load Details</Text>
+        <Text style={styles.errorMessage}>
+          We couldn't load the consultation details. Please try again.
+        </Text>
+        <TouchableOpacity style={styles.retryButton} onPress={fetchBookingAndAstrologerDetails}>
+          <Text style={styles.retryButtonText}>Retry</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.goBackButton} onPress={() => navigation.goBack()}>
+          <Text style={styles.goBackButtonText}>Go Back</Text>
+        </TouchableOpacity>
       </View>
     );
   }
@@ -121,29 +201,64 @@ const RatingScreen = ({ route, navigation }) => {
   return (
     <ScrollView style={styles.container}>
       <View style={styles.header}>
+        <TouchableOpacity 
+          style={styles.backButton} 
+          onPress={() => navigation.goBack()}
+        >
+          <Ionicons name="arrow-back" size={24} color="#333" />
+        </TouchableOpacity>
         <Text style={styles.headerTitle}>Rate Your Consultation</Text>
+        <View style={styles.placeholder} />
       </View>
       
       <View style={styles.sessionSummary}>
         <View style={styles.astrologerInfo}>
-          <Image source={{ uri: astrologer?.image }} style={styles.astrologerImage} />
-          <View>
-            <Text style={styles.astrologerName}>{astrologer?.name}</Text>
-            <Text style={styles.sessionType}>
-              {sessionType === 'chat' ? 'Chat' : 'Video'} Consultation
+          <Image 
+            source={{ 
+              uri: astrologer.profileImage || astrologer.image || 'https://via.placeholder.com/100' 
+            }} 
+            style={styles.astrologerImage} 
+          />
+          <View style={styles.astrologerDetails}>
+            <Text style={styles.astrologerName}>
+              {astrologer.displayName || astrologer.name || 'Unknown Astrologer'}
             </Text>
+            <Text style={styles.sessionType}>
+              {formatConsultationType(bookingData.type)}
+            </Text>
+            {astrologer.specialties && astrologer.specialties.length > 0 && (
+              <Text style={styles.specialties}>
+                {astrologer.specialties.slice(0, 2).join(', ')}
+              </Text>
+            )}
           </View>
         </View>
         
         <View style={styles.sessionDetails}>
           <View style={styles.detailItem}>
             <Ionicons name="time-outline" size={16} color="#666" />
-            <Text style={styles.detailText}>Duration: {formatTime(duration || 0)}</Text>
+            <Text style={styles.detailText}>
+              Duration: {formatDuration(bookingData.actualDuration || bookingData.duration)}
+            </Text>
           </View>
           <View style={styles.detailItem}>
             <Ionicons name="cash-outline" size={16} color="#666" />
-            <Text style={styles.detailText}>Amount: ₹{charges || 0}</Text>
+            <Text style={styles.detailText}>
+              Amount: ₹{bookingData.totalAmount || bookingData.amount || 0}
+            </Text>
           </View>
+          {bookingData.scheduledAt && (
+            <View style={styles.detailItem}>
+              <Ionicons name="calendar-outline" size={16} color="#666" />
+              <Text style={styles.detailText}>
+                Date: {new Date(bookingData.scheduledAt).toLocaleDateString('en-IN', {
+                  day: 'numeric',
+                  month: 'short',
+                  year: 'numeric'
+                })}
+              </Text>
+            </View>
+          )}
         </View>
       </View>
       
@@ -185,7 +300,7 @@ const RatingScreen = ({ route, navigation }) => {
         <Text style={styles.reviewTitle}>Write a review (optional)</Text>
         <TextInput
           style={styles.reviewInput}
-          placeholder="Share your experience with this astrologer..."
+          placeholder={`Share your experience with ${astrologer.displayName || astrologer.name}...`}
           multiline
           numberOfLines={5}
           value={review}
@@ -227,54 +342,122 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+    backgroundColor: '#f8f8f8',
+  },
+  loadingText: {
+    marginTop: 16,
+    fontSize: 16,
+    color: '#666',
+  },
+  errorContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#f8f8f8',
+    padding: 20,
+  },
+  errorTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#333',
+    marginTop: 16,
+    marginBottom: 8,
+  },
+  errorMessage: {
+    fontSize: 16,
+    color: '#666',
+    textAlign: 'center',
+    marginBottom: 24,
+  },
+  retryButton: {
+    backgroundColor: '#F97316',
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 8,
+    marginBottom: 12,
+  },
+  retryButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  goBackButton: {
+    backgroundColor: '#fff',
+    borderWidth: 1,
+    borderColor: '#ddd',
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 8,
+  },
+  goBackButtonText: {
+    color: '#333',
+    fontSize: 16,
+    fontWeight: '500',
   },
   header: {
-    padding: 15,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingVertical: 16,
     backgroundColor: '#fff',
     borderBottomWidth: 1,
     borderBottomColor: '#eee',
+  },
+  backButton: {
+    padding: 8,
   },
   headerTitle: {
     fontSize: 18,
     fontWeight: 'bold',
+    color: '#333',
+  },
+  placeholder: {
+    width: 40,
   },
   sessionSummary: {
     backgroundColor: '#fff',
-    margin: 15,
-    padding: 15,
-    borderRadius: 10,
+    margin: 16,
+    padding: 20,
+    borderRadius: 12,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 4,
-    elevation: 2,
+    elevation: 3,
   },
   astrologerInfo: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 15,
-    paddingBottom: 15,
-    borderBottomWidth: 1,
-    borderBottomColor: '#eee',
+    marginBottom: 16,
   },
   astrologerImage: {
     width: 60,
     height: 60,
     borderRadius: 30,
-    marginRight: 15,
+    marginRight: 16,
+  },
+  astrologerDetails: {
+    flex: 1,
   },
   astrologerName: {
     fontSize: 18,
     fontWeight: 'bold',
+    color: '#333',
+    marginBottom: 4,
   },
   sessionType: {
     fontSize: 14,
+    color: '#F97316',
+    fontWeight: '500',
+    marginBottom: 2,
+  },
+  specialties: {
+    fontSize: 12,
     color: '#666',
-    marginTop: 5,
   },
   sessionDetails: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+    gap: 8,
   },
   detailItem: {
     flexDirection: 'row',
@@ -283,80 +466,81 @@ const styles = StyleSheet.create({
   detailText: {
     fontSize: 14,
     color: '#666',
-    marginLeft: 5,
+    marginLeft: 8,
   },
   ratingContainer: {
     backgroundColor: '#fff',
-    margin: 15,
-    marginTop: 0,
-    padding: 15,
-    borderRadius: 10,
+    margin: 16,
+    padding: 20,
+    borderRadius: 12,
     alignItems: 'center',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 4,
-    elevation: 2,
+    elevation: 3,
   },
   ratingTitle: {
-    fontSize: 16,
+    fontSize: 18,
     fontWeight: 'bold',
-    marginBottom: 15,
+    color: '#333',
+    marginBottom: 20,
   },
   starsContainer: {
     flexDirection: 'row',
-    justifyContent: 'center',
-    marginBottom: 10,
+    gap: 8,
+    marginBottom: 16,
   },
   starButton: {
-    padding: 5,
+    padding: 4,
   },
   ratingText: {
     fontSize: 16,
     color: '#666',
-    marginTop: 5,
+    fontWeight: '500',
   },
   reviewContainer: {
     backgroundColor: '#fff',
-    margin: 15,
-    marginTop: 0,
-    padding: 15,
-    borderRadius: 10,
+    margin: 16,
+    padding: 20,
+    borderRadius: 12,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 4,
-    elevation: 2,
+    elevation: 3,
   },
   reviewTitle: {
     fontSize: 16,
     fontWeight: 'bold',
-    marginBottom: 15,
+    color: '#333',
+    marginBottom: 12,
   },
   reviewInput: {
     borderWidth: 1,
     borderColor: '#ddd',
     borderRadius: 8,
-    padding: 10,
-    height: 120,
+    padding: 12,
+    fontSize: 14,
     textAlignVertical: 'top',
+    minHeight: 100,
   },
   charCount: {
-    alignSelf: 'flex-end',
-    marginTop: 5,
-    color: '#666',
     fontSize: 12,
+    color: '#999',
+    textAlign: 'right',
+    marginTop: 4,
   },
   submitButton: {
-    backgroundColor: '#8A2BE2',
-    margin: 15,
-    marginTop: 0,
-    padding: 15,
+    backgroundColor: '#F97316',
+    marginHorizontal: 16,
+    marginVertical: 8,
+    paddingVertical: 16,
     borderRadius: 8,
     alignItems: 'center',
   },
   disabledButton: {
-    backgroundColor: '#ccc',
+    opacity: 0.6,
   },
   submitButtonText: {
     color: '#fff',
@@ -364,14 +548,14 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   },
   skipButton: {
-    margin: 15,
-    marginTop: 0,
-    padding: 15,
+    marginHorizontal: 16,
+    marginBottom: 20,
+    paddingVertical: 12,
     alignItems: 'center',
   },
   skipButtonText: {
     color: '#666',
-    fontSize: 16,
+    fontSize: 14,
   },
 });
 

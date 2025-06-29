@@ -49,11 +49,15 @@ const WalletScreen = () => {
       
       // Fetch wallet transactions
       const transactionsResponse = await walletAPI.getTransactions();
+      console.log('Wallet transactions response:', transactionsResponse.data);
       
-      if (transactionsResponse.data && transactionsResponse.data.transactions) {
-        setTransactions(transactionsResponse.data.transactions);
+      // Backend returns transactions in data array, not data.transactions
+      if (transactionsResponse.data && transactionsResponse.data.data) {
+        setTransactions(transactionsResponse.data.data);
+        console.log('Transactions loaded:', transactionsResponse.data.data.length);
       } else {
         // Fallback to empty array if no transactions found
+        console.log('No transactions found in response');
         setTransactions([]);
       }
       
@@ -61,35 +65,44 @@ const WalletScreen = () => {
     } catch (error) {
       console.error('Error fetching wallet data:', error);
       setLoading(false);
-      Alert.alert('Error', 'Failed to load wallet data. Please try again.');
       
-      // Fallback to dummy transactions in case of error
+      // Show more specific error message
+      if (error.response) {
+        console.error('API Error Response:', error.response.data);
+        Alert.alert('Error', error.response.data.message || 'Failed to load wallet data. Please try again.');
+      } else {
+        Alert.alert('Error', 'Network error. Please check your connection and try again.');
+      }
+      
+      // Fallback to dummy transactions in case of error for development
       const dummyTransactions = [
         {
-          id: '1',
-          type: 'credit',
+          _id: '1',
+          type: 'wallet_topup',
           amount: 500,
+          status: 'completed',
           description: 'Wallet top-up',
-          timestamp: new Date(Date.now() - 86400000).toISOString(), // 1 day ago
+          createdAt: new Date(Date.now() - 86400000).toISOString(), // 1 day ago
         },
         {
-          id: '2',
-          type: 'debit',
-          amount: 225,
-          description: 'Video consultation with Jyotish Gupta',
-          timestamp: new Date(Date.now() - 172800000).toISOString(), // 2 days ago
+          _id: '2',
+          type: 'consultation_payment',
+          amount: -225,
+          status: 'completed',
+          description: 'Video consultation payment',
+          createdAt: new Date(Date.now() - 172800000).toISOString(), // 2 days ago
         },
         {
-          id: '3',
-          type: 'credit',
+          _id: '3',
+          type: 'wallet_topup',
           amount: 1000,
-          description: 'Wallet top-up',
-          timestamp: new Date(Date.now() - 604800000).toISOString(), // 7 days ago
+          status: 'completed',
+          description: 'Wallet top-up with bonus',
+          createdAt: new Date(Date.now() - 604800000).toISOString(), // 7 days ago
         },
       ];
       
       setTransactions(dummyTransactions);
-      setLoading(false);
     }
   };
 
@@ -148,7 +161,7 @@ const WalletScreen = () => {
           contact: user.phone,
           name: user.name
         },
-        theme: { color: '#8A2BE2' }
+        theme: { color: '#F97316' }
       };
 
       // Open Razorpay checkout
@@ -188,10 +201,26 @@ const WalletScreen = () => {
   };
 
   const renderTransaction = ({ item }) => {
-    const isCredit = item.type === 'wallet_topup' || item.type === 'bonus_credit';
+    const isCredit = item.type === 'wallet_topup' || item.type === 'bonus_credit' || item.amount > 0;
     const iconName = isCredit ? 'add-circle' : 'remove-circle';
     const iconColor = isCredit ? '#4CAF50' : '#F44336';
-    const amountPrefix = isCredit ? '+' : '-';
+    const amountPrefix = isCredit ? '+' : '';
+    
+    // Get transaction description based on type
+    const getTransactionDescription = (transaction) => {
+      switch (transaction.type) {
+        case 'wallet_topup':
+          return 'Wallet Recharge';
+        case 'bonus_credit':
+          return 'Bonus Credit';
+        case 'consultation_payment':
+          return 'Consultation Payment';
+        case 'refund':
+          return 'Refund';
+        default:
+          return transaction.description || 'Transaction';
+      }
+    };
 
     return (
       <View style={styles.transactionItem}>
@@ -199,20 +228,27 @@ const WalletScreen = () => {
           <Ionicons name={iconName} size={24} color={iconColor} />
           <View style={styles.transactionDetails}>
             <Text style={styles.transactionType}>
-              {item.type === 'wallet_topup' ? 'Wallet Recharge' : 
-               item.type === 'bonus_credit' ? 'Bonus Credit' : 
-               item.description || 'Transaction'}
+              {getTransactionDescription(item)}
             </Text>
             <Text style={styles.transactionDate}>
-              {new Date(item.createdAt).toLocaleDateString()}
+              {new Date(item.createdAt).toLocaleDateString('en-IN', {
+                year: 'numeric',
+                month: 'short',
+                day: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit'
+              })}
             </Text>
-            <Text style={styles.transactionStatus}>
-              Status: {item.status}
+            <Text style={[styles.transactionStatus, { 
+              color: item.status === 'completed' ? '#4CAF50' : 
+                     item.status === 'pending' ? '#FF9800' : '#F44336' 
+            }]}>
+              Status: {item.status?.charAt(0).toUpperCase() + item.status?.slice(1)}
             </Text>
           </View>
         </View>
         <Text style={[styles.transactionAmount, { color: iconColor }]}>
-          {amountPrefix}₹{item.amount}
+          {amountPrefix}₹{Math.abs(item.amount)}
         </Text>
       </View>
     );
@@ -251,11 +287,11 @@ const WalletScreen = () => {
 
     setLoadingMoreTransactions(true);
     try {
-      const transactionsResponse = await walletAPI.getTransactions(page + 1);
-      if (transactionsResponse.data && transactionsResponse.data.transactions) {
-        setTransactions([...transactions, ...transactionsResponse.data.transactions]);
+      const transactionsResponse = await walletAPI.getTransactions({ page: page + 1 });
+      if (transactionsResponse.data && transactionsResponse.data.data) {
+        setTransactions([...transactions, ...transactionsResponse.data.data]);
         setPage(page + 1);
-        setHasMoreTransactions(transactionsResponse.data.hasMore);
+        setHasMoreTransactions(transactionsResponse.data.pagination?.next ? true : false);
       }
     } catch (error) {
       console.error('Error loading more transactions:', error);
@@ -344,9 +380,12 @@ const WalletScreen = () => {
           <FlatList
             data={transactions}
             renderItem={renderTransaction}
-            keyExtractor={(item) => item.id}
+            keyExtractor={(item) => item._id || item.id}
             onEndReached={handleLoadMoreTransactions}
             onEndReachedThreshold={0.5}
+            ListFooterComponent={loadingMoreTransactions ? (
+              <ActivityIndicator style={styles.loader} size="small" color="#F97316" />
+            ) : null}
           />
         )}
       </View>
@@ -377,7 +416,7 @@ const styles = StyleSheet.create({
   walletBalance: {
     fontSize: 36,
     fontWeight: 'bold',
-    color: '#8A2BE2',
+    color: '#F97316',
     marginVertical: 10,
   },
   topUpContainer: {
@@ -412,17 +451,17 @@ const styles = StyleSheet.create({
     marginTop: 15,
   },
   quickAmountButton: {
-    backgroundColor: '#f0e6ff',
+    backgroundColor: '#fef3e2',
     paddingVertical: 10,
     paddingHorizontal: 15,
     borderRadius: 20,
   },
   quickAmountText: {
-    color: '#8A2BE2',
+    color: '#F97316',
     fontWeight: 'bold',
   },
   topUpButton: {
-    backgroundColor: '#8A2BE2',
+    backgroundColor: '#F97316',
     paddingVertical: 15,
     borderRadius: 8,
     alignItems: 'center',
@@ -456,7 +495,7 @@ const styles = StyleSheet.create({
     elevation: 2,
   },
   selectedOfferCard: {
-    backgroundColor: '#f0e6ff',
+    backgroundColor: '#fef3e2',
   },
   offerHeader: {
     flexDirection: 'row',
@@ -468,7 +507,7 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   },
   offerBadge: {
-    backgroundColor: '#8A2BE2',
+    backgroundColor: '#F97316',
     paddingHorizontal: 10,
     paddingVertical: 5,
     borderRadius: 20,

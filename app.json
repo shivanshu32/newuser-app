@@ -19,7 +19,8 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.jyotishcall.user",
       "infoPlist": {
-        "NSMicrophoneUsageDescription": "Allow Jyotish Call to access your microphone for voice consultations with astrologers"
+        "NSMicrophoneUsageDescription": "Allow Jyotish Call to access your microphone for voice consultations with astrologers",
+        "NSCameraUsageDescription": "Allow Jyotish Call to access your camera for video consultations with astrologers"
       }
     },
     "android": {
@@ -28,11 +29,24 @@
         "backgroundColor": "#ffffff"
       },
       "package": "com.jyotishcall.user",
+      "minSdkVersion": 25,
       "permissions": [
+        "CAMERA",
         "RECORD_AUDIO",
-        "MODIFY_AUDIO_SETTINGS"
+        "MODIFY_AUDIO_SETTINGS",
+        "INTERNET",
+        "ACCESS_NETWORK_STATE"
       ],
-      "usesCleartextTraffic": true
+      "usesCleartextTraffic": true,
+      "networkSecurityConfig": {
+        "domain-config": [
+          {
+            "domain": "jyotishcallbackend-2uxrv.ondigitalocean.app",
+            "includeSubdomains": true
+          }
+        ]
+      },
+      "ndkVersion": "26.1.10909125"
     },
     "web": {
       "favicon": "./assets/splash.png"
@@ -47,7 +61,7 @@
       ]
     ],
     "updates": {
-      "url": "https://u.expo.dev/your-project-id"
+      "url": "https://u.expo.dev/19ce1c4d-7c68-407f-96a0-d41bedaa3d55"
     },
     "runtimeVersion": "1.0.0",
     "extra": {

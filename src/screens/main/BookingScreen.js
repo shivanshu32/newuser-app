@@ -1,53 +1,63 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   StyleSheet,
   View,
   Text,
   FlatList,
   TouchableOpacity,
-  Alert,
-  ActivityIndicator,
+  SafeAreaView,
   Image,
+  RefreshControl,
+  ActivityIndicator,
+  Alert,
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 import { useAuth } from '../../context/AuthContext';
-import { bookingsAPI, astrologersAPI } from '../../services/api';
-import { getPendingConsultationsCount } from '../../utils/pendingConsultationsStore';
+import { useSocket } from '../../context/SocketContext';
+import { useFocusEffect } from '@react-navigation/native';
+import { bookingsAPI } from '../../services/api';
 
 const BookingScreen = ({ route, navigation }) => {
   const [bookings, setBookings] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [pendingCount, setPendingCount] = useState(0);
+  const [refreshing, setRefreshing] = useState(false);
+  const [activeTab, setActiveTab] = useState('active');
   const { user } = useAuth();
+  const { socket } = useSocket();
   
   // Check if we have an astrologer passed from the home screen
   const selectedAstrologer = route.params?.astrologer;
 
-  useEffect(() => {
-    fetchBookings();
-    
-    // If we have a selected astrologer, show the booking modal
-    if (selectedAstrologer) {
-      showBookingOptions(selectedAstrologer);
+  // Filter bookings based on active tab
+  const getFilteredBookings = () => {
+    let filtered;
+    switch (activeTab) {
+      case 'active':
+        filtered = bookings.filter(booking => 
+          ['pending', 'confirmed', 'waiting_for_user', 'in-progress'].includes(booking.status)
+        );
+        break;
+      case 'completed':
+        filtered = bookings.filter(booking => 
+          ['completed', 'no_show'].includes(booking.status)
+        );
+        break;
+      case 'cancelled':
+        filtered = bookings.filter(booking => 
+          ['cancelled', 'rejected', 'expired'].includes(booking.status)
+        );
+        break;
+      default:
+        filtered = bookings;
     }
     
-    // Check for pending consultations
-    setPendingCount(getPendingConsultationsCount());
-    
-    // Listen for new pending consultations
-    const handleNewConsultation = () => {
-      console.log('BookingScreen: New pending consultation detected');
-      setPendingCount(getPendingConsultationsCount());
-    };
-    
-    if (global.eventEmitter) {
-      global.eventEmitter.on('pendingConsultationAdded', handleNewConsultation);
-      
-      return () => {
-        global.eventEmitter.off('pendingConsultationAdded', handleNewConsultation);
-      };
-    }
-  }, [selectedAstrologer]);
+    // Sort by most recent first (createdAt or scheduledAt)
+    return filtered.sort((a, b) => {
+      const dateA = new Date(a.createdAt || a.scheduledAt);
+      const dateB = new Date(b.createdAt || b.scheduledAt);
+      return dateB - dateA; // Most recent first
+    });
+  };
 
   const fetchBookings = async () => {
     try {
@@ -72,6 +82,66 @@ const BookingScreen = ({ route, navigation }) => {
       setBookings([]);
     }
   };
+
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await fetchBookings();
+    setRefreshing(false);
+  }, []);
+
+  // Setup socket listeners for real-time booking updates
+  useEffect(() => {
+    if (!socket?.connected) return;
+
+    const handleBookingUpdate = (data) => {
+      console.log('Booking update received:', data);
+      // Refresh bookings list when any booking event occurs
+      fetchBookings();
+    };
+
+    // Listen for booking lifecycle events
+    socket.on('booking_accepted', handleBookingUpdate);
+    socket.on('booking_rejected', handleBookingUpdate);
+    socket.on('booking_expired', handleBookingUpdate);
+    socket.on('booking_cancelled', handleBookingUpdate);
+    socket.on('session_started', handleBookingUpdate);
+    socket.on('session_completed', handleBookingUpdate);
+    socket.on('astrologer_joined_session', handleBookingUpdate);
+    socket.on('no_show_detected', handleBookingUpdate);
+    socket.on('booking_reminder', (data) => {
+      Alert.alert(
+        'Booking Reminder',
+        `Your consultation with ${data.astrologerName} is starting in 2 minutes!`,
+        [{ text: 'OK' }]
+      );
+    });
+
+    return () => {
+      socket.off('booking_accepted', handleBookingUpdate);
+      socket.off('booking_rejected', handleBookingUpdate);
+      socket.off('booking_expired', handleBookingUpdate);
+      socket.off('booking_cancelled', handleBookingUpdate);
+      socket.off('session_started', handleBookingUpdate);
+      socket.off('session_completed', handleBookingUpdate);
+      socket.off('astrologer_joined_session', handleBookingUpdate);
+      socket.off('no_show_detected', handleBookingUpdate);
+      socket.off('booking_reminder');
+    };
+  }, [socket]);
+
+  // Refresh bookings when screen comes into focus
+  useFocusEffect(
+    useCallback(() => {
+      fetchBookings();
+    }, [])
+  );
+
+  useEffect(() => {
+    // If we have a selected astrologer, show the booking modal
+    if (selectedAstrologer) {
+      showBookingOptions(selectedAstrologer);
+    }
+  }, [selectedAstrologer]);
   
   // Function to handle booking creation
   const createBooking = async (astrologer, type, scheduledTime) => {
@@ -155,30 +225,216 @@ const BookingScreen = ({ route, navigation }) => {
     );
   };
 
-  const handleBookingAction = (booking) => {
-    if (booking.status === 'scheduled') {
-      // Navigate to the appropriate screen based on booking type
-      if (booking.type === 'chat') {
-        navigation.navigate('Chat', { bookingId: booking.id });
-      } else if (booking.type === 'video') {
-        navigation.navigate('VideoCall', { bookingId: booking.id });
+  const handleBookingAction = async (booking) => {
+    try {
+      switch (booking.status) {
+        case 'confirmed':
+        case 'waiting_for_user':
+          // User can join the session
+          await handleJoinSession(booking);
+          break;
+        case 'in-progress':
+          // Navigate to ongoing session
+          navigateToSession(booking);
+          break;
+        case 'pending':
+          // Show booking details or allow cancellation
+          showBookingDetails(booking);
+          break;
+        case 'completed':
+          // Navigate to rating screen if not rated
+          if (!booking.rated) {
+            navigation.navigate('Rating', { bookingId: booking._id });
+          }
+          break;
+        default:
+          showBookingDetails(booking);
+          break;
       }
-    } else if (booking.status === 'completed' && !booking.rated) {
-      // Navigate to rating screen if the booking is completed and not rated
-      navigation.navigate('Rating', { bookingId: booking.id });
+    } catch (error) {
+      console.error('Error handling booking action:', error);
+      Alert.alert('Error', 'Something went wrong. Please try again.');
     }
+  };
+
+  const handleJoinSession = async (booking) => {
+    try {
+      console.log(' [BookingScreen] Joining session for booking:', booking._id);
+      console.log(' [BookingScreen] Full booking object:', JSON.stringify(booking, null, 2));
+      
+      Alert.alert('DEBUG', 'Starting join session for booking: ' + booking._id);
+      
+      // Validate booking data
+      if (!booking._id) {
+        console.error(' [BookingScreen] ERROR: Missing booking._id');
+        Alert.alert('Error', 'Invalid booking data. Missing booking ID.');
+        return;
+      }
+      
+      // Import socket service functions
+      const { joinConsultationRoom } = require('../../services/socketService');
+      
+      // Prepare consultation data
+      const consultationData = {
+        bookingId: booking._id,
+        sessionId: booking.sessionId,
+        roomId: booking.roomId || `consultation:${booking._id}`,
+        astrologerId: booking.astrologer?._id || booking.astrologer,
+        consultationType: booking.type
+      };
+      
+      console.log(' [BookingScreen] Consultation data to send:', JSON.stringify(consultationData, null, 2));
+      
+      Alert.alert('DEBUG', 'About to call joinConsultationRoom socket function');
+      
+      // Join the consultation room via socket
+      await joinConsultationRoom(consultationData);
+      
+      console.log(' [BookingScreen] Successfully joined consultation room');
+      Alert.alert('DEBUG', 'Socket join successful - about to navigate to ' + booking.type + ' screen');
+      
+      // Navigate to appropriate session screen with proper parameters
+      if (booking.type === 'video') {
+        navigation.navigate('VideoCall', { 
+          bookingId: booking._id,
+          sessionId: booking.sessionId,
+          roomId: booking.roomId || `consultation:${booking._id}`,
+          astrologerId: booking.astrologer?._id || booking.astrologer,
+          consultationType: 'video'
+        });
+        Alert.alert('DEBUG', 'Navigation.navigate called for VideoCall');
+      } else if (booking.type === 'voice') {
+        navigation.navigate('VoiceCall', { 
+          bookingId: booking._id,
+          sessionId: booking.sessionId,
+          roomId: booking.roomId || `consultation:${booking._id}`,
+          astrologerId: booking.astrologer?._id || booking.astrologer,
+          consultationType: 'voice'
+        });
+        Alert.alert('DEBUG', 'Navigation.navigate called for VoiceCall');
+      } else if (booking.type === 'chat') {
+        navigation.navigate('Chat', { 
+          bookingId: booking._id,
+          sessionId: booking.sessionId,
+          roomId: booking.roomId || `consultation:${booking._id}`,
+          astrologerId: booking.astrologer?._id || booking.astrologer,
+          consultationType: 'chat'
+        });
+        Alert.alert('DEBUG', 'Navigation.navigate called for Chat');
+      }
+      
+    } catch (error) {
+      console.error(' [BookingScreen] Error joining session:', error);
+      Alert.alert('Error', 'Failed to join session. Please try again.');
+    }
+  };
+
+  const navigateToSession = (booking) => {
+    if (booking.type === 'video') {
+      navigation.navigate('VideoCall', { 
+        bookingId: booking._id,
+        astrologer: booking.astrologer 
+      });
+    } else if (booking.type === 'voice') {
+      navigation.navigate('VoiceCall', { 
+        bookingId: booking._id,
+        astrologer: booking.astrologer 
+      });
+    } else if (booking.type === 'chat') {
+      navigation.navigate('Chat', { 
+        bookingId: booking._id,
+        astrologer: booking.astrologer 
+      });
+    }
+  };
+
+  const showBookingDetails = (booking) => {
+    const canCancel = ['pending', 'confirmed'].includes(booking.status);
+    const actions = [{ text: 'Close', style: 'cancel' }];
+    
+    if (canCancel) {
+      actions.unshift({
+        text: 'Cancel Booking',
+        style: 'destructive',
+        onPress: () => handleCancelBooking(booking)
+      });
+    }
+
+    Alert.alert(
+      'Booking Details',
+      `Status: ${booking.status}\nType: ${booking.type}\nAstrologer: ${booking.astrologer?.name || 'Unknown'}\nScheduled: ${new Date(booking.scheduledAt).toLocaleString()}`,
+      actions
+    );
+  };
+
+  const handleCancelBooking = (booking) => {
+    Alert.alert(
+      'Cancel Booking',
+      'Are you sure you want to cancel this booking?',
+      [
+        { text: 'No', style: 'cancel' },
+        {
+          text: 'Yes, Cancel',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await bookingsAPI.cancel(booking._id, 'User cancelled');
+              Alert.alert('Success', 'Booking cancelled successfully');
+              fetchBookings();
+            } catch (error) {
+              console.error('Error cancelling booking:', error);
+              Alert.alert('Error', 'Failed to cancel booking. Please try again.');
+            }
+          }
+        }
+      ]
+    );
   };
 
   const getStatusColor = (status) => {
     switch (status) {
-      case 'scheduled':
+      case 'pending':
+        return '#FF9800';
+      case 'confirmed':
+      case 'waiting_for_user':
         return '#4CAF50';
-      case 'completed':
+      case 'in-progress':
         return '#2196F3';
+      case 'completed':
+        return '#9C27B0';
       case 'cancelled':
+      case 'rejected':
         return '#F44336';
+      case 'expired':
+        return '#795548';
+      case 'no_show':
+        return '#607D8B';
       default:
         return '#666';
+    }
+  };
+
+  const getStatusIcon = (status) => {
+    switch (status) {
+      case 'pending':
+        return 'hourglass-outline';
+      case 'confirmed':
+        return 'checkmark-circle-outline';
+      case 'waiting_for_user':
+        return 'person-outline';
+      case 'in-progress':
+        return 'play-circle-outline';
+      case 'completed':
+        return 'checkmark-done-outline';
+      case 'cancelled':
+      case 'rejected':
+        return 'close-circle-outline';
+      case 'expired':
+        return 'time-outline';
+      case 'no_show':
+        return 'alert-circle-outline';
+      default:
+        return 'help-circle-outline';
     }
   };
 
@@ -188,26 +444,54 @@ const BookingScreen = ({ route, navigation }) => {
         return 'chatbubble-outline';
       case 'video':
         return 'videocam-outline';
+      case 'voice':
+        return 'call-outline';
       default:
         return 'help-circle-outline';
     }
   };
 
+  const getActionButtonText = (booking) => {
+    switch (booking.status) {
+      case 'confirmed':
+      case 'waiting_for_user':
+        return 'Join Session';
+      case 'in-progress':
+        return 'Continue Session';
+      case 'pending':
+        return 'View Details';
+      case 'completed':
+        return booking.rated ? 'View Rating' : 'Rate Session';
+      default:
+        return 'View Details';
+    }
+  };
+
   const renderBookingItem = ({ item }) => {
     const statusColor = getStatusColor(item.status);
+    const statusIcon = getStatusIcon(item.status);
     const typeIcon = getBookingTypeIcon(item.type);
-    const scheduledDate = new Date(item.scheduledTime);
+    
+    // Fix: Use scheduledAt instead of scheduledTime and add validation
+    const scheduledDate = item.scheduledAt ? new Date(item.scheduledAt) : new Date();
+    const isValidDate = !isNaN(scheduledDate.getTime());
+    
+    // Check if this booking can be joined (accepted by astrologer)
+    const canJoin = ['confirmed', 'waiting_for_user'].includes(item.status);
     
     return (
       <TouchableOpacity
         style={styles.bookingCard}
-        onPress={() => handleBookingAction(item)}
+        onPress={() => !canJoin && handleBookingAction(item)}
       >
         <View style={styles.bookingHeader}>
           <View style={styles.astrologerInfo}>
-            <Image source={{ uri: item.astrologerImage }} style={styles.astrologerImage} />
+            <Image 
+              source={{ uri: item.astrologer?.profileImage || 'https://via.placeholder.com/50' }} 
+              style={styles.astrologerImage} 
+            />
             <View>
-              <Text style={styles.astrologerName}>{item.astrologerName}</Text>
+              <Text style={styles.astrologerName}>{item.astrologer?.name || 'Unknown Astrologer'}</Text>
               <View style={styles.bookingType}>
                 <Ionicons name={typeIcon} size={14} color="#666" />
                 <Text style={styles.bookingTypeText}>
@@ -217,8 +501,9 @@ const BookingScreen = ({ route, navigation }) => {
             </View>
           </View>
           <View style={[styles.statusBadge, { backgroundColor: statusColor }]}>
+            <Ionicons name={statusIcon} size={12} color="#fff" style={styles.statusIcon} />
             <Text style={styles.statusText}>
-              {item.status.charAt(0).toUpperCase() + item.status.slice(1)}
+              {item.status.charAt(0).toUpperCase() + item.status.slice(1).replace('_', ' ')}
             </Text>
           </View>
         </View>
@@ -227,13 +512,21 @@ const BookingScreen = ({ route, navigation }) => {
           <View style={styles.detailItem}>
             <Ionicons name="calendar-outline" size={16} color="#666" />
             <Text style={styles.detailText}>
-              {scheduledDate.toLocaleDateString()}
+              {isValidDate ? scheduledDate.toLocaleDateString('en-IN', {
+                year: 'numeric',
+                month: 'short',
+                day: 'numeric'
+              }) : 'Date not set'}
             </Text>
           </View>
           <View style={styles.detailItem}>
             <Ionicons name="time-outline" size={16} color="#666" />
             <Text style={styles.detailText}>
-              {scheduledDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+              {isValidDate ? scheduledDate.toLocaleTimeString('en-IN', { 
+                hour: '2-digit', 
+                minute: '2-digit',
+                hour12: true 
+              }) : 'Time not set'}
             </Text>
           </View>
           {item.duration > 0 && (
@@ -242,95 +535,102 @@ const BookingScreen = ({ route, navigation }) => {
               <Text style={styles.detailText}>{item.duration} mins</Text>
             </View>
           )}
-          {item.amount > 0 && (
+          {item.totalAmount > 0 && (
             <View style={styles.detailItem}>
               <Ionicons name="cash-outline" size={16} color="#666" />
-              <Text style={styles.detailText}>₹{item.amount}</Text>
+              <Text style={styles.detailText}>₹{item.totalAmount}</Text>
             </View>
           )}
         </View>
         
-        {item.status === 'scheduled' && (
+        {/* Join Button for accepted bookings */}
+        {canJoin ? (
+          <TouchableOpacity 
+            style={styles.joinButton}
+            onPress={() => handleJoinSession(item)}
+          >
+            <Ionicons name="videocam" size={20} color="#fff" style={styles.joinButtonIcon} />
+            <Text style={styles.joinButtonText}>Join Session</Text>
+            <Ionicons name="arrow-forward" size={16} color="#fff" />
+          </TouchableOpacity>
+        ) : (
           <View style={styles.actionContainer}>
             <Text style={styles.actionText}>
-              {item.type === 'chat' ? 'Start Chat' : 'Join Video Call'}
+              {getActionButtonText(item)}
             </Text>
-            <Ionicons name="arrow-forward" size={16} color="#8A2BE2" />
-          </View>
-        )}
-        
-        {item.status === 'completed' && !item.rated && (
-          <View style={styles.actionContainer}>
-            <Text style={styles.actionText}>Rate Consultation</Text>
-            <Ionicons name="arrow-forward" size={16} color="#8A2BE2" />
+            <Ionicons name="chevron-forward" size={16} color="#666" />
           </View>
         )}
       </TouchableOpacity>
     );
   };
 
-  if (loading && bookings.length === 0) {
-    return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#F97316" />
-      </View>
-    );
-  }
+  const renderTabButton = (tabKey, title, count) => (
+    <TouchableOpacity
+      style={[styles.tabButton, activeTab === tabKey && styles.activeTabButton]}
+      onPress={() => setActiveTab(tabKey)}
+    >
+      <Text style={[styles.tabText, activeTab === tabKey && styles.activeTabText]}>
+        {title}
+      </Text>
+      {count > 0 && (
+        <View style={styles.tabBadge}>
+          <Text style={styles.tabBadgeText}>{count}</Text>
+        </View>
+      )}
+    </TouchableOpacity>
+  );
 
-  // Navigate to pending consultations screen
-  const navigateToPendingConsultations = () => {
-    navigation.navigate('PendingConsultations');
-  };
+  const filteredBookings = getFilteredBookings();
+  const activeCount = bookings.filter(b => ['pending', 'confirmed', 'waiting_for_user', 'in-progress'].includes(b.status)).length;
+  const completedCount = bookings.filter(b => ['completed', 'no_show'].includes(b.status)).length;
+  const cancelledCount = bookings.filter(b => ['cancelled', 'rejected', 'expired'].includes(b.status)).length;
 
   return (
-    <View style={styles.container}>
+    <SafeAreaView style={styles.container}>
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>Your Bookings</Text>
-        {pendingCount > 0 && (
-          <TouchableOpacity 
-            style={styles.pendingButton}
-            onPress={navigateToPendingConsultations}
-          >
-            <Text style={styles.pendingButtonText}>
-              {pendingCount} Pending
-            </Text>
-            <View style={styles.pendingBadge}>
-              <Text style={styles.pendingBadgeText}>{pendingCount}</Text>
-            </View>
-          </TouchableOpacity>
-        )}
+        <Text style={styles.title}>My Bookings</Text>
       </View>
-      
-      {bookings.length === 0 ? (
-        <View style={styles.emptyContainer}>
-          <Ionicons name="calendar-outline" size={80} color="#ccc" />
-          <Text style={styles.emptyText}>No bookings yet</Text>
-          <Text style={styles.emptySubtext}>
-            Your bookings will appear here once you schedule a consultation with an astrologer.
-          </Text>
-          <TouchableOpacity
-            style={styles.emptyButton}
-            onPress={() => navigation.navigate('Home')}
-          >
-            <Text style={styles.emptyButtonText}>Find Astrologers</Text>
-          </TouchableOpacity>
+
+      {/* Tab Navigation */}
+      <View style={styles.tabContainer}>
+        {renderTabButton('active', 'Active', activeCount)}
+        {renderTabButton('completed', 'Completed', completedCount)}
+        {renderTabButton('cancelled', 'Cancelled', cancelledCount)}
+      </View>
+
+      {loading && !refreshing ? (
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color="#FF5722" />
+          <Text style={styles.loadingText}>Loading bookings...</Text>
         </View>
       ) : (
         <FlatList
-          data={bookings}
+          data={filteredBookings}
           renderItem={renderBookingItem}
-          keyExtractor={(item) => item.id}
-          contentContainerStyle={styles.bookingList}
-          showsVerticalScrollIndicator={false}
+          keyExtractor={(item) => item._id}
+          contentContainerStyle={styles.listContainer}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+          }
+          ListEmptyComponent={
+            <View style={styles.emptyContainer}>
+              <Ionicons name="calendar-outline" size={64} color="#ccc" />
+              <Text style={styles.emptyText}>
+                {activeTab === 'active' && 'No active bookings'}
+                {activeTab === 'completed' && 'No completed bookings'}
+                {activeTab === 'cancelled' && 'No cancelled bookings'}
+              </Text>
+              <Text style={styles.emptySubtext}>
+                {activeTab === 'active' && 'Book a consultation to get started'}
+                {activeTab === 'completed' && 'Completed sessions will appear here'}
+                {activeTab === 'cancelled' && 'Cancelled bookings will appear here'}
+              </Text>
+            </View>
+          }
         />
       )}
-      
-      {loading && bookings.length > 0 && (
-        <View style={styles.loadingOverlay}>
-          <ActivityIndicator size="large" color="#F97316" />
-        </View>
-      )}
-    </View>
+    </SafeAreaView>
   );
 };
 
@@ -338,21 +638,6 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#f8f8f8',
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  loadingOverlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: 'rgba(255, 255, 255, 0.7)',
-    justifyContent: 'center',
-    alignItems: 'center',
   },
   header: {
     padding: 16,
@@ -363,12 +648,59 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
   },
-  headerTitle: {
+  title: {
     fontSize: 20,
     fontWeight: 'bold',
     color: '#333',
   },
-  bookingList: {
+  tabContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    alignItems: 'center',
+    padding: 16,
+    backgroundColor: '#fff',
+    borderBottomWidth: 1,
+    borderBottomColor: '#eee',
+  },
+  tabButton: {
+    padding: 8,
+    borderRadius: 8,
+  },
+  activeTabButton: {
+    backgroundColor: '#f0f0f0',
+  },
+  tabText: {
+    fontSize: 16,
+    color: '#666',
+  },
+  activeTabText: {
+    color: '#333',
+    fontWeight: 'bold',
+  },
+  tabBadge: {
+    position: 'absolute',
+    top: -4,
+    right: -4,
+    backgroundColor: '#FF5722',
+    paddingHorizontal: 4,
+    paddingVertical: 2,
+    borderRadius: 8,
+  },
+  tabBadgeText: {
+    fontSize: 12,
+    color: '#fff',
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingText: {
+    fontSize: 16,
+    color: '#666',
+    marginTop: 16,
+  },
+  listContainer: {
     padding: 16,
   },
   bookingCard: {
@@ -418,6 +750,9 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     borderRadius: 12,
   },
+  statusIcon: {
+    marginRight: 4,
+  },
   statusText: {
     color: '#fff',
     fontSize: 12,
@@ -453,6 +788,22 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     marginRight: 4,
   },
+  joinButton: {
+    backgroundColor: '#4CAF50',
+    padding: 12,
+    borderRadius: 8,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  joinButtonIcon: {
+    marginRight: 8,
+  },
+  joinButtonText: {
+    fontSize: 16,
+    color: '#fff',
+    fontWeight: 'bold',
+  },
   emptyContainer: {
     flex: 1,
     justifyContent: 'center',
@@ -471,43 +822,6 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginTop: 8,
     marginBottom: 24,
-  },
-  emptyButton: {
-    backgroundColor: '#F97316',
-    paddingHorizontal: 24,
-    paddingVertical: 12,
-    borderRadius: 24,
-  },
-  emptyButtonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: 'bold',
-  },
-  pendingButton: {
-    backgroundColor: '#F97316',
-    borderRadius: 20,
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  pendingButtonText: {
-    color: '#fff',
-    fontWeight: 'bold',
-    marginRight: 5,
-  },
-  pendingBadge: {
-    backgroundColor: '#FF3B30',
-    borderRadius: 10,
-    width: 20,
-    height: 20,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  pendingBadgeText: {
-    color: '#FFFFFF',
-    fontSize: 12,
-    fontWeight: 'bold',
   },
 });
 

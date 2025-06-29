@@ -7,15 +7,25 @@ const getApiUrl = () => {
   // Check if we're in development (Expo Go)
   const isDevelopment = __DEV__ || Constants.appOwnership === 'expo';
   
+  // Debug logging to help identify environment in APK builds
+  console.log('Environment Detection:', {
+    __DEV__,
+    appOwnership: Constants.appOwnership,
+    isDevelopment,
+    executionEnvironment: Constants.executionEnvironment
+  });
+  
   if (isDevelopment) {
     // Local development - use your local IP (commented out for production)
     // return 'http://192.168.29.107:5000';
     
     // Production URL for development testing
+    console.log('Using development/Expo Go URL');
     return 'https://jyotishcallbackend-2uxrv.ondigitalocean.app';
   } else {
     // Production - use new production URL
     // Old production URL: return 'https://3.110.171.85';
+    console.log('Using production APK URL');
     return 'https://jyotishcallbackend-2uxrv.ondigitalocean.app';
   }
 };
@@ -36,10 +46,37 @@ API.interceptors.request.use(
     const token = await AsyncStorage.getItem('userToken');
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
+      console.log(' [API] Request with auth token:', config.method?.toUpperCase(), config.url);
+    } else {
+      console.log(' [API] Request without auth token:', config.method?.toUpperCase(), config.url);
     }
+    console.log(' [API] Request config:', {
+      method: config.method,
+      url: config.url,
+      baseURL: config.baseURL,
+      data: config.data
+    });
     return config;
   },
   (error) => {
+    console.error(' [API] Request interceptor error:', error);
+    return Promise.reject(error);
+  }
+);
+
+// Add response interceptor for better error handling
+API.interceptors.response.use(
+  (response) => {
+    console.log(' [API] Response received:', response.status, response.config.url);
+    return response.data; // Return only the data part
+  },
+  (error) => {
+    console.error(' [API] Response error:', {
+      status: error.response?.status,
+      statusText: error.response?.statusText,
+      url: error.config?.url,
+      data: error.response?.data
+    });
     return Promise.reject(error);
   }
 );
@@ -61,10 +98,38 @@ export const astrologersAPI = {
 
 // Bookings API
 export const bookingsAPI = {
-  create: (bookingData) => API.post('/bookings/create', bookingData),
-  getAll: () => API.get('/bookings'),
-  getById: (id) => API.get(`/bookings/${id}`),
-  cancel: (id) => API.put(`/bookings/${id}/cancel`),
+  create(bookingData) {
+    return API.post('/bookings', bookingData);
+  },
+  createBooking(bookingData) {
+    // Enhanced booking creation with user information support
+    return API.post('/bookings/create', bookingData);
+  },
+  getAll() {
+    return API.get('/bookings/user');
+  },
+  getById(id) {
+    return API.get(`/bookings/${id}`);
+  },
+  cancel(id, reason = 'User cancelled') {
+    return API.post(`/bookings/${id}/cancel`, { reason });
+  },
+  // New lifecycle endpoints
+  joinUser(id) {
+    return API.post(`/bookings/${id}/join-user`);
+  },
+  complete(id) {
+    return API.post(`/bookings/${id}/complete`);
+  },
+  reschedule(id, newScheduledTime, reason) {
+    return API.post(`/bookings/${id}/reschedule`, { 
+      newScheduledTime, 
+      reason 
+    });
+  },
+  getStats() {
+    return API.get('/bookings/stats');
+  }
 };
 
 // Wallet API
