@@ -24,7 +24,7 @@ import {
   removePendingConsultation,
   addPendingConsultation 
 } from '../../utils/pendingConsultationsStore';
-import { astrologersAPI } from '../../services/api';
+import { astrologersAPI, walletAPI } from '../../services/api';
 
 const HomeScreen = ({ navigation }) => {
   const { user } = useAuth();
@@ -34,6 +34,8 @@ const HomeScreen = ({ navigation }) => {
   const [loading, setLoading] = useState(true);
   const [loadingConsultations, setLoadingConsultations] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [walletBalance, setWalletBalance] = useState(0);
+  const [loadingWallet, setLoadingWallet] = useState(false);
 
   // Fetch all astrologers data with pagination
   const fetchAstrologers = useCallback(async () => {
@@ -91,6 +93,30 @@ const HomeScreen = ({ navigation }) => {
     }
   }, []);
 
+  // Fetch wallet balance
+  const fetchWalletBalance = useCallback(async () => {
+    try {
+      setLoadingWallet(true);
+      console.log('🔄 Fetching wallet balance...');
+      const response = await walletAPI.getBalance();
+      console.log('💰 Wallet balance response:', response);
+      
+      if (response.success && response.data) {
+        setWalletBalance(response.data.balance || 0);
+        console.log('✅ Wallet balance updated:', response.data.balance);
+      } else {
+        console.warn('⚠️ Wallet API returned success: false or no data');
+        setWalletBalance(0);
+      }
+    } catch (error) {
+      console.error('❌ Error fetching wallet balance:', error);
+      // Don't show alert for wallet errors, just set balance to 0
+      setWalletBalance(0);
+    } finally {
+      setLoadingWallet(false);
+    }
+  }, []);
+
   // Handle join consultation
   const handleJoinConsultation = useCallback(async (booking) => {
     try {
@@ -137,27 +163,27 @@ const HomeScreen = ({ navigation }) => {
     }
   }, [fetchPendingConsultations]);
 
-  // Refresh handler
-  const onRefresh = useCallback(async () => {
-    setRefreshing(true);
+  // Load initial data
+  const loadInitialData = useCallback(async () => {
     await Promise.all([
       fetchAstrologers(),
-      fetchPendingConsultations()
+      fetchPendingConsultations(),
+      fetchWalletBalance()
     ]);
-    setRefreshing(false);
-  }, [fetchAstrologers, fetchPendingConsultations]);
+  }, [fetchAstrologers, fetchPendingConsultations, fetchWalletBalance]);
 
-  // Initial load
-  useEffect(() => {
-    fetchAstrologers();
-  }, [fetchAstrologers]);
+  // Handle refresh
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await loadInitialData();
+    setRefreshing(false);
+  }, [loadInitialData]);
 
   // Use focus effect to refresh data when screen comes into focus
   useFocusEffect(
     useCallback(() => {
-      fetchPendingConsultations();
-      fetchAstrologers();
-    }, [])
+      loadInitialData();
+    }, [loadInitialData])
   );
 
   // Handle astrologer status updates
@@ -329,12 +355,28 @@ const HomeScreen = ({ navigation }) => {
             Find your perfect astrologer
           </Text>
         </View>
-        <TouchableOpacity
-          style={styles.profileButton}
-          onPress={() => navigation.navigate('Profile')}
-        >
-          <Ionicons name="person-circle-outline" size={32} color="#F97316" />
-        </TouchableOpacity>
+        <View style={styles.headerActions}>
+          <TouchableOpacity
+            style={styles.walletContainer}
+            onPress={() => navigation.navigate('Wallet')}
+          >
+            <View style={styles.walletContent}>
+              <Ionicons name="wallet-outline" size={16} color="#F97316" />
+              <View style={styles.walletInfo}>
+                <Text style={styles.walletLabel}>Wallet</Text>
+                <Text style={styles.walletBalance}>
+                  {loadingWallet ? '...' : `₹${walletBalance.toFixed(2)}`}
+                </Text>
+              </View>
+            </View>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.profileButton}
+            onPress={() => navigation.navigate('Profile')}
+          >
+            <Ionicons name="person-circle-outline" size={32} color="#F97316" />
+          </TouchableOpacity>
+        </View>
       </View>
     </View>
   );
@@ -566,6 +608,44 @@ const styles = StyleSheet.create({
   subGreeting: {
     fontSize: 16,
     color: '#666',
+  },
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  walletContainer: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    marginRight: 12,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.1,
+    shadowRadius: 3.84,
+    elevation: 5,
+    borderWidth: 1,
+    borderColor: '#f0f0f0',
+  },
+  walletContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  walletInfo: {
+    marginLeft: 8,
+  },
+  walletLabel: {
+    fontSize: 10,
+    color: '#666',
+    fontWeight: '500',
+  },
+  walletBalance: {
+    fontSize: 14,
+    color: '#F97316',
+    fontWeight: 'bold',
   },
   profileButton: {
     padding: 8,

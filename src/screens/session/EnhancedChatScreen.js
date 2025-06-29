@@ -209,6 +209,39 @@ const EnhancedChatScreen = ({ route, navigation }) => {
         }
         return prevActive;
       });
+    } else if (data.type === 'consultation_ended') {
+      console.log('🔴 [USER-APP] Consultation ended event received in handleStatusUpdate');
+      console.log('🔴 [USER-APP] Session ended by:', data.endedBy);
+      console.log('🔴 [USER-APP] Session data:', data.sessionData);
+      
+      // Clear session state
+      setSessionActive(false);
+      setConnectionStatus('session_ended');
+      
+      // Show alert with session summary and navigate back
+      const sessionData = data.sessionData || {};
+      const duration = sessionData.duration || 0;
+      const totalAmount = sessionData.totalAmount || 0;
+      
+      Alert.alert(
+        'Session Ended',
+        `The consultation has been ended by ${data.endedBy}.\n\nDuration: ${duration} minutes\nTotal Amount: ₹${totalAmount}`,
+        [
+          {
+            text: 'OK',
+            onPress: () => {
+              console.log('🔴 [USER-APP] Navigating back after session end');
+              // Navigate back to previous screen
+              if (navigation.canGoBack()) {
+                navigation.goBack();
+              } else {
+                navigation.navigate('Home');
+              }
+            }
+          }
+        ],
+        { cancelable: false }
+      );
     }
   }, [bookingId, sessionTime]);
 
@@ -246,10 +279,27 @@ const EnhancedChatScreen = ({ route, navigation }) => {
   }, []);
 
   // Handle typing status
-  const handleTypingStatus = useCallback((data) => {
-    console.log('🔴 [USER-APP] Typing status:', data);
-    if (data.senderId !== authUser?.id) {
-      setIsAstrologerTyping(data.isTyping);
+  const handleTypingStatus = useCallback((isTyping, data) => {
+    console.log('🔴 [USER-APP] Typing status received:', { isTyping, data });
+    console.log('🔴 [USER-APP] Data structure:', {
+      senderId: data?.senderId,
+      astrologerId: data?.astrologerId, 
+      userId: data?.userId,
+      senderRole: data?.senderRole
+    });
+    console.log('🔴 [USER-APP] Current user ID:', authUser?.id);
+    
+    // Only show typing indicator if it's from the astrologer (not from current user)
+    // Backend sends userId (which is astrologerId when astrologer types) and senderRole
+    const senderId = data?.senderId || data?.astrologerId || data?.userId;
+    const isFromAstrologer = data?.senderRole === 'astrologer' || 
+                            (senderId && senderId !== authUser?.id);
+    
+    if (isFromAstrologer) {
+      console.log('🔴 [USER-APP] Setting astrologer typing status:', isTyping);
+      setIsAstrologerTyping(isTyping);
+    } else {
+      console.log('🔴 [USER-APP] Ignoring typing status - from current user or invalid sender');
     }
   }, [authUser?.id]);
 

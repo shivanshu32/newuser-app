@@ -145,14 +145,28 @@ class ChatConnectionManager {
     });
 
     this.socket.on('typing_started', (data) => {
+      console.log('🔴 [USER-APP] ChatConnectionManager: Received typing_started event:', data);
+      console.log('🔴 [USER-APP] ChatConnectionManager: Current booking ID:', this.currentBookingId);
+      console.log('🔴 [USER-APP] ChatConnectionManager: Event booking ID:', data.bookingId);
+      
       if (data.bookingId === this.currentBookingId) {
+        console.log('🔴 [USER-APP] ChatConnectionManager: Booking ID matches, notifying typing callbacks');
         this.notifyTyping(true, data);
+      } else {
+        console.log('🔴 [USER-APP] ChatConnectionManager: Booking ID mismatch, ignoring typing event');
       }
     });
 
     this.socket.on('typing_stopped', (data) => {
+      console.log('🔴 [USER-APP] ChatConnectionManager: Received typing_stopped event:', data);
+      console.log('🔴 [USER-APP] ChatConnectionManager: Current booking ID:', this.currentBookingId);
+      console.log('🔴 [USER-APP] ChatConnectionManager: Event booking ID:', data.bookingId);
+      
       if (data.bookingId === this.currentBookingId) {
+        console.log('🔴 [USER-APP] ChatConnectionManager: Booking ID matches, notifying typing callbacks');
         this.notifyTyping(false, data);
+      } else {
+        console.log('🔴 [USER-APP] ChatConnectionManager: Booking ID mismatch, ignoring typing event');
       }
     });
 
@@ -200,6 +214,25 @@ class ChatConnectionManager {
       if (data.bookingId === this.currentBookingId) {
         this.notifyConnectionStatus('session_ended', 'Chat session has ended');
         this.notifyStatusUpdate({ type: 'session_ended', data });
+      }
+    });
+
+    this.socket.on('consultation_ended', (data) => {
+      console.log('🔴 [USER-APP] Consultation ended event received:', data);
+      console.log('🔴 [USER-APP] Current booking ID:', this.currentBookingId);
+      console.log('🔴 [USER-APP] Event booking ID:', data.bookingId);
+      
+      if (data.bookingId === this.currentBookingId) {
+        console.log('🔴 [USER-APP] Processing consultation end - ended by:', data.endedBy);
+        this.notifyConnectionStatus('consultation_ended', `Session ended by ${data.endedBy}`);
+        this.notifyStatusUpdate({ 
+          type: 'consultation_ended', 
+          data,
+          endedBy: data.endedBy,
+          sessionData: data.sessionData
+        });
+      } else {
+        console.log('🔴 [USER-APP] Consultation ended event ignored - booking ID mismatch');
       }
     });
 
@@ -380,10 +413,11 @@ class ChatConnectionManager {
    */
   sendTypingStatus(isTyping) {
     if (this.isConnected && this.socket) {
-      this.socket.emit(isTyping ? 'typing_start' : 'typing_stop', {
+      this.socket.emit(isTyping ? 'typing_started' : 'typing_stopped', {
         bookingId: this.currentBookingId,
         userId: this.currentUserId
       });
+      console.log(`[ChatConnectionManager] Sent ${isTyping ? 'typing_started' : 'typing_stopped'} event for booking ${this.currentBookingId}`);
     }
   }
 
@@ -477,11 +511,16 @@ class ChatConnectionManager {
    * Notify typing status
    */
   notifyTyping(isTyping, data) {
-    this.typingCallbacks.forEach(callback => {
+    console.log('🔴 [USER-APP] ChatConnectionManager: notifyTyping called with:', { isTyping, data });
+    console.log('🔴 [USER-APP] ChatConnectionManager: Number of typing callbacks:', this.typingCallbacks.length);
+    
+    this.typingCallbacks.forEach((callback, index) => {
       try {
+        console.log(`🔴 [USER-APP] ChatConnectionManager: Calling typing callback ${index + 1}`);
         callback(isTyping, data);
+        console.log(`🔴 [USER-APP] ChatConnectionManager: Typing callback ${index + 1} executed successfully`);
       } catch (error) {
-        console.error('[ChatConnectionManager] Error in typing callback:', error);
+        console.error(`[ChatConnectionManager] Error in typing callback ${index + 1}:`, error);
       }
     });
   }
