@@ -106,7 +106,7 @@ export const bookingsAPI = {
     return API.post('/bookings/create', bookingData);
   },
   getAll() {
-    return API.get('/bookings/user');
+    return API.get('/bookings');
   },
   getById(id) {
     return API.get(`/bookings/${id}`);

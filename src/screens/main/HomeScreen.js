@@ -386,7 +386,7 @@ const HomeScreen = ({ navigation }) => {
     if (loadingConsultations && pendingConsultations.length === 0) {
       return (
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Ready to Join</Text>
+          <Text style={styles.sectionTitle}>Ready to Joinn</Text>
           <ActivityIndicator size="small" color="#F97316" style={styles.loadingIndicator} />
         </View>
       );

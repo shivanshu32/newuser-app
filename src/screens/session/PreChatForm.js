@@ -134,17 +134,32 @@ const PreChatForm = ({ route, navigation }) => {
       const handleBookingInitiated = (response) => {
         console.log(' [PreChatForm] Booking initiated successfully:', response);
         
-        if (response.success && response.booking) {
+        // Check if booking was created (either online or offline/queued)
+        if (response.booking && response.bookingId) {
           console.log(' [PreChatForm] Booking created successfully');
           
-          // For chat consultations, skip waiting screen and go back to home
-          // User will receive notification when astrologer accepts
+          // Determine the appropriate message based on astrologer status
+          let alertTitle, alertMessage;
+          
+          if (response.queuedRequest || !response.isAstrologerOnline) {
+            // Offline astrologer - booking is queued
+            alertTitle = 'Request Queued!';
+            alertMessage = response.message || `Your ${bookingType} consultation request has been queued. ${astrologer.displayName} will be notified when they come online.`;
+            console.log(' [PreChatForm] Astrologer offline - booking queued');
+          } else {
+            // Online astrologer - booking sent immediately
+            alertTitle = 'Request Sent!';
+            alertMessage = `Your ${bookingType} consultation request has been sent to ${astrologer.displayName}. You'll receive a notification when they respond.`;
+            console.log(' [PreChatForm] Astrologer online - booking sent immediately');
+          }
+          
+          // For chat consultations, show appropriate message and navigate to home
           if (bookingType === 'chat') {
             console.log(' [PreChatForm] Chat consultation - navigating to HomeScreen');
             
             Alert.alert(
-              'Request Sent!',
-              `Your chat consultation request has been sent to ${astrologer.displayName}. You'll receive a notification when they accept.`,
+              alertTitle,
+              alertMessage,
               [
                 {
                   text: 'OK',

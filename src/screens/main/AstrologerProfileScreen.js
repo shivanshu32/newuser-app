@@ -755,17 +755,7 @@ const AstrologerProfileScreen = ({ route, navigation }) => {
       <StatusBar backgroundColor="#fff" barStyle="dark-content" />
       
       {/* Header with back button */}
-      <View style={styles.header}>
-        <TouchableOpacity 
-          style={styles.backButton}
-          onPress={() => navigation.goBack()}
-          accessibilityLabel="Go back"
-        >
-          <Ionicons name="arrow-back" size={24} color="#374151" />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Astrologer Profile</Text>
-        <View style={styles.headerRight} />
-      </View>
+   
       
       {/* Notification UI removed in favor of Alert */}
       <ScrollView 
@@ -782,7 +772,8 @@ const AstrologerProfileScreen = ({ route, navigation }) => {
             <View
               style={[
                 styles.statusIndicator,
-                { backgroundColor: astrologer.status === 'Online' ? '#4CAF50' : '#F44336' },
+                // { backgroundColor: astrologer.status === 'Online' ? '#4CAF50' : '#F44336' },
+                 { backgroundColor: '#4CAF50' },
               ]}
             />
           </View>
@@ -793,7 +784,7 @@ const AstrologerProfileScreen = ({ route, navigation }) => {
             
             <View style={styles.ratingContainer}>
               <Ionicons name="star" size={16} color="#FFD700" />
-              <Text style={styles.rating}>{ratingText}</Text>
+              <Text style={styles.rating}>5.0</Text>
               {ratingCount > 0 && (
                 <Text style={styles.ratingCount}>({ratingCount} reviews)</Text>
               )}
@@ -801,7 +792,8 @@ const AstrologerProfileScreen = ({ route, navigation }) => {
             
             <View style={styles.statusTextContainer}>
               <Text style={styles.statusText}>
-                {astrologer.status === 'Online' ? 'Available now' : 'Currently unavailable'}
+                Online
+                {/* {astrologer.status === 'Online' ? 'Available now' : 'Currently unavailable'} */}
               </Text>
             </View>
           </View>
@@ -817,7 +809,7 @@ const AstrologerProfileScreen = ({ route, navigation }) => {
           <View style={styles.statDivider} />
           
           <View style={styles.statItem}>
-            <Text style={styles.statValue}>{ratingText}</Text>
+            <Text style={styles.statValue}>5.0</Text>
             <Text style={styles.statLabel}>Rating</Text>
           </View>
           
