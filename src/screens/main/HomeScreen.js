@@ -489,7 +489,7 @@ const HomeScreen = ({ navigation }) => {
           <Text style={styles.experience}>• {item.experience || '5'}+ years</Text>
         </View>
         <View style={styles.priceContainer}>
-          <Text style={styles.price}>₹{item.rates?.video || item.rates?.call || '50'}/min</Text>
+          <Text style={styles.price}>₹{item.consultationPrices?.video || item.consultationPrices?.call || item.consultationPrices?.chat || '50'}/min</Text>
           <View style={[
             styles.statusDot, 
             { 

@@ -903,7 +903,7 @@ const AstrologerProfileScreen = ({ route, navigation }) => {
                 Chat
               </Text>
               <Text style={styles.bookingButtonPrice}>
-                ₹{astrologer.chatPrice || astrologer.price || '20'}/min
+                ₹{astrologer.consultationPrices?.chat || '20'}/min
               </Text>
             </TouchableOpacity>
             
@@ -921,7 +921,7 @@ const AstrologerProfileScreen = ({ route, navigation }) => {
                 Voice Call
               </Text>
               <Text style={styles.bookingButtonPrice}>
-                ₹{astrologer.voicePrice || astrologer.price || '30'}/min
+                ₹{astrologer.consultationPrices?.call || '30'}/min
               </Text>
             </TouchableOpacity>
             
@@ -940,7 +940,7 @@ const AstrologerProfileScreen = ({ route, navigation }) => {
                 Video Call
               </Text>
               <Text style={styles.bookingButtonPrice}>
-                ₹{astrologer.videoPrice || astrologer.price || '40'}/min
+                ₹{astrologer.consultationPrices?.video || '40'}/min
               </Text>
             </TouchableOpacity> */}
           </View>
