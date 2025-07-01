@@ -826,24 +826,30 @@ const AstrologerProfileScreen = ({ route, navigation }) => {
           {/* Bio/Description */}
           <View style={styles.detailSection}>
             <Text style={styles.sectionTitle}>About</Text>
-            <Text style={styles.bioText}>{astrologer.bio || astrologer.description || 'No bio available'}</Text>
+            <Text style={styles.bioText}>{astrologer.about || astrologer.bio || astrologer.description || 'No bio available'}</Text>
           </View>
 
-          {/* Specialties */}
-          <View style={styles.detailSection}>
-            <Text style={styles.sectionTitle}>Specialties</Text>
-            <View style={styles.tagsContainer}>
-              {Array.isArray(astrologer.specialties) ? (
-                astrologer.specialties.map((specialty, index) => (
-                  <View key={`specialty-${index}`} style={styles.tagItem}>
-                    <Text style={styles.tagText}>{specialty}</Text>
-                  </View>
-                ))
-              ) : (
-                <Text style={styles.detailText}>{specialtiesText}</Text>
-              )}
+          {/* Specialization */}
+          {astrologer.specialization && (
+            <View style={styles.detailSection}>
+              <Text style={styles.sectionTitle}>Specialization</Text>
+              <Text style={styles.detailText}>{astrologer.specialization}</Text>
             </View>
-          </View>
+          )}
+
+          {/* Categories */}
+          {Array.isArray(astrologer.categories) && astrologer.categories.length > 0 && (
+            <View style={styles.detailSection}>
+              <Text style={styles.sectionTitle}>Categories</Text>
+              <View style={styles.tagsContainer}>
+                {astrologer.categories.map((category, index) => (
+                  <View key={`category-${index}`} style={styles.tagItem}>
+                    <Text style={styles.tagText}>{category}</Text>
+                  </View>
+                ))}
+              </View>
+            </View>
+          )}
 
           {/* Languages */}
           <View style={styles.detailSection}>
