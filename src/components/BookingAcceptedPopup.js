@@ -65,6 +65,9 @@ const BookingAcceptedPopup = ({
     return null;
   }
 
+  // Check if this is a voice consultation
+  const isVoiceConsultation = bookingData.type === 'voice';
+
   return (
     <Modal
       visible={visible}
@@ -77,11 +80,20 @@ const BookingAcceptedPopup = ({
           {/* Header */}
           <View style={styles.header}>
             <View style={styles.iconContainer}>
-              <Ionicons name="checkmark-circle" size={50} color="#4CAF50" />
+              <Ionicons 
+                name={isVoiceConsultation ? "call" : "checkmark-circle"} 
+                size={50} 
+                color={isVoiceConsultation ? "#2196F3" : "#4CAF50"} 
+              />
             </View>
-            <Text style={styles.title}>Booking Accepted!</Text>
+            <Text style={styles.title}>
+              {isVoiceConsultation ? 'Voice Call Connecting!' : 'Booking Accepted!'}
+            </Text>
             <Text style={styles.subtitle}>
-              Your astrologer has accepted your {bookingData.type} consultation request
+              {isVoiceConsultation 
+                ? 'Your voice consultation is being connected. Please keep your phone available.' 
+                : `Your astrologer has accepted your ${bookingData.type} consultation request`
+              }
             </Text>
           </View>
 
@@ -96,12 +108,12 @@ const BookingAcceptedPopup = ({
             
             <View style={styles.detailRow}>
               <Ionicons 
-                name={bookingData.type === 'video' ? 'videocam' : 'call'} 
+                name={bookingData.type === 'video' ? 'videocam' : bookingData.type === 'voice' ? 'call' : 'chatbubble'} 
                 size={20} 
                 color="#666" 
               />
               <Text style={styles.detailText}>
-                {bookingData.type === 'video' ? 'Video' : 'Voice'} Consultation
+                {bookingData.type === 'video' ? 'Video' : bookingData.type === 'voice' ? 'Voice' : 'Chat'} Consultation
               </Text>
             </View>
             
@@ -115,36 +127,63 @@ const BookingAcceptedPopup = ({
             )}
           </View>
 
-          {/* Action Buttons */}
-          <View style={styles.buttonContainer}>
-            <TouchableOpacity
-              style={[styles.button, styles.joinButton]}
-              onPress={handleJoinSession}
-              disabled={isJoining}
-            >
-              {isJoining ? (
-                <ActivityIndicator color="#fff" size="small" />
-              ) : (
-                <>
-                  <Ionicons name="videocam" size={20} color="#fff" style={styles.buttonIcon} />
-                  <Text style={styles.joinButtonText}>Join Session</Text>
-                </>
-              )}
-            </TouchableOpacity>
-            
-            <TouchableOpacity
-              style={[styles.button, styles.dismissButton]}
-              onPress={handleDismiss}
-              disabled={isJoining}
-            >
-              <Text style={styles.dismissButtonText}>Join Later</Text>
-            </TouchableOpacity>
-          </View>
+          {/* Conditional Action Buttons */}
+          {isVoiceConsultation ? (
+            /* Voice Consultation - No Join Button, Only Informational */
+            <View style={styles.voiceInfoContainer}>
+              <View style={styles.voiceInfoBox}>
+                <Ionicons name="information-circle" size={24} color="#2196F3" />
+                <Text style={styles.voiceInfoText}>
+                  You will receive a phone call shortly from our system. Please answer the call to connect with your astrologer.
+                </Text>
+              </View>
+              
+              <TouchableOpacity
+                style={[styles.button, styles.okButton]}
+                onPress={handleDismiss}
+              >
+                <Text style={styles.okButtonText}>Got It</Text>
+              </TouchableOpacity>
+            </View>
+          ) : (
+            /* Chat/Video Consultation - Show Join Session Button */
+            <View style={styles.buttonContainer}>
+              <TouchableOpacity
+                style={[styles.button, styles.joinButton]}
+                onPress={handleJoinSession}
+                disabled={isJoining}
+              >
+                {isJoining ? (
+                  <ActivityIndicator color="#fff" size="small" />
+                ) : (
+                  <>
+                    <Ionicons 
+                      name={bookingData.type === 'video' ? 'videocam' : 'chatbubble'} 
+                      size={20} 
+                      color="#fff" 
+                      style={styles.buttonIcon} 
+                    />
+                    <Text style={styles.joinButtonText}>Join Session</Text>
+                  </>
+                )}
+              </TouchableOpacity>
+              
+              <TouchableOpacity
+                style={[styles.button, styles.dismissButton]}
+                onPress={handleDismiss}
+                disabled={isJoining}
+              >
+                <Text style={styles.dismissButtonText}>Join Later</Text>
+              </TouchableOpacity>
+            </View>
+          )}
 
           {/* Info Text */}
-          <Text style={styles.infoText}>
-            You can also join the session later from your Bookings screen
-          </Text>
+          {!isVoiceConsultation && (
+            <Text style={styles.infoText}>
+              You can also join the session later from your Bookings screen
+            </Text>
+          )}
         </View>
       </View>
     </Modal>
@@ -255,6 +294,42 @@ const styles = StyleSheet.create({
     color: '#888',
     textAlign: 'center',
     lineHeight: 18,
+  },
+  // Voice consultation specific styles
+  voiceInfoContainer: {
+    marginBottom: 15,
+  },
+  voiceInfoBox: {
+    backgroundColor: '#E3F2FD',
+    borderRadius: 12,
+    padding: 20,
+    marginBottom: 20,
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+  },
+  voiceInfoText: {
+    fontSize: 16,
+    color: '#1976D2',
+    marginLeft: 12,
+    flex: 1,
+    lineHeight: 22,
+    fontWeight: '500',
+  },
+  okButton: {
+    backgroundColor: '#2196F3',
+    shadowColor: '#2196F3',
+    shadowOffset: {
+      width: 0,
+      height: 4,
+    },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 5,
+  },
+  okButtonText: {
+    color: '#fff',
+    fontSize: 18,
+    fontWeight: 'bold',
   },
 });
 
