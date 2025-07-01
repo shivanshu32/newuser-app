@@ -9,12 +9,12 @@ import {
   ActivityIndicator,
   TextInput,
   ScrollView,
+  Modal,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../context/AuthContext';
 import { walletAPI, offersAPI } from '../../services/api';
-//import RazorpayCheckout from 'react-native-razorpay';
-import RazorpayCheckout from '../../utils/razorpayMock';
+import RazorpayWebView from '../../components/RazorpayWebView';
 
 const WalletScreen = () => {
   const [transactions, setTransactions] = useState([]);
@@ -27,6 +27,9 @@ const WalletScreen = () => {
   const [page, setPage] = useState(1);
   const [hasMoreTransactions, setHasMoreTransactions] = useState(true);
   const [loadingMoreTransactions, setLoadingMoreTransactions] = useState(false);
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [paymentOrder, setPaymentOrder] = useState(null);
+  const [razorpayConfig, setRazorpayConfig] = useState(null);
   const { user, updateUser } = useAuth();
 
   const quickAmounts = [100, 500, 1000, 2000];
@@ -127,77 +130,159 @@ const WalletScreen = () => {
   };
 
   const handleAddMoney = async () => {
-    const amountValue = parseFloat(amount);
-    
-    // Validate minimum amount
-    if (!amount || isNaN(amountValue) || amountValue < 10) {
-      Alert.alert('Invalid Amount', 'Minimum recharge amount is ₹10');
+    const numAmount = parseFloat(amount);
+    if (!numAmount || numAmount < 10) {
+      Alert.alert('Invalid Amount', 'Please enter a valid amount (minimum ₹10)');
       return;
     }
 
     try {
       setProcessingPayment(true);
-
-      // Create order
-      const orderResponse = await walletAPI.createOrder(amountValue);
       
-      if (!orderResponse.data.success) {
-        throw new Error('Failed to create order');
-      }
-
-      const { orderId, keyId, amount: orderAmount, currency } = orderResponse.data.data;
-
-      // Prepare Razorpay options
-      const options = {
-        description: 'Wallet Recharge',
-        image: 'https://your-logo-url.com/logo.png', // Replace with your app logo
-        currency: currency,
-        key: keyId,
-        amount: orderAmount,
-        order_id: orderId,
-        name: 'Jyotish Call',
-        prefill: {
-          email: user.email,
-          contact: user.phone,
-          name: user.name
-        },
-        theme: { color: '#F97316' }
-      };
-
-      // Open Razorpay checkout
-      const paymentResult = await RazorpayCheckout.open(options);
+      // Get Razorpay configuration
+      const configResponse = await walletAPI.getRazorpayConfig();
+      console.log('Razorpay config response:', configResponse);
       
-      // Verify payment
-      const verificationData = {
-        razorpay_order_id: paymentResult.razorpay_order_id,
-        razorpay_payment_id: paymentResult.razorpay_payment_id,
-        razorpay_signature: paymentResult.razorpay_signature
-      };
-
-      const verifyResponse = await walletAPI.verifyPayment(verificationData);
-      
-      if (verifyResponse.data.success) {
-        Alert.alert('Success', 'Money added successfully!');
-        setAmount('');
-        fetchTransactions();
-        
-        // Show bonus message if applicable
-        if (verifyResponse.data.data.bonusAmount > 0) {
-          Alert.alert(
-            'Bonus Credited!', 
-            `You received a bonus of ₹${verifyResponse.data.data.bonusAmount}!`
-          );
-        }
+      // Handle the response structure - API interceptor returns response.data directly
+      let config;
+      if (configResponse.success && configResponse.data) {
+        // Direct response from API interceptor
+        config = configResponse.data;
+      } else if (configResponse.data && configResponse.data.success) {
+        // Nested response structure
+        config = configResponse.data.data;
       } else {
-        throw new Error('Payment verification failed');
+        throw new Error('Failed to get payment configuration');
       }
-
+      
+      console.log('Razorpay config extracted:', config);
+      setRazorpayConfig(config);
+      
+      // Create order on backend
+      const orderResponse = await walletAPI.createOrder(numAmount);
+      console.log('Order creation response:', orderResponse);
+      
+      // Handle the response structure - API interceptor returns response.data directly
+      let order;
+      if (orderResponse.success && orderResponse.data) {
+        // Direct response from API interceptor
+        order = orderResponse.data;
+      } else if (orderResponse.data && orderResponse.data.success) {
+        // Nested response structure
+        order = orderResponse.data.data;
+      } else {
+        const errorMsg = orderResponse.message || orderResponse.data?.message || 'Failed to create order';
+        throw new Error(errorMsg);
+      }
+      
+      console.log('Order extracted:', order);
+      setPaymentOrder(order);
+      
+      // Show payment modal with WebView
+      setShowPaymentModal(true);
+      
     } catch (error) {
-      console.error('Payment error:', error);
-      Alert.alert('Payment Failed', error.message || 'Something went wrong. Please try again.');
+      console.error('Payment initialization error:', error);
+      
+      let errorMessage = 'Failed to initialize payment. Please try again.';
+      if (error.response?.data?.message) {
+        errorMessage = error.response.data.message;
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+      
+      Alert.alert('Payment Error', errorMessage);
     } finally {
       setProcessingPayment(false);
     }
+  };
+
+  const handlePaymentSuccess = async (paymentData) => {
+    try {
+      console.log('Payment successful:', paymentData);
+      
+      // Verify payment on backend
+      const verificationData = {
+        razorpay_order_id: paymentData.razorpay_order_id,
+        razorpay_payment_id: paymentData.razorpay_payment_id,
+        razorpay_signature: paymentData.razorpay_signature,
+      };
+      
+      const verifyResponse = await walletAPI.verifyPayment(verificationData);
+      console.log('Payment verification response:', verifyResponse);
+      
+      // Handle the response structure - API interceptor returns response.data directly
+      let verificationResult;
+      if (verifyResponse.success && verifyResponse.data) {
+        // Direct response from API interceptor
+        verificationResult = verifyResponse.data;
+      } else if (verifyResponse.data && verifyResponse.data.success) {
+        // Nested response structure
+        verificationResult = verifyResponse.data.data;
+      } else {
+        const errorMsg = verifyResponse.message || verifyResponse.data?.message || 'Payment verification failed';
+        throw new Error(errorMsg);
+      }
+      
+      console.log('Verification result:', verificationResult);
+      const { transaction, newBalance, bonusAmount } = verificationResult;
+        
+        // Update user balance in context
+        await updateUser({ walletBalance: newBalance });
+        
+        // Show success message with bonus info
+        let successMessage = `Payment successful! ₹${parseFloat(amount)} added to your wallet.`;
+        if (bonusAmount > 0) {
+          successMessage += ` You received a bonus of ₹${bonusAmount}!`;
+        }
+        
+        Alert.alert('Success', successMessage);
+        
+        // Reset form and refresh data
+        setAmount('');
+        setSelectedOffer(null);
+        fetchTransactions();
+
+      
+    } catch (error) {
+      console.error('Payment verification error:', error);
+      
+      let errorMessage = 'Payment verification failed. Please contact support.';
+      if (error.response?.data?.message) {
+        errorMessage = error.response.data.message;
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+      
+      Alert.alert('Verification Failed', errorMessage);
+    } finally {
+      setShowPaymentModal(false);
+      setPaymentOrder(null);
+      setRazorpayConfig(null);
+    }
+  };
+
+  const handlePaymentFailure = (error) => {
+    console.error('Payment failed:', error);
+    
+    let errorMessage = 'Payment failed. Please try again.';
+    if (error.description) {
+      errorMessage = error.description;
+    } else if (error.code === 'payment_cancelled') {
+      errorMessage = 'Payment was cancelled.';
+    }
+    
+    Alert.alert('Payment Failed', errorMessage);
+    
+    setShowPaymentModal(false);
+    setPaymentOrder(null);
+    setRazorpayConfig(null);
+  };
+
+  const handlePaymentClose = () => {
+    setShowPaymentModal(false);
+    setPaymentOrder(null);
+    setRazorpayConfig(null);
   };
 
   const renderTransaction = ({ item }) => {
@@ -301,7 +386,8 @@ const WalletScreen = () => {
   };
 
   return (
-    <ScrollView style={styles.container}>
+    <View style={styles.container}>
+      <ScrollView style={styles.scrollView}>
       <View style={styles.walletCard}>
         <Text style={styles.walletLabel}>Wallet Balance</Text>
         <Text style={styles.walletBalance}>₹{user?.walletBalance || 0}</Text>
@@ -389,7 +475,33 @@ const WalletScreen = () => {
           />
         )}
       </View>
-    </ScrollView>
+      </ScrollView>
+      
+      {/* Razorpay Payment Modal */}
+      <Modal
+        visible={showPaymentModal}
+        animationType="slide"
+        presentationStyle="fullScreen"
+        onRequestClose={handlePaymentClose}
+      >
+        {paymentOrder && razorpayConfig && (
+          <RazorpayWebView
+            orderId={paymentOrder.orderId}
+            keyId={razorpayConfig.keyId}
+            amount={paymentOrder.amount}
+            currency={paymentOrder.currency}
+            userDetails={{
+              name: user?.name || '',
+              email: user?.email || '',
+              phone: user?.phone || ''
+            }}
+            onPaymentSuccess={handlePaymentSuccess}
+            onPaymentFailure={handlePaymentFailure}
+            onClose={handlePaymentClose}
+          />
+        )}
+      </Modal>
+    </View>
   );
 };
 
@@ -397,6 +509,9 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#f8f8f8',
+  },
+  scrollView: {
+    flex: 1,
   },
   walletCard: {
     backgroundColor: '#fff',

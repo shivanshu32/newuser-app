@@ -274,8 +274,8 @@ const AstrologerProfileScreen = () => {
             </Text>
           </TouchableOpacity>
           
-          {/* Video Consultation */}
-          <TouchableOpacity
+          {/* Video Consultation - Temporarily Hidden */}
+          {/* <TouchableOpacity
             style={[
               styles.consultationType,
               selectedConsultationType === 'video' && styles.selectedConsultationType
@@ -303,7 +303,7 @@ const AstrologerProfileScreen = () => {
             >
               ₹{astrologer.rates?.video || '200'}/min
             </Text>
-          </TouchableOpacity>
+          </TouchableOpacity> */}
         </View>
       </View>
       
@@ -353,7 +353,8 @@ const AstrologerProfileScreen = () => {
           <Text style={styles.bookingButtonText}>Book Voice Call</Text>
         </TouchableOpacity>
 
-        <TouchableOpacity
+        {/* Video Call Button - Temporarily Hidden */}
+        {/* <TouchableOpacity
           style={[styles.bookingButton, { backgroundColor: '#FF5722' }]}
           onPress={() => {
             // Directly call handleBookNow with the booking data
@@ -367,7 +368,7 @@ const AstrologerProfileScreen = () => {
         >
           <Icon name="videocam" size={20} color="#FFFFFF" style={styles.bookingButtonIcon} />
           <Text style={styles.bookingButtonText}>Book Video Call</Text>
-        </TouchableOpacity>
+        </TouchableOpacity> */}
       </View>
       
       {/* Schedule Button */}

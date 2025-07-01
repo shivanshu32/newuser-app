@@ -870,47 +870,7 @@ const AstrologerProfileScreen = ({ route, navigation }) => {
             </View>
           </View>
 
-          {/* Charges */}
-          <View style={styles.detailSection}>
-            <Text style={styles.sectionTitle}>Consultation Charges</Text>
-            <View style={styles.chargesContainer}>
-              <View style={styles.chargeCard}>
-                <View style={styles.chargeIconContainer}>
-                  <Ionicons name="chatbubble" size={22} color="#fff" />
-                </View>
-                <View style={styles.chargeContent}>
-                  <Text style={styles.chargeLabel}>Chat Consultation</Text>
-                  <Text style={styles.chargeValue}>
-                    ₹{astrologer.chatPrice || astrologer.price || '20'}<Text style={styles.perMinText}>/min</Text>
-                  </Text>
-                </View>
-              </View>
-              
-              <View style={styles.chargeCard}>
-                <View style={[styles.chargeIconContainer, styles.voiceIconContainer]}>
-                  <Ionicons name="call" size={22} color="#fff" />
-                </View>
-                <View style={styles.chargeContent}>
-                  <Text style={styles.chargeLabel}>Voice Call</Text>
-                  <Text style={styles.chargeValue}>
-                    ₹{astrologer.voicePrice || astrologer.price || '30'}<Text style={styles.perMinText}>/min</Text>
-                  </Text>
-                </View>
-              </View>
-              
-              <View style={styles.chargeCard}>
-                <View style={[styles.chargeIconContainer, styles.videoIconContainer]}>
-                  <Ionicons name="videocam" size={22} color="#fff" />
-                </View>
-                <View style={styles.chargeContent}>
-                  <Text style={styles.chargeLabel}>Video Call</Text>
-                  <Text style={styles.chargeValue}>
-                    ₹{astrologer.videoPrice || astrologer.price || '40'}<Text style={styles.perMinText}>/min</Text>
-                  </Text>
-                </View>
-              </View>
-            </View>
-          </View>
+          {/* Consultation Charges section removed */}
         </View>
 
         {/* Booking Buttons */}
@@ -959,7 +919,8 @@ const AstrologerProfileScreen = ({ route, navigation }) => {
               </Text>
             </TouchableOpacity>
             
-            <TouchableOpacity 
+            {/* Video Call booking button temporarily hidden */}
+            {/* <TouchableOpacity 
               style={[styles.bookingButton, styles.videoButton]} 
               onPress={handleBookVideoCall}
               accessibilityLabel="Book Video Call Consultation"
@@ -975,7 +936,7 @@ const AstrologerProfileScreen = ({ route, navigation }) => {
               <Text style={styles.bookingButtonPrice}>
                 ₹{astrologer.videoPrice || astrologer.price || '40'}/min
               </Text>
-            </TouchableOpacity>
+            </TouchableOpacity> */}
           </View>
         </View>
       </ScrollView>

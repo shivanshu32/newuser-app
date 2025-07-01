@@ -131,12 +131,23 @@ const HomeScreen = ({ navigation }) => {
           userId: user._id || user.id
         });
       } else if (booking.type === 'voice') {
-        navigation.navigate('VoiceCall', {
-          sessionId: booking.sessionId || booking._id,
-          bookingId: booking._id,
-          astrologerId: booking.astrologerId,
-          userId: user._id || user.id
-        });
+        // For voice calls, show info about Exotel call instead of navigating to WebRTC screen
+        Alert.alert(
+          'Voice Call Ready! 📞',
+          'Your voice consultation is ready. You should receive a phone call shortly from our system. Please answer the call to connect with the astrologer.',
+          [
+            {
+              text: 'OK',
+              onPress: () => {
+                // Optionally remove from pending consultations since user is aware
+                console.log('User acknowledged voice call readiness');
+              }
+            }
+          ]
+        );
+        
+        // Note: No navigation to VoiceCall screen - Exotel handles the actual call
+        // The backend should have already initiated the Exotel call when astrologer accepted
       } else if (booking.type === 'chat') {
         navigation.navigate('EnhancedChat', {
           sessionId: booking.sessionId || booking._id,
@@ -204,7 +215,35 @@ const HomeScreen = ({ navigation }) => {
     console.log('📢 Booking status update received:', data);
     
     if (data.status === 'accepted') {
-      // Show notification alert
+      // For voice calls, show different message since Exotel will handle the call
+      if (data.bookingType === 'voice') {
+        Alert.alert(
+          'Voice Call Accepted! 📞',
+          `Your voice consultation with ${data.astrologerName} has been accepted! You will receive a phone call shortly from our system. Please answer the call to connect with the astrologer.`,
+          [{ text: 'OK' }]
+        );
+        
+        // Add to pending consultations for tracking
+        const consultationData = {
+          booking: {
+            _id: data.bookingId,
+            type: data.bookingType,
+            astrologer: data.astrologer,
+            userInfo: data.userInfo
+          },
+          sessionId: data.sessionId,
+          astrologerId: data.astrologerId
+        };
+        
+        await addPendingConsultation(consultationData);
+        fetchPendingConsultations();
+        
+        // Note: Exotel call initiation is handled by backend automatically
+        // User will receive actual phone call, no need to navigate to WebRTC screen
+        return;
+      }
+      
+      // For video and chat, show normal acceptance alert with navigation
       Alert.alert(
         'Booking Accepted! 🎉',
         `Your ${data.bookingType || 'consultation'} with ${data.astrologerName} has been accepted! Join now to start your session.`,
@@ -215,13 +254,6 @@ const HomeScreen = ({ navigation }) => {
               // Navigate to appropriate consultation screen
               if (data.bookingType === 'video') {
                 navigation.navigate('VideoConsultation', {
-                  sessionId: data.sessionId,
-                  bookingId: data.bookingId,
-                  astrologerId: data.astrologerId,
-                  userId: user._id || user.id
-                });
-              } else if (data.bookingType === 'voice') {
-                navigation.navigate('VoiceCall', {
                   sessionId: data.sessionId,
                   bookingId: data.bookingId,
                   astrologerId: data.astrologerId,
@@ -323,6 +355,25 @@ const HomeScreen = ({ navigation }) => {
         );
       });
       
+      // Listen for Exotel voice call events
+      socket.on('voice_call_initiated', (data) => {
+        console.log('📞 Voice call initiated:', data);
+        Alert.alert(
+          'Voice Call Connecting! 📞',
+          `Your call is being connected. You will receive a phone call shortly. Please answer to connect with ${data.astrologerName || 'the astrologer'}.`,
+          [{ text: 'OK' }]
+        );
+      });
+      
+      socket.on('voice_call_failed', (data) => {
+        console.log('❌ Voice call failed:', data);
+        Alert.alert(
+          'Voice Call Failed',
+          data.message || 'Unable to initiate voice call. Please try again or contact support.',
+          [{ text: 'OK' }]
+        );
+      });
+      
       // Cleanup listeners on unmount
       return () => {
         console.log('🔌 Cleaning up socket listeners in HomeScreen');
@@ -330,6 +381,8 @@ const HomeScreen = ({ navigation }) => {
         socket.off('booking_status_update', handleBookingStatusUpdate);
         socket.off('booking_accepted', handleBookingAccepted);
         socket.off('booking_rejected');
+        socket.off('voice_call_initiated');
+        socket.off('voice_call_failed');
       };
     }
   }, [socket, handleAstrologerStatusUpdate, handleBookingStatusUpdate, handleBookingAccepted]);
