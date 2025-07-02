@@ -147,21 +147,21 @@ const HomeScreen = ({ navigation }) => {
     try {
       console.log('HomeScreen: Dismissing consultation:', bookingId);
       await removePendingConsultation(bookingId);
-      await fetchPendingConsultations(); // Refresh the list
+      // Refresh the list by reloading initial data
+      await loadInitialData();
     } catch (error) {
       console.error('HomeScreen: Error dismissing consultation:', error);
       Alert.alert('Error', 'Failed to dismiss consultation. Please try again.');
     }
-  }, [fetchPendingConsultations]);
+  }, []);
 
   // Load initial data
   const loadInitialData = useCallback(async () => {
     await Promise.all([
       fetchAstrologers(),
-      fetchPendingConsultations(),
       fetchWalletBalance()
     ]);
-  }, [fetchAstrologers, fetchPendingConsultations, fetchWalletBalance]);
+  }, [fetchAstrologers, fetchWalletBalance]);
 
   // Handle refresh
   const onRefresh = useCallback(async () => {
@@ -216,7 +216,7 @@ const HomeScreen = ({ navigation }) => {
         };
         
         await addPendingConsultation(consultationData);
-        fetchPendingConsultations();
+        // Consultation data added to pending list
         
         // Note: Exotel call initiation is handled by backend automatically
         // User will receive actual phone call, no need to navigate to WebRTC screen
@@ -272,8 +272,7 @@ const HomeScreen = ({ navigation }) => {
       // Store in pending consultations
       await addPendingConsultation(consultationData);
       
-      // Refresh pending consultations display
-      fetchPendingConsultations();
+      // Consultation data added to pending list
     } else if (data.status === 'rejected') {
       Alert.alert(
         'Booking Declined',
@@ -281,7 +280,7 @@ const HomeScreen = ({ navigation }) => {
         [{ text: 'OK' }]
       );
     }
-  }, [navigation, user, fetchPendingConsultations]);
+  }, [navigation, user]);
 
   // Handle legacy booking accepted event for backward compatibility
   const handleBookingAccepted = useCallback(async (data) => {
@@ -307,9 +306,8 @@ const HomeScreen = ({ navigation }) => {
       ]
     );
     
-    // Refresh pending consultations
-    fetchPendingConsultations();
-  }, [navigation, fetchPendingConsultations]);
+    // Consultation handled
+  }, [navigation]);
 
   // Socket listener for real-time updates
   useEffect(() => {
