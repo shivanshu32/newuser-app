@@ -71,19 +71,7 @@ const HomeScreen = ({ navigation }) => {
     }
   }, []);
 
-  // Fetch pending consultations
-  const fetchPendingConsultations = useCallback(async () => {
-    try {
-      setLoadingConsultations(true);
-      const consultations = await getPendingConsultations();
-      console.log('HomeScreen: Fetched consultations:', consultations);
-      setPendingConsultations(consultations);
-    } catch (error) {
-      console.error('HomeScreen: Error fetching consultations:', error);
-    } finally {
-      setLoadingConsultations(false);
-    }
-  }, []);
+
 
   // Fetch wallet balance
   const fetchWalletBalance = useCallback(async () => {
