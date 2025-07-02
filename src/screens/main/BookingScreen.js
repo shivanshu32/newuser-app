@@ -510,7 +510,6 @@ const BookingScreen = ({ route, navigation }) => {
             </View>
           </View>
           <View style={[styles.statusBadge, { backgroundColor: statusColor }]}>
-            <Ionicons name={statusIcon} size={12} color="#fff" style={styles.statusIcon} />
             <Text style={styles.statusText}>
               {item.status.charAt(0).toUpperCase() + item.status.slice(1).replace('_', ' ')}
             </Text>

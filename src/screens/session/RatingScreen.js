@@ -69,11 +69,16 @@ const RatingScreen = ({ route, navigation }) => {
         astrologerData = consultation.astrologer;
       } else if (bookingId) {
         // Fetch booking details by ID
+        console.log('🔍 Fetching booking details for ID:', bookingId);
         const bookingResponse = await bookingsAPI.getById(bookingId);
+        console.log('📋 Booking response:', JSON.stringify(bookingResponse, null, 2));
+        
         if (bookingResponse.data && bookingResponse.data.success) {
-          const fullConsultation = bookingResponse.data.data;
-          booking = fullConsultation.booking;
-          astrologerData = fullConsultation.astrologer;
+          // Backend returns { success: true, data: booking }
+          booking = bookingResponse.data.data;
+          astrologerData = booking.astrologer; // Astrologer is populated in the booking
+          console.log('✅ Booking data found:', booking);
+          console.log('✅ Astrologer data found:', astrologerData);
         }
       }
       
@@ -82,10 +87,13 @@ const RatingScreen = ({ route, navigation }) => {
       }
       
       // If we don't have astrologer data, fetch it separately
-      if (!astrologerData && booking.astrologerId) {
-        const astrologerResponse = await astrologersAPI.getById(booking.astrologerId);
+      if (!astrologerData && (booking.astrologer || booking.astrologerId)) {
+        const astrologerId = booking.astrologer?._id || booking.astrologer || booking.astrologerId;
+        console.log('🔍 Fetching astrologer data for ID:', astrologerId);
+        const astrologerResponse = await astrologersAPI.getById(astrologerId);
         if (astrologerResponse.data && astrologerResponse.data.success) {
           astrologerData = astrologerResponse.data.data;
+          console.log('✅ Astrologer data fetched separately:', astrologerData);
         }
       }
       
