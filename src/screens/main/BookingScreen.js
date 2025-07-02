@@ -61,22 +61,30 @@ const BookingScreen = ({ route, navigation }) => {
 
   const fetchBookings = async () => {
     try {
+      console.log('🔄 Starting fetchBookings...');
       setLoading(true);
       
       // Call backend API to fetch user's bookings
       const response = await bookingsAPI.getAll();
+      console.log('📋 Full bookings response:', JSON.stringify(response, null, 2));
       
-      // The backend returns data in response.data.data format as per the controller
-      if (response.data && response.data.data) {
+      // The backend returns data in response.data format (not response.data.data)
+      if (response.data && Array.isArray(response.data)) {
+        console.log('✅ Bookings found in response.data:', response.data.length);
+        setBookings(response.data);
+      } else if (response.data && response.data.data && Array.isArray(response.data.data)) {
+        console.log('✅ Bookings found in response.data.data:', response.data.data.length);
         setBookings(response.data.data);
       } else {
-        // If no bookings found, set empty array
+        console.log('❌ No bookings array found, setting empty');
+        console.log('📋 Response structure:', response);
         setBookings([]);
       }
       
       setLoading(false);
     } catch (error) {
-      console.log('Error fetching bookings:', error);
+      console.error('❌ Error fetching bookings:', error);
+      console.error('❌ Error details:', error.response?.data || error.message);
       setLoading(false);
       // In case of error, set empty bookings array
       setBookings([]);
