@@ -284,6 +284,33 @@ const VoiceCallScreenInner = () => {
       }
     };
 
+    // Handle voice call failure notifications
+    const handleCallFailureNotification = (data) => {
+      console.log('[USER-APP] Received call failure notification:', data);
+      
+      // Verify this notification is for our current booking
+      if (data.bookingId === bookingId) {
+        console.log('[USER-APP] Call failure notification matches current booking, showing alert');
+        
+        Alert.alert(
+          data.title || 'Call Failed',
+          data.message || 'The voice call could not be completed.',
+          [
+            {
+              text: 'OK',
+              onPress: () => {
+                console.log('[USER-APP] User acknowledged call failure, navigating back');
+                navigation.goBack();
+              }
+            }
+          ],
+          { cancelable: false }
+        );
+      } else {
+        console.log('[USER-APP] Call failure notification for different booking, ignoring');
+      }
+    };
+
     socket.on('signal', handleSignal);
     socket.on('start_voice_call', handleStartVoiceCall);
     socket.on('voice_call_ended', handleVoiceCallEnded);
@@ -292,6 +319,7 @@ const VoiceCallScreenInner = () => {
     socket.on('voice_call_offer', handleVoiceCallOffer);
     socket.on('voice_call_answer', handleVoiceCallAnswer);
     socket.on('voice_ice_candidate', handleVoiceIceCandidate);
+    socket.on('call_failure_notification', handleCallFailureNotification);
 
     // Cleanup listeners
     return () => {
@@ -303,6 +331,7 @@ const VoiceCallScreenInner = () => {
       socket.off('voice_call_offer', handleVoiceCallOffer);
       socket.off('voice_call_answer', handleVoiceCallAnswer);
       socket.off('voice_ice_candidate', handleVoiceIceCandidate);
+      socket.off('call_failure_notification', handleCallFailureNotification);
     };
   }, [socket, socketReady, bookingId, sessionId, roomId, user]);
 
