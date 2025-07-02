@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useContext } from 'react';
 import {
   StyleSheet,
   View,
@@ -18,6 +18,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { astrologersAPI } from '../../services/api';
 import { initiateRealTimeBooking, listenForBookingStatusUpdates } from '../../services/socketService';
 import { addPendingConsultation, getPendingConsultations } from '../../utils/pendingConsultationsStore';
+import { SocketContext } from '../../context/SocketContext';
 
 const AstrologerProfileScreen = ({ route, navigation }) => {
   const [astrologer, setAstrologer] = useState(null);
@@ -34,6 +35,15 @@ const AstrologerProfileScreen = ({ route, navigation }) => {
   // State for consultation notification
   const [showNotificationBanner, setShowNotificationBanner] = useState(false);
   const [consultationData, setConsultationData] = useState(null);
+  
+  // Socket context for real-time updates
+  const { socket } = useContext(SocketContext);
+  
+  // State for consultation availability
+  const [consultationAvailability, setConsultationAvailability] = useState({
+    chat: true,
+    voiceCall: true
+  });
   
   // Get astrologer ID from navigation params - handle both astrologerId and astrologer object
   const { astrologerId, astrologer: passedAstrologer } = route.params || {};
@@ -62,13 +72,36 @@ const AstrologerProfileScreen = ({ route, navigation }) => {
     // Set up booking status listener when component mounts
     setupBookingStatusListener();
     
-    // Clean up listener when component unmounts
+    // Set up availability listener
+    if (socket) {
+      const handleAvailabilityUpdate = (data) => {
+        console.log('🔄 [USER-APP] AstrologerProfileScreen: Received availability update:', data);
+        
+        // Check if this update is for the current astrologer
+        if (data.astrologerId === actualAstrologerId) {
+          setConsultationAvailability(data.consultationAvailability);
+          console.log('✅ [USER-APP] AstrologerProfileScreen: Updated consultation availability:', data.consultationAvailability);
+        }
+      };
+      
+      socket.on('consultation_availability_updated', handleAvailabilityUpdate);
+      
+      // Clean up listener when component unmounts
+      return () => {
+        socket.off('consultation_availability_updated', handleAvailabilityUpdate);
+        if (statusListenerCleanup.current && typeof statusListenerCleanup.current === 'function') {
+          statusListenerCleanup.current();
+        }
+      };
+    }
+    
+    // Clean up listener when component unmounts (fallback)
     return () => {
       if (statusListenerCleanup.current && typeof statusListenerCleanup.current === 'function') {
         statusListenerCleanup.current();
       }
     };
-  }, []);
+  }, [socket, actualAstrologerId]);
   
   // Add timeout for booking requests
   useEffect(() => {
@@ -423,6 +456,17 @@ const AstrologerProfileScreen = ({ route, navigation }) => {
       if (passedAstrologer && (passedAstrologer._id || passedAstrologer.id)) {
         console.log('✅ [USER-APP] AstrologerProfileScreen: Using passed astrologer object');
         setAstrologer(passedAstrologer);
+        
+        // Initialize consultation availability from passed astrologer data
+        if (passedAstrologer?.consultationAvailability) {
+          setConsultationAvailability(passedAstrologer.consultationAvailability);
+          console.log('✅ [USER-APP] AstrologerProfileScreen: Initialized consultation availability from passed data:', passedAstrologer.consultationAvailability);
+        } else {
+          // Default to both enabled if not specified
+          setConsultationAvailability({ chat: true, voiceCall: true });
+          console.log('⚠️ [USER-APP] AstrologerProfileScreen: Using default consultation availability for passed astrologer (both enabled)');
+        }
+        
         setLoading(false);
         return;
       }
@@ -455,6 +499,16 @@ const AstrologerProfileScreen = ({ route, navigation }) => {
       
       // Set the extracted astrologer data
       setAstrologer(astrologerData);
+      
+      // Initialize consultation availability from astrologer data
+      if (astrologerData?.consultationAvailability) {
+        setConsultationAvailability(astrologerData.consultationAvailability);
+        console.log('✅ [USER-APP] AstrologerProfileScreen: Initialized consultation availability:', astrologerData.consultationAvailability);
+      } else {
+        // Default to both enabled if not specified
+        setConsultationAvailability({ chat: true, voiceCall: true });
+        console.log('⚠️ [USER-APP] AstrologerProfileScreen: Using default consultation availability (both enabled)');
+      }
     } catch (err) {
       setError('Failed to load astrologer details. Please try again.');
     } finally {
@@ -889,41 +943,58 @@ const AstrologerProfileScreen = ({ route, navigation }) => {
           </Text>
           
           <View style={styles.bookingButtonsContainer}>
-            <TouchableOpacity 
-              style={[styles.bookingButton, styles.chatButton]} 
-              onPress={handleBookChat}
-              accessibilityLabel="Book Chat Consultation"
-            >
-              <Ionicons 
-                name="chatbubble" 
-                size={24} 
-                color="#fff" 
-              />
-              <Text style={styles.bookingButtonText}>
-                Chat
-              </Text>
-              <Text style={styles.bookingButtonPrice}>
-                ₹{astrologer.consultationPrices?.chat || '20'}/min
-              </Text>
-            </TouchableOpacity>
+            {/* Chat Consultation Button - Only show if enabled */}
+            {consultationAvailability.chat && (
+              <TouchableOpacity 
+                style={[styles.bookingButton, styles.chatButton]} 
+                onPress={handleBookChat}
+                accessibilityLabel="Book Chat Consultation"
+              >
+                <Ionicons 
+                  name="chatbubble" 
+                  size={24} 
+                  color="#fff" 
+                />
+                <Text style={styles.bookingButtonText}>
+                  Chat
+                </Text>
+                <Text style={styles.bookingButtonPrice}>
+                  ₹{astrologer.consultationPrices?.chat || '20'}/min
+                </Text>
+              </TouchableOpacity>
+            )}
             
-            <TouchableOpacity 
-              style={[styles.bookingButton, styles.voiceButton]} 
-              onPress={handleBookVoiceCall}
-              accessibilityLabel="Book Voice Call Consultation"
-            >
-              <Ionicons 
-                name="call" 
-                size={24} 
-                color="#fff" 
-              />
-              <Text style={styles.bookingButtonText}>
-                Voice Call
-              </Text>
-              <Text style={styles.bookingButtonPrice}>
-                ₹{astrologer.consultationPrices?.call || '30'}/min
-              </Text>
-            </TouchableOpacity>
+            {/* Voice Call Consultation Button - Only show if enabled */}
+            {consultationAvailability.voiceCall && (
+              <TouchableOpacity 
+                style={[styles.bookingButton, styles.voiceButton]} 
+                onPress={handleBookVoiceCall}
+                accessibilityLabel="Book Voice Call Consultation"
+              >
+                <Ionicons 
+                  name="call" 
+                  size={24} 
+                  color="#fff" 
+                />
+                <Text style={styles.bookingButtonText}>
+                  Voice Call
+                </Text>
+                <Text style={styles.bookingButtonPrice}>
+                  ₹{astrologer.consultationPrices?.call || '30'}/min
+                </Text>
+              </TouchableOpacity>
+            )}
+            
+            {/* Show message when no consultation options are available */}
+            {!consultationAvailability.chat && !consultationAvailability.voiceCall && (
+              <View style={styles.noConsultationContainer}>
+                <Ionicons name="information-circle-outline" size={48} color="#9CA3AF" />
+                <Text style={styles.noConsultationTitle}>No Consultations Available</Text>
+                <Text style={styles.noConsultationText}>
+                  This astrologer has temporarily disabled all consultation options. Please check back later.
+                </Text>
+              </View>
+            )}
             
             {/* Video Call booking button temporarily hidden */}
             {/* <TouchableOpacity 
@@ -1382,6 +1453,29 @@ const styles = StyleSheet.create({
   },
   disabledButtonText: {
     color: '#9CA3AF',
+  },
+  noConsultationContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 32,
+    paddingHorizontal: 16,
+    backgroundColor: '#F9FAFB',
+    borderRadius: 12,
+    marginVertical: 8,
+  },
+  noConsultationTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#374151',
+    marginTop: 12,
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  noConsultationText: {
+    fontSize: 14,
+    color: '#6B7280',
+    textAlign: 'center',
+    lineHeight: 20,
   },
 });
 
