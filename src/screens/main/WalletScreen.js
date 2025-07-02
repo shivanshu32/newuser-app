@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   StyleSheet,
   View,
@@ -31,43 +31,62 @@ const WalletScreen = () => {
   const [paymentOrder, setPaymentOrder] = useState(null);
   const [razorpayConfig, setRazorpayConfig] = useState(null);
   const { user, updateUser } = useAuth();
+  const initialLoadDone = useRef(false);
+  const isLoadingTransactions = useRef(false);
+  const lastBalanceUpdate = useRef(null);
 
   const quickAmounts = [100, 500, 1000, 2000];
 
-  useEffect(() => {
-    fetchTransactions();
-    fetchOffers();
-  }, []);
-
   const fetchTransactions = async () => {
+    // Prevent multiple simultaneous calls
+    if (isLoadingTransactions.current) {
+      console.log('🚫 fetchTransactions already in progress, skipping...');
+      return;
+    }
     try {
+      isLoadingTransactions.current = true;
       setLoading(true);
+      console.log('🔄 Starting fetchTransactions...');
       
       // Fetch wallet balance
       const balanceResponse = await walletAPI.getBalance();
-      if (balanceResponse.data && balanceResponse.data.balance !== undefined) {
-        // Update user wallet balance in auth context using the updateUser function
-        await updateUser({ walletBalance: balanceResponse.data.balance });
+      console.log('💰 Balance response:', balanceResponse);
+      if (balanceResponse && balanceResponse.balance !== undefined) {
+        // Only update if balance has actually changed and enough time has passed
+        const currentBalance = balanceResponse.balance;
+        const shouldUpdate = user?.walletBalance !== currentBalance && 
+                           (!lastBalanceUpdate.current || 
+                            Date.now() - lastBalanceUpdate.current > 1000); // 1 second debounce
+        
+        if (shouldUpdate) {
+          lastBalanceUpdate.current = Date.now();
+          await updateUser({ walletBalance: currentBalance });
+          console.log('✅ Wallet balance updated:', currentBalance);
+        } else {
+          console.log('⏭️ Skipping balance update (no change or too frequent)');
+        }
       }
       
       // Fetch wallet transactions
+      console.log('📋 Fetching wallet transactions...');
       const transactionsResponse = await walletAPI.getTransactions();
-      console.log('Wallet transactions response:', transactionsResponse.data);
+      console.log('📋 Full transactions response:', JSON.stringify(transactionsResponse, null, 2));
       
-      // Backend returns transactions in data array, not data.transactions
-      if (transactionsResponse.data && transactionsResponse.data.data) {
-        setTransactions(transactionsResponse.data.data);
-        console.log('Transactions loaded:', transactionsResponse.data.data.length);
+      // Backend returns transactions in data array format
+      if (transactionsResponse && transactionsResponse.data && Array.isArray(transactionsResponse.data)) {
+        setTransactions(transactionsResponse.data);
+        console.log('✅ Transactions loaded:', transactionsResponse.data.length);
       } else {
-        // Fallback to empty array if no transactions found
-        console.log('No transactions found in response');
+        console.log('❌ No transactions found in response');
         setTransactions([]);
       }
       
       setLoading(false);
+      isLoadingTransactions.current = false;
     } catch (error) {
       console.error('Error fetching wallet data:', error);
       setLoading(false);
+      isLoadingTransactions.current = false;
       
       // Show more specific error message
       if (error.response) {
@@ -106,8 +125,18 @@ const WalletScreen = () => {
       ];
       
       setTransactions(dummyTransactions);
+    } finally {
+      isLoadingTransactions.current = false;
     }
   };
+
+  useEffect(() => {
+    if (!initialLoadDone.current) {
+      initialLoadDone.current = true;
+      fetchTransactions();
+      fetchOffers();
+    }
+  }, []); // Empty dependency array to run only once on mount
 
   const fetchOffers = async () => {
     try {
@@ -286,10 +315,15 @@ const WalletScreen = () => {
   };
 
   const renderTransaction = ({ item }) => {
-    const isCredit = item.type === 'wallet_topup' || item.type === 'bonus_credit' || item.amount > 0;
+    // For users: wallet_topup, bonus_credit, refund, admin_credit are credits (+)
+    // session_payment, admin_debit are debits (-)
+    const isCredit = item.type === 'wallet_topup' || 
+                     item.type === 'bonus_credit' || 
+                     item.type === 'refund' || 
+                     item.type === 'admin_credit';
     const iconName = isCredit ? 'add-circle' : 'remove-circle';
     const iconColor = isCredit ? '#4CAF50' : '#F44336';
-    const amountPrefix = isCredit ? '+' : '';
+    const amountPrefix = isCredit ? '+' : '-';
     
     // Get transaction description based on type
     const getTransactionDescription = (transaction) => {
@@ -368,8 +402,14 @@ const WalletScreen = () => {
   );
 
   const handleLoadMoreTransactions = async () => {
-    if (!hasMoreTransactions || loadingMoreTransactions) return;
+    console.log('🔄 handleLoadMoreTransactions called - hasMoreTransactions:', hasMoreTransactions, 'loadingMoreTransactions:', loadingMoreTransactions, 'page:', page);
+    
+    if (!hasMoreTransactions || loadingMoreTransactions) {
+      console.log('⏭️ Skipping handleLoadMoreTransactions - no more data or already loading');
+      return;
+    }
 
+    console.log('📄 Loading more transactions for page:', page + 1);
     setLoadingMoreTransactions(true);
     try {
       const transactionsResponse = await walletAPI.getTransactions({ page: page + 1 });
@@ -377,9 +417,10 @@ const WalletScreen = () => {
         setTransactions([...transactions, ...transactionsResponse.data.data]);
         setPage(page + 1);
         setHasMoreTransactions(transactionsResponse.data.pagination?.next ? true : false);
+        console.log('✅ More transactions loaded:', transactionsResponse.data.data.length);
       }
     } catch (error) {
-      console.error('Error loading more transactions:', error);
+      console.error('❌ Error loading more transactions:', error);
     } finally {
       setLoadingMoreTransactions(false);
     }
@@ -387,95 +428,93 @@ const WalletScreen = () => {
 
   return (
     <View style={styles.container}>
-      <ScrollView style={styles.scrollView}>
-      <View style={styles.walletCard}>
-        <Text style={styles.walletLabel}>Wallet Balance</Text>
-        <Text style={styles.walletBalance}>₹{user?.walletBalance || 0}</Text>
-        
-        <View style={styles.topUpContainer}>
-          <Text style={styles.topUpLabel}>Top Up Amount</Text>
-          <View style={styles.amountInputContainer}>
-            <Text style={styles.currencySymbol}>₹</Text>
-            <TextInput
-              style={styles.amountInput}
-              placeholder="Enter amount"
-              keyboardType="number-pad"
-              value={amount}
-              onChangeText={setAmount}
-              editable={!processingPayment}
-            />
-          </View>
-          
-          <View style={styles.quickAmounts}>
-            {quickAmounts.map((quickAmount) => (
-              <TouchableOpacity
-                key={quickAmount}
-                style={styles.quickAmountButton}
-                onPress={() => setAmount(quickAmount.toString())}
-                disabled={processingPayment}
-              >
-                <Text style={styles.quickAmountText}>₹{quickAmount}</Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-          
-          <TouchableOpacity
-            style={[styles.topUpButton, processingPayment && styles.disabledButton]}
-            onPress={handleAddMoney}
-            disabled={processingPayment}
-          >
-            {processingPayment ? (
-              <ActivityIndicator color="#fff" />
-            ) : (
-              <Text style={styles.topUpButtonText}>Top Up Wallet</Text>
-            )}
-          </TouchableOpacity>
-        </View>
-        
-        <View style={styles.offersContainer}>
-          <Text style={styles.offersTitle}>Offers</Text>
-          {loadingOffers ? (
-            <ActivityIndicator style={styles.loader} size="large" color="#F97316" />
-          ) : offers.length === 0 ? (
-            <View style={styles.emptyOffers}>
-              <Ionicons name="gift-outline" size={60} color="#ccc" />
-              <Text style={styles.emptyText}>No offers available</Text>
+      <FlatList
+        data={transactions}
+        renderItem={renderTransaction}
+        keyExtractor={(item) => item._id || item.id}
+        onEndReached={null}
+        onEndReachedThreshold={0.5}
+        ListHeaderComponent={
+          <View>
+            <View style={styles.walletCard}>
+              <Text style={styles.walletLabel}>Wallet Balance</Text>
+              <Text style={styles.walletBalance}>₹{user?.walletBalance || 0}</Text>
+              
+              <View style={styles.topUpContainer}>
+                <Text style={styles.topUpLabel}>Top Up Amount</Text>
+                <View style={styles.amountInputContainer}>
+                  <Text style={styles.currencySymbol}>₹</Text>
+                  <TextInput
+                    style={styles.amountInput}
+                    placeholder="Enter amount"
+                    keyboardType="number-pad"
+                    value={amount}
+                    onChangeText={setAmount}
+                    editable={!processingPayment}
+                  />
+                </View>
+                
+                <View style={styles.quickAmounts}>
+                  {quickAmounts.map((quickAmount) => (
+                    <TouchableOpacity
+                      key={quickAmount}
+                      style={styles.quickAmountButton}
+                      onPress={() => setAmount(quickAmount.toString())}
+                      disabled={processingPayment}
+                    >
+                      <Text style={styles.quickAmountText}>₹{quickAmount}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+                
+                <TouchableOpacity
+                  style={[styles.topUpButton, processingPayment && styles.disabledButton]}
+                  onPress={handleAddMoney}
+                  disabled={processingPayment}
+                >
+                  {processingPayment ? (
+                    <ActivityIndicator color="#fff" />
+                  ) : (
+                    <Text style={styles.topUpButtonText}>Top Up Wallet</Text>
+                  )}
+                </TouchableOpacity>
+              </View>
+              
+              <View style={styles.offersContainer}>
+                <Text style={styles.offersTitle}>Offers</Text>
+                {loadingOffers ? (
+                  <ActivityIndicator style={styles.loader} size="large" color="#F97316" />
+                ) : offers.length === 0 ? (
+                  <View style={styles.emptyOffers}>
+                    <Ionicons name="gift-outline" size={60} color="#ccc" />
+                    <Text style={styles.emptyText}>No offers available</Text>
+                  </View>
+                ) : (
+                  <View>
+                    {offers.map((offer) => renderOffer({ item: offer }))}
+                  </View>
+                )}
+              </View>
             </View>
-          ) : (
-            <FlatList
-              data={offers}
-              renderItem={renderOffer}
-              keyExtractor={(item) => item.id}
-              scrollEnabled={false}
-            />
-          )}
-        </View>
-      </View>
-      
-      <View style={styles.transactionsContainer}>
-        <Text style={styles.transactionsTitle}>Transaction History</Text>
-        
-        {loading ? (
-          <ActivityIndicator style={styles.loader} size="large" color="#F97316" />
-        ) : transactions.length === 0 ? (
-          <View style={styles.emptyTransactions}>
-            <Ionicons name="wallet-outline" size={60} color="#ccc" />
-            <Text style={styles.emptyText}>No transactions yet</Text>
+            
+            <View style={styles.transactionsContainer}>
+              <Text style={styles.transactionsTitle}>Transaction History</Text>
+              {loading && (
+                <ActivityIndicator style={styles.loader} size="large" color="#F97316" />
+              )}
+              {!loading && transactions.length === 0 && (
+                <View style={styles.emptyTransactions}>
+                  <Ionicons name="wallet-outline" size={60} color="#ccc" />
+                  <Text style={styles.emptyText}>No transactions yet</Text>
+                </View>
+              )}
+            </View>
           </View>
-        ) : (
-          <FlatList
-            data={transactions}
-            renderItem={renderTransaction}
-            keyExtractor={(item) => item._id || item.id}
-            onEndReached={handleLoadMoreTransactions}
-            onEndReachedThreshold={0.5}
-            ListFooterComponent={loadingMoreTransactions ? (
-              <ActivityIndicator style={styles.loader} size="small" color="#F97316" />
-            ) : null}
-          />
-        )}
-      </View>
-      </ScrollView>
+        }
+        ListFooterComponent={loadingMoreTransactions ? (
+          <ActivityIndicator style={styles.loader} size="small" color="#F97316" />
+        ) : null}
+      />
       
       {/* Razorpay Payment Modal */}
       <Modal
