@@ -18,21 +18,13 @@ import {
 import { Ionicons, MaterialIcons, FontAwesome } from '@expo/vector-icons';
 import { useAuth } from '../../context/AuthContext';
 import { useSocket } from '../../context/SocketContext';
-import BookingCard from '../../components/BookingCard';
-import { 
-  getPendingConsultations, 
-  removePendingConsultation,
-  addPendingConsultation 
-} from '../../utils/pendingConsultationsStore';
 import { astrologersAPI, walletAPI } from '../../services/api';
 
 const HomeScreen = ({ navigation }) => {
   const { user } = useAuth();
   const { socket } = useSocket();
-  const [pendingConsultations, setPendingConsultations] = useState([]);
   const [astrologers, setAstrologers] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [loadingConsultations, setLoadingConsultations] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [walletBalance, setWalletBalance] = useState(0);
   const [loadingWallet, setLoadingWallet] = useState(false);
@@ -434,35 +426,7 @@ const HomeScreen = ({ navigation }) => {
     </View>
   );
 
-  // Render pending consultations section
-  const renderPendingConsultations = () => {
-    if (loadingConsultations && pendingConsultations.length === 0) {
-      return (
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Ready to Joinn</Text>
-          <ActivityIndicator size="small" color="#F97316" style={styles.loadingIndicator} />
-        </View>
-      );
-    }
 
-    if (pendingConsultations.length === 0) {
-      return null;
-    }
-
-    return (
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Ready to Join</Text>
-        <FlatList
-          data={pendingConsultations}
-          renderItem={renderBookingCard}
-          keyExtractor={(item) => item._id || item.id}
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.consultationsList}
-        />
-      </View>
-    );
-  };
 
   // Render astrologer card
   const renderAstrologerCard = ({ item }) => (
@@ -516,53 +480,12 @@ const HomeScreen = ({ navigation }) => {
 
   // Note: renderAstrologersSection removed - now handled in single FlatList
 
-  // Render quick actions
-  const renderQuickActions = () => (
-    <View style={styles.section}>
-      <Text style={styles.sectionTitle}>Quick Actions</Text>
-      <View style={styles.quickActions}>
-        <TouchableOpacity
-          style={styles.actionCard}
-          onPress={() => navigation.navigate('Astrologers')}
-        >
-          <View style={styles.actionIcon}>
-            <FontAwesome name="star" size={24} color="#F97316" />
-          </View>
-          <Text style={styles.actionTitle}>Find Astrologer</Text>
-          <Text style={styles.actionSubtitle}>Browse experts</Text>
-        </TouchableOpacity>
 
-        <TouchableOpacity
-          style={styles.actionCard}
-          onPress={() => navigation.navigate('Wallet')}
-        >
-          <View style={styles.actionIcon}>
-            <Ionicons name="wallet-outline" size={24} color="#F97316" />
-          </View>
-          <Text style={styles.actionTitle}>My Wallet</Text>
-          <Text style={styles.actionSubtitle}>Add money</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={styles.actionCard}
-          onPress={() => navigation.navigate('Bookings')}
-        >
-          <View style={styles.actionIcon}>
-            <MaterialIcons name="history" size={24} color="#F97316" />
-          </View>
-          <Text style={styles.actionTitle}>My Bookings</Text>
-          <Text style={styles.actionSubtitle}>View history</Text>
-        </TouchableOpacity>
-      </View>
-    </View>
-  );
 
   // Prepare data for single FlatList
   const getFlatListData = () => {
     const data = [
       { type: 'header', id: 'header' },
-      { type: 'pendingConsultations', id: 'pendingConsultations' },
-      { type: 'quickActions', id: 'quickActions' },
       { type: 'astrologersHeader', id: 'astrologersHeader' },
       ...astrologers.map((astrologer, index) => ({
         type: 'astrologer',
@@ -578,10 +501,6 @@ const HomeScreen = ({ navigation }) => {
     switch (item.type) {
       case 'header':
         return renderHeader();
-      case 'pendingConsultations':
-        return renderPendingConsultations();
-      case 'quickActions':
-        return renderQuickActions();
       case 'astrologersHeader':
         return (
           <View style={styles.section}>
