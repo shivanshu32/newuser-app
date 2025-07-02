@@ -21,7 +21,7 @@ const BookingScreen = ({ route, navigation }) => {
   const [bookings, setBookings] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [activeTab, setActiveTab] = useState('active');
+  const [activeTab, setActiveTab] = useState('all');
   const { user } = useAuth();
   const { socket } = useSocket();
   
@@ -47,6 +47,7 @@ const BookingScreen = ({ route, navigation }) => {
           ['cancelled', 'rejected', 'expired'].includes(booking.status)
         );
         break;
+      case 'all':
       default:
         filtered = bookings;
     }
@@ -495,11 +496,11 @@ const BookingScreen = ({ route, navigation }) => {
         <View style={styles.bookingHeader}>
           <View style={styles.astrologerInfo}>
             <Image 
-              source={{ uri: item.astrologer?.profileImage || 'https://via.placeholder.com/50' }} 
+              source={{ uri: item.astrologer?.imageUrl || item.astrologer?.profileImage || 'https://via.placeholder.com/50' }} 
               style={styles.astrologerImage} 
             />
             <View>
-              <Text style={styles.astrologerName}>{item.astrologer?.name || 'Unknown Astrologer'}</Text>
+              <Text style={styles.astrologerName}>{item.astrologer?.displayName || item.astrologer?.name || 'Unknown Astrologer'}</Text>
               <View style={styles.bookingType}>
                 <Ionicons name={typeIcon} size={14} color="#666" />
                 <Text style={styles.bookingTypeText}>
@@ -590,6 +591,7 @@ const BookingScreen = ({ route, navigation }) => {
   );
 
   const filteredBookings = getFilteredBookings();
+  const allCount = bookings.length;
   const activeCount = bookings.filter(b => ['pending', 'confirmed', 'waiting_for_user', 'in-progress'].includes(b.status)).length;
   const completedCount = bookings.filter(b => ['completed', 'no_show'].includes(b.status)).length;
   const cancelledCount = bookings.filter(b => ['cancelled', 'rejected', 'expired'].includes(b.status)).length;
@@ -602,6 +604,7 @@ const BookingScreen = ({ route, navigation }) => {
 
       {/* Tab Navigation */}
       <View style={styles.tabContainer}>
+        {renderTabButton('all', 'All', allCount)}
         {renderTabButton('active', 'Active', activeCount)}
         {renderTabButton('completed', 'Completed', completedCount)}
         {renderTabButton('cancelled', 'Cancelled', cancelledCount)}
@@ -625,11 +628,13 @@ const BookingScreen = ({ route, navigation }) => {
             <View style={styles.emptyContainer}>
               <Ionicons name="calendar-outline" size={64} color="#ccc" />
               <Text style={styles.emptyText}>
+                {activeTab === 'all' && 'No bookings yet'}
                 {activeTab === 'active' && 'No active bookings'}
                 {activeTab === 'completed' && 'No completed bookings'}
                 {activeTab === 'cancelled' && 'No cancelled bookings'}
               </Text>
               <Text style={styles.emptySubtext}>
+                {activeTab === 'all' && 'Book a consultation to get started'}
                 {activeTab === 'active' && 'Book a consultation to get started'}
                 {activeTab === 'completed' && 'Completed sessions will appear here'}
                 {activeTab === 'cancelled' && 'Cancelled bookings will appear here'}
