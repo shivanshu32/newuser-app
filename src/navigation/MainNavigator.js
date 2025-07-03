@@ -22,6 +22,7 @@ import RatingScreen from '../screens/session/RatingScreen';
 // Import components
 import NotificationBadge from '../components/NotificationBadge';
 import BookingAcceptedPopup from '../components/BookingAcceptedPopup';
+import TestBookingPopup from '../components/TestBookingPopup';
 
 // Import context
 import { BookingPopupProvider, useBookingPopup } from '../context/BookingPopupContext';
@@ -93,25 +94,46 @@ const TabNavigator = () => {
 // Wrapper component that uses the BookingPopup context
 const BookingPopupWrapper = () => {
   const { popupData, isVisible, hideBookingAcceptedPopup, showBookingAcceptedPopup } = useBookingPopup();
-  const navigation = useNavigation();
 
-  // Listen for booking acceptance events
+  // Debug wrapper state
+  useEffect(() => {
+    console.log(' [BookingPopupWrapper] State update:');
+    console.log('   - isVisible:', isVisible);
+    console.log('   - popupData present:', !!popupData);
+    console.log('   - popupData:', popupData);
+  }, [isVisible, popupData]);
+
+  // Setup event listener for booking accepted popup
   useEffect(() => {
     const handleShowBookingAcceptedPopup = (bookingData) => {
       console.log(' [BookingPopupWrapper] Received showBookingAcceptedPopup event:', bookingData);
+      console.log(' [BookingPopupWrapper] Event data type:', typeof bookingData);
+      console.log(' [BookingPopupWrapper] Event data keys:', bookingData ? Object.keys(bookingData) : 'none');
+      
+      if (!bookingData) {
+        console.error(' [BookingPopupWrapper] ERROR: Received null/undefined bookingData from event!');
+        return;
+      }
+      
+      console.log(' [BookingPopupWrapper] Calling showBookingAcceptedPopup...');
       showBookingAcceptedPopup(bookingData);
+      console.log(' [BookingPopupWrapper] showBookingAcceptedPopup call completed');
     };
 
     if (global.eventEmitter) {
+      console.log(' [BookingPopupWrapper] Setting up event listener for showBookingAcceptedPopup');
       global.eventEmitter.on('showBookingAcceptedPopup', handleShowBookingAcceptedPopup);
-    }
 
-    return () => {
-      if (global.eventEmitter) {
+      return () => {
+        console.log(' [BookingPopupWrapper] Cleaning up event listener for showBookingAcceptedPopup');
         global.eventEmitter.off('showBookingAcceptedPopup', handleShowBookingAcceptedPopup);
-      }
-    };
+      };
+    } else {
+      console.error(' [BookingPopupWrapper] ERROR: global.eventEmitter is not available!');
+    }
   }, [showBookingAcceptedPopup]);
+
+  const navigation = useNavigation();
 
   const handleJoinSession = async (bookingData) => {
     try {
@@ -184,12 +206,20 @@ const BookingPopupWrapper = () => {
   };
 
   return (
-    <BookingAcceptedPopup
-      visible={isVisible}
-      onClose={hideBookingAcceptedPopup}
-      bookingData={popupData}
-      onJoinSession={handleJoinSession}
-    />
+    <>
+      <BookingAcceptedPopup
+        visible={isVisible}
+        onClose={hideBookingAcceptedPopup}
+        bookingData={popupData}
+        onJoinSession={handleJoinSession}
+      />
+      
+      {/* Test popup to isolate the narrow box issue */}
+      <TestBookingPopup
+        visible={false} // Set to true to test
+        onClose={() => console.log('🧪 [TestBookingPopup] Close called')}
+      />
+    </>
   );
 };
 

@@ -25,7 +25,62 @@ const BookingAcceptedPopup = ({
   onJoinSession 
 }) => {
   const [isJoining, setIsJoining] = useState(false);
+  const [modalKey, setModalKey] = useState(0); // Force re-mount on data changes
+  const [isModalReady, setIsModalReady] = useState(false);
   const navigation = useNavigation();
+
+  // Debug component lifecycle
+  useEffect(() => {
+    console.log('🔄 [BookingAcceptedPopup] Component mounted/updated');
+    console.log('🔄 [BookingAcceptedPopup] Props received:', {
+      visible,
+      hasOnClose: !!onClose,
+      hasOnJoinSession: !!onJoinSession,
+      bookingDataKeys: bookingData ? Object.keys(bookingData) : 'null',
+      bookingData: bookingData
+    });
+    
+    return () => {
+      console.log('🔄 [BookingAcceptedPopup] Component cleanup/unmount');
+    };
+  }, [visible, bookingData, onClose, onJoinSession]);
+
+  // Debug data validation and handle modal re-mounting
+  useEffect(() => {
+    if (visible) {
+      console.log('🔍 [BookingAcceptedPopup] Modal becoming visible - validating data:');
+      console.log('🔍 [BookingAcceptedPopup] bookingData type:', typeof bookingData);
+      console.log('🔍 [BookingAcceptedPopup] bookingData value:', bookingData);
+      
+      if (!bookingData) {
+        console.error('❌ [BookingAcceptedPopup] CRITICAL: bookingData is null/undefined when modal should be visible!');
+        setIsModalReady(false);
+      } else {
+        console.log('✅ [BookingAcceptedPopup] bookingData validation passed');
+        console.log('📊 [BookingAcceptedPopup] Data structure:', JSON.stringify(bookingData, null, 2));
+        
+        // Force modal re-mount with new key to prevent layout issues
+        setModalKey(prev => prev + 1);
+        
+        // Small delay to ensure proper re-mounting
+        setTimeout(() => {
+          setIsModalReady(true);
+          console.log('🔄 [BookingAcceptedPopup] Modal ready for display with key:', modalKey + 1);
+        }, 100);
+      }
+    } else {
+      setIsModalReady(false);
+      console.log('🔍 [BookingAcceptedPopup] Modal hidden, resetting ready state');
+    }
+  }, [visible, bookingData]);
+
+  // Reset joining state when modal becomes invisible
+  useEffect(() => {
+    if (!visible) {
+      setIsJoining(false);
+      console.log('🔄 [BookingAcceptedPopup] Modal hidden, resetting joining state');
+    }
+  }, [visible]);
 
   const handleJoinSession = async () => {
     console.log(' [BookingAcceptedPopup] handleJoinSession called - button pressed!');
@@ -80,21 +135,69 @@ const BookingAcceptedPopup = ({
   }
 
   // Check if this is a voice consultation
-  const isVoiceConsultation = bookingData.type === 'voice';
+  const isVoiceConsultation = bookingData?.type === 'voice';
 
-  console.log(' [BookingAcceptedPopup] Rendering popup with visible:', visible);
-  console.log(' [BookingAcceptedPopup] BookingData for rendering:', JSON.stringify(bookingData, null, 2));
-  console.log(' [BookingAcceptedPopup] Popup dimensions - width:', width, 'calculated width:', width * 0.9);
+  console.log('🎨 [BookingAcceptedPopup] Rendering popup with visible:', visible);
+  console.log('🎨 [BookingAcceptedPopup] BookingData for rendering:', JSON.stringify(bookingData, null, 2));
+  console.log('🎨 [BookingAcceptedPopup] Popup dimensions - width:', width, 'calculated width:', width * 0.9);
+  console.log('🎨 [BookingAcceptedPopup] isVoiceConsultation:', isVoiceConsultation);
+  console.log('🎨 [BookingAcceptedPopup] bookingData?.type:', bookingData?.type);
+  
+  // Debug layout calculations
+  const calculatedWidth = width * 0.9;
+  const minWidth = 300;
+  const maxWidth = 400;
+  const finalWidth = Math.max(minWidth, Math.min(calculatedWidth, maxWidth));
+  
+  console.log('📐 [BookingAcceptedPopup] Layout calculations:');
+  console.log('📐   - Screen width:', width);
+  console.log('📐   - Calculated width (90%):', calculatedWidth);
+  console.log('📐   - Min width:', minWidth);
+  console.log('📐   - Max width:', maxWidth);
+  console.log('📐   - Final width:', finalWidth);
+  
+  // Validate critical data for rendering
+  if (visible && !bookingData) {
+    console.error('🚨 [BookingAcceptedPopup] CRITICAL RENDER ERROR: Modal is visible but bookingData is missing!');
+    console.error('🚨 [BookingAcceptedPopup] This will cause layout issues - returning early');
+    return null; // Prevent rendering with invalid data
+  }
+
+  // Don't render until modal is ready (prevents layout issues during rapid state changes)
+  if (visible && !isModalReady) {
+    console.log('⏳ [BookingAcceptedPopup] Modal not ready yet, waiting for proper initialization...');
+    return null;
+  }
+  
+  console.log('🎬 [BookingAcceptedPopup] About to render Modal with:');
+  console.log('🎬   - visible:', visible);
+  console.log('🎬   - bookingData present:', !!bookingData);
+  console.log('🎬   - isVoiceConsultation:', isVoiceConsultation);
+  console.log('🎬   - modalKey:', modalKey);
+  console.log('🎬   - isModalReady:', isModalReady);
   
   return (
     <Modal
-      visible={visible}
+      key={modalKey} // Force re-mount on data changes
+      visible={visible && isModalReady} // Only show when ready
       transparent={true}
       animationType="fade"
       onRequestClose={handleDismiss}
+      onShow={() => {
+        console.log('📱 [BookingAcceptedPopup] Modal onShow callback triggered (key: ' + modalKey + ')');
+        console.log('📱 [BookingAcceptedPopup] Modal is now visible on screen');
+      }}
+      onDismiss={() => {
+        console.log('📱 [BookingAcceptedPopup] Modal onDismiss callback triggered');
+      }}
     >
       <View style={styles.overlay}>
-        <View style={styles.popup}>
+        <View style={[styles.popup, { 
+          // Add debug styling to identify layout issues
+          borderWidth: 2,
+          borderColor: 'red',
+          backgroundColor: 'yellow' // Temporary debug color
+        }]}>
           {/* Header */}
           <View style={styles.header}>
             <View style={styles.iconContainer}>
