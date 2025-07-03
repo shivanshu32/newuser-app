@@ -12,7 +12,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../context/AuthContext';
-import { bookingsAPI, astrologersAPI } from '../../services/api';
+import { bookingsAPI, astrologersAPI, ratingsAPI } from '../../services/api';
 
 const RatingScreen = ({ route, navigation }) => {
   const { bookingId, consultation } = route.params || {};
@@ -73,16 +73,23 @@ const RatingScreen = ({ route, navigation }) => {
         const bookingResponse = await bookingsAPI.getById(bookingId);
         console.log('📋 Booking response:', JSON.stringify(bookingResponse, null, 2));
         
-        if (bookingResponse.data && bookingResponse.data.success) {
-          // Backend returns { success: true, data: booking }
-          booking = bookingResponse.data.data;
+        // API interceptor returns response.data directly, so bookingResponse is already the data
+        if (bookingResponse && bookingResponse.success) {
+          // Backend returns { success: true, data: booking } but interceptor strips outer response
+          booking = bookingResponse.data;
           astrologerData = booking.astrologer; // Astrologer is populated in the booking
           console.log('✅ Booking data found:', booking);
           console.log('✅ Astrologer data found:', astrologerData);
+        } else {
+          console.log('❌ Invalid booking response:', bookingResponse);
         }
       }
       
+      console.log('🔍 Final booking validation - booking exists:', !!booking);
+      console.log('🔍 Final astrologer validation - astrologer exists:', !!astrologerData);
+      
       if (!booking) {
+        console.log('❌ Booking validation failed - booking is:', booking);
         throw new Error('Booking data not found');
       }
       
@@ -144,20 +151,20 @@ const RatingScreen = ({ route, navigation }) => {
         amount: bookingData.totalAmount || bookingData.amount
       };
       
-      // Call the ratings API endpoint
-      const response = await fetch(`${process.env.EXPO_PUBLIC_API_URL || 'http://localhost:5000'}/api/ratings`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${user?.token}`
-        },
-        body: JSON.stringify(ratingData)
-      });
+      // Call the ratings API endpoint using the proper API service
+      console.log('📤 Submitting rating data:', ratingData);
       
-      const result = await response.json();
+      // Backend expects: { bookingId, rating, comment }
+      const response = await ratingsAPI.submit(
+        bookingData._id, // bookingId
+        rating,
+        review // comment
+      );
       
-      if (!response.ok) {
-        throw new Error(result.message || 'Failed to submit rating');
+      console.log('✅ Rating submission response:', response);
+      
+      if (!response || !response.success) {
+        throw new Error(response?.message || 'Failed to submit rating');
       }
       
       setSubmitting(false);
@@ -223,7 +230,7 @@ const RatingScreen = ({ route, navigation }) => {
         <View style={styles.astrologerInfo}>
           <Image 
             source={{ 
-              uri: astrologer.profileImage || astrologer.image || 'https://via.placeholder.com/100' 
+              uri: astrologer.imageUrl || astrologer.profileImage || astrologer.image || 'https://via.placeholder.com/100' 
             }} 
             style={styles.astrologerImage} 
           />

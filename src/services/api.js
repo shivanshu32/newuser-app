@@ -155,7 +155,7 @@ export const sessionsAPI = {
 
 // Ratings API
 export const ratingsAPI = {
-  submit: (sessionId, rating, review) => API.post('/ratings/submit', { sessionId, rating, review }),
+  submit: (bookingId, rating, comment) => API.post('/ratings/submit', { bookingId, rating, comment }),
 };
 
 export default API;
