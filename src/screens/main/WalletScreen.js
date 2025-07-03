@@ -30,6 +30,7 @@ const WalletScreen = () => {
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [paymentOrder, setPaymentOrder] = useState(null);
   const [razorpayConfig, setRazorpayConfig] = useState(null);
+  const [walletBalance, setWalletBalance] = useState(0);
   const { user, updateUser } = useAuth();
   const initialLoadDone = useRef(false);
   const isLoadingTransactions = useRef(false);
@@ -51,9 +52,16 @@ const WalletScreen = () => {
       // Fetch wallet balance
       const balanceResponse = await walletAPI.getBalance();
       console.log('💰 Balance response:', balanceResponse);
-      if (balanceResponse && balanceResponse.balance !== undefined) {
-        // Only update if balance has actually changed and enough time has passed
-        const currentBalance = balanceResponse.balance;
+      
+      // Handle API response structure correctly (same as HomeScreen)
+      if (balanceResponse && balanceResponse.success && balanceResponse.data) {
+        const currentBalance = balanceResponse.data.balance || 0;
+        
+        // Update local state immediately for display
+        setWalletBalance(currentBalance);
+        console.log('✅ Local wallet balance updated:', currentBalance);
+        
+        // Only update user context if balance has actually changed and enough time has passed
         const shouldUpdate = user?.walletBalance !== currentBalance && 
                            (!lastBalanceUpdate.current || 
                             Date.now() - lastBalanceUpdate.current > 1000); // 1 second debounce
@@ -61,10 +69,15 @@ const WalletScreen = () => {
         if (shouldUpdate) {
           lastBalanceUpdate.current = Date.now();
           await updateUser({ walletBalance: currentBalance });
-          console.log('✅ Wallet balance updated:', currentBalance);
+          console.log('✅ User context wallet balance updated:', currentBalance);
         } else {
-          console.log('⏭️ Skipping balance update (no change or too frequent)');
+          console.log('⏭️ Skipping user context update (no change or too frequent)');
         }
+      } else {
+        console.warn('⚠️ Wallet API returned success: false or no data');
+        // Fallback to user context value if API fails
+        setWalletBalance(user?.walletBalance || 0);
+        console.log('⚠️ Using fallback balance from user context:', user?.walletBalance || 0);
       }
       
       // Fetch wallet transactions
@@ -438,7 +451,7 @@ const WalletScreen = () => {
           <View>
             <View style={styles.walletCard}>
               <Text style={styles.walletLabel}>Wallet Balance</Text>
-              <Text style={styles.walletBalance}>₹{user?.walletBalance || 0}</Text>
+              <Text style={styles.walletBalance}>₹{walletBalance.toFixed(2)}</Text>
               
               <View style={styles.topUpContainer}>
                 <Text style={styles.topUpLabel}>Top Up Amount</Text>

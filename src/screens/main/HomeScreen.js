@@ -19,6 +19,7 @@ import { Ionicons, MaterialIcons, FontAwesome } from '@expo/vector-icons';
 import { useAuth } from '../../context/AuthContext';
 import { useSocket } from '../../context/SocketContext';
 import { astrologersAPI, walletAPI } from '../../services/api';
+import BookingAcceptedModal from '../../components/BookingAcceptedModal';
 
 const HomeScreen = ({ navigation }) => {
   const { user } = useAuth();
@@ -28,6 +29,8 @@ const HomeScreen = ({ navigation }) => {
   const [refreshing, setRefreshing] = useState(false);
   const [walletBalance, setWalletBalance] = useState(0);
   const [loadingWallet, setLoadingWallet] = useState(false);
+  const [showBookingAcceptedModal, setShowBookingAcceptedModal] = useState(false);
+  const [bookingAcceptedData, setBookingAcceptedData] = useState(null);
 
   // Fetch all astrologers data with pagination
   const fetchAstrologers = useCallback(async () => {
@@ -195,11 +198,58 @@ const HomeScreen = ({ navigation }) => {
     console.log('📢 Booking status update received:', data);
     
     if (data.status === 'accepted') {
+      // Get astrologer details for proper display
+      let astrologerInfo = {
+        name: 'Professional Astrologer', // Default fallback
+        image: null
+      };
+      
+      console.log('🔍 [USER-APP] Booking accepted - retrieving astrologer details:', {
+        astrologerId: data.astrologerId,
+        astrologerName: data.astrologerName,
+        localAstrologersCount: astrologers.length
+      });
+      
+      // Try multiple sources to get astrologer details
+      if (data.astrologerId) {
+        try {
+          // First check if astrologer is in local state
+          const localAstrologer = astrologers.find(a => a._id === data.astrologerId);
+          if (localAstrologer) {
+            console.log('✅ [USER-APP] Found astrologer in local state:', localAstrologer.displayName);
+            astrologerInfo.name = localAstrologer.displayName || localAstrologer.name || astrologerInfo.name;
+            astrologerInfo.image = localAstrologer.imageUrl;
+          } else {
+            console.log('⚠️ [USER-APP] Astrologer not in local state, fetching from API');
+            // Fetch from API if not in local state
+            const astrologerResponse = await astrologersAPI.getById(data.astrologerId);
+            if (astrologerResponse && astrologerResponse.data) {
+              console.log('✅ [USER-APP] Fetched astrologer from API:', astrologerResponse.data.displayName);
+              astrologerInfo.name = astrologerResponse.data.displayName || astrologerResponse.data.name || astrologerInfo.name;
+              astrologerInfo.image = astrologerResponse.data.imageUrl;
+            } else {
+              console.log('❌ [USER-APP] Failed to fetch astrologer from API');
+            }
+          }
+        } catch (error) {
+          console.error('❌ [USER-APP] Error fetching astrologer details:', error);
+          // Use fallback values
+        }
+      }
+      
+      // Final fallback: use data.astrologerName if we still don't have a proper name
+      if (astrologerInfo.name === 'Professional Astrologer' && data.astrologerName) {
+        console.log('🔄 [USER-APP] Using astrologerName from event data:', data.astrologerName);
+        astrologerInfo.name = data.astrologerName;
+      }
+      
+      console.log('📋 [USER-APP] Final astrologer info:', astrologerInfo);
+      
       // For voice calls, show different message since Exotel will handle the call
-      if (data.bookingType === 'voice') {
+      if (data.consultationType === 'voice' || data.bookingType === 'voice') {
         Alert.alert(
           'Voice Call Accepted! 📞',
-          `Your voice consultation with ${data.astrologerName} has been accepted! You will receive a phone call shortly from our system. Please answer the call to connect with the astrologer.`,
+          `Your voice consultation with ${astrologerInfo.name} has been accepted! You will receive a phone call shortly from our system. Please answer the call to connect with the astrologer.`,
           [{ text: 'OK' }]
         );
         
@@ -223,45 +273,23 @@ const HomeScreen = ({ navigation }) => {
         return;
       }
       
-      // For video and chat, show normal acceptance alert with navigation
-      Alert.alert(
-        'Booking Accepted! 🎉',
-        `Your ${data.bookingType || 'consultation'} with ${data.astrologerName} has been accepted! Join now to start your session.`,
-        [
-          {
-            text: 'Join Now',
-            onPress: () => {
-              // Navigate to appropriate consultation screen
-              if (data.bookingType === 'video') {
-                navigation.navigate('VideoConsultation', {
-                  sessionId: data.sessionId,
-                  bookingId: data.bookingId,
-                  astrologerId: data.astrologerId,
-                  userId: user._id || user.id
-                });
-              } else if (data.bookingType === 'chat') {
-                navigation.navigate('EnhancedChat', {
-                  sessionId: data.sessionId,
-                  bookingId: data.bookingId,
-                  astrologerId: data.astrologerId,
-                  userId: user._id || user.id,
-                  userInfo: data.userInfo
-                });
-              }
-            }
-          },
-          {
-            text: 'Later',
-            style: 'cancel'
-          }
-        ]
-      );
+      // For video and chat, show custom modal with astrologer details
+      setBookingAcceptedData({
+        astrologerName: astrologerInfo.name,
+        astrologerImage: astrologerInfo.image,
+        bookingType: data.consultationType || data.bookingType,
+        sessionId: data.sessionId,
+        bookingId: data.bookingId,
+        astrologerId: data.astrologerId,
+        userInfo: data.userInfo
+      });
+      setShowBookingAcceptedModal(true);
       
       // Add to pending consultations for later access
       const consultationData = {
         booking: {
           _id: data.bookingId,
-          type: data.bookingType,
+          type: data.consultationType || data.bookingType,
           astrologer: data.astrologer,
           userInfo: data.userInfo
         },
@@ -282,32 +310,100 @@ const HomeScreen = ({ navigation }) => {
     }
   }, [navigation, user]);
 
+  // Handle custom booking accepted modal actions
+  const handleJoinNow = useCallback(() => {
+    if (!bookingAcceptedData) return;
+    
+    setShowBookingAcceptedModal(false);
+    
+    // Navigate to appropriate consultation screen
+    if (bookingAcceptedData.bookingType === 'video') {
+      navigation.navigate('VideoConsultation', {
+        sessionId: bookingAcceptedData.sessionId,
+        bookingId: bookingAcceptedData.bookingId,
+        astrologerId: bookingAcceptedData.astrologerId,
+        userId: user._id || user.id
+      });
+    } else if (bookingAcceptedData.bookingType === 'chat') {
+      navigation.navigate('EnhancedChat', {
+        sessionId: bookingAcceptedData.sessionId,
+        bookingId: bookingAcceptedData.bookingId,
+        astrologerId: bookingAcceptedData.astrologerId,
+        userId: user._id || user.id,
+        userInfo: bookingAcceptedData.userInfo
+      });
+    }
+  }, [bookingAcceptedData, navigation, user]);
+  
+  const handleCloseModal = useCallback(() => {
+    setShowBookingAcceptedModal(false);
+    setBookingAcceptedData(null);
+  }, []);
+
   // Handle legacy booking accepted event for backward compatibility
   const handleBookingAccepted = useCallback(async (data) => {
-    console.log('📢 Legacy booking accepted event received:', data);
+    console.log('📢 [USER-APP] Legacy booking accepted event received:', data);
     
-    // Show notification alert
-    Alert.alert(
-      'Booking Accepted! 🎉',
-      data.message || 'Your booking has been accepted! Join now to start your session.',
-      [
-        {
-          text: 'Join Now',
-          onPress: () => {
-            // Navigate to appropriate consultation screen based on booking type
-            // Since legacy event might not have type, we'll need to check the booking
-            navigation.navigate('Home'); // Refresh home to show pending consultations
+    // Instead of showing a separate alert, use the modern BookingAcceptedModal
+    // Try to get astrologer details for proper display
+    let astrologerInfo = {
+      name: 'Professional Astrologer', // Default fallback
+      image: null
+    };
+    
+    console.log('🔍 [USER-APP] Legacy booking - retrieving astrologer details:', {
+      astrologerId: data.astrologerId,
+      astrologerName: data.astrologerName,
+      localAstrologersCount: astrologers.length
+    });
+    
+    // Try multiple sources to get astrologer details
+    if (data.astrologerId) {
+      try {
+        // First check if astrologer is in local state
+        const localAstrologer = astrologers.find(a => a._id === data.astrologerId);
+        if (localAstrologer) {
+          console.log('✅ [USER-APP] Found astrologer in local state (legacy):', localAstrologer.displayName);
+          astrologerInfo.name = localAstrologer.displayName || localAstrologer.name || astrologerInfo.name;
+          astrologerInfo.image = localAstrologer.imageUrl;
+        } else {
+          console.log('⚠️ [USER-APP] Astrologer not in local state, fetching from API (legacy)');
+          // Fetch from API if not in local state
+          const astrologerResponse = await astrologersAPI.getById(data.astrologerId);
+          if (astrologerResponse && astrologerResponse.data) {
+            console.log('✅ [USER-APP] Fetched astrologer from API (legacy):', astrologerResponse.data.displayName);
+            astrologerInfo.name = astrologerResponse.data.displayName || astrologerResponse.data.name || astrologerInfo.name;
+            astrologerInfo.image = astrologerResponse.data.imageUrl;
+          } else {
+            console.log('❌ [USER-APP] Failed to fetch astrologer from API (legacy)');
           }
-        },
-        {
-          text: 'Later',
-          style: 'cancel'
         }
-      ]
-    );
+      } catch (error) {
+        console.error('❌ [USER-APP] Error fetching astrologer details for legacy booking:', error);
+        // Use fallback values
+      }
+    }
     
-    // Consultation handled
-  }, [navigation]);
+    // Final fallback: use data.astrologerName if we still don't have a proper name
+    if (astrologerInfo.name === 'Professional Astrologer' && data.astrologerName) {
+      console.log('🔄 [USER-APP] Using astrologerName from legacy event data:', data.astrologerName);
+      astrologerInfo.name = data.astrologerName;
+    }
+    
+    console.log('📋 [USER-APP] Final astrologer info (legacy):', astrologerInfo);
+    
+    // Use the modern BookingAcceptedModal
+    setBookingAcceptedData({
+      astrologerName: astrologerInfo.name,
+      astrologerImage: astrologerInfo.image,
+      bookingType: data.consultationType || data.type || 'chat', // Default to chat if unknown
+      sessionId: data.sessionId,
+      bookingId: data.bookingId,
+      astrologerId: data.astrologerId,
+      userInfo: data.userInfo
+    });
+    setShowBookingAcceptedModal(true);
+  }, [astrologers, navigation, user]);
 
   // Socket listener for real-time updates
   useEffect(() => {
@@ -529,6 +625,16 @@ const HomeScreen = ({ navigation }) => {
           <ActivityIndicator size="large" color="#F97316" />
         </View>
       )}
+      
+      {/* Custom Booking Accepted Modal */}
+      <BookingAcceptedModal
+        visible={showBookingAcceptedModal}
+        onClose={handleCloseModal}
+        onJoinNow={handleJoinNow}
+        astrologerName={bookingAcceptedData?.astrologerName}
+        astrologerImage={bookingAcceptedData?.astrologerImage}
+        bookingType={bookingAcceptedData?.bookingType}
+      />
     </SafeAreaView>
   );
 };

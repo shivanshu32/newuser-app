@@ -9,22 +9,21 @@ import io from 'socket.io-client';
 class ChatConnectionManager {
   constructor() {
     this.socket = null;
-    this.isConnected = false;
-    this.isConnecting = false;
-    this.reconnectAttempts = 0;
-    this.maxReconnectAttempts = 10;
-    this.reconnectDelay = 1000; // Start with 1 second
-    this.maxReconnectDelay = 30000; // Max 30 seconds
-    this.reconnectTimer = null;
-    this.messageQueue = [];
-    this.appState = AppState.currentState;
-    this.connectionCallbacks = new Set();
-    this.messageCallbacks = new Set();
-    this.typingCallbacks = new Set();
-    this.statusCallbacks = new Set();
     this.currentBookingId = null;
     this.currentUserId = null;
     this.currentAstrologerId = null;
+    this.messageCallbacks = new Set();
+    this.statusCallbacks = new Set();
+    this.connectionCallbacks = new Set();
+    this.typingCallbacks = new Set();
+    this.isConnected = false;
+    this.reconnectAttempts = 0;
+    this.maxReconnectAttempts = 5;
+    this.reconnectDelay = 1000;
+    this.roomJoined = false;
+    this.lastHeartbeat = Date.now();
+    this.heartbeatInterval = null;
+    this.connectionStabilityTimer = null;
     
     // Bind methods
     this.handleAppStateChange = this.handleAppStateChange.bind(this);
@@ -114,34 +113,41 @@ class ChatConnectionManager {
     this.socket.on('connect_error', this.handleConnectError);
     this.socket.on('reconnect', this.handleReconnect);
 
-    // Chat-specific events
+    // Chat-specific events - Optimized for instant delivery
     this.socket.on('receive_message', (message) => {
-      console.log('🔴 [USER-APP] Received message event:', message);
-      console.log('🔴 [USER-APP] Message roomId:', message.roomId);
-      console.log('🔴 [USER-APP] Expected roomId:', `room:${this.currentBookingId}`);
+      const receiveTime = Date.now();
+      console.log('🔴 [USER-APP] Received message event at:', receiveTime, message);
       
-      // Backend sends roomId as 'room:bookingId', so check both formats
+      // Fast path: Pre-compute expected roomId to avoid repeated string concatenation
       const expectedRoomId = `room:${this.currentBookingId}`;
-      if (message.roomId === expectedRoomId || message.roomId === this.currentBookingId) {
-        console.log('🔴 [USER-APP] Message accepted, normalizing fields');
-        
-        // Normalize message fields to ensure compatibility
-        const normalizedMessage = {
-          ...message,
-          id: message.id || message.messageId || `msg_${Date.now()}`,
-          text: message.content || message.text || message.message,
-          content: message.content || message.text || message.message,
-          senderId: message.senderId || message.sender,
-          senderName: message.senderName || 'Astrologer',
-          timestamp: message.timestamp || new Date().toISOString(),
-          status: 'received'
-        };
-        
-        console.log('🔴 [USER-APP] Normalized message:', normalizedMessage);
-        this.notifyMessage(normalizedMessage);
-      } else {
+      
+      // Quick roomId validation
+      if (message.roomId !== expectedRoomId && message.roomId !== this.currentBookingId) {
         console.log('🔴 [USER-APP] Message rejected - roomId mismatch');
+        return;
       }
+      
+      console.log('🔴 [USER-APP] Message accepted, processing immediately');
+      
+      // Streamlined message normalization - avoid object spread for performance
+      const normalizedMessage = {
+        id: message.id || message.messageId || `msg_${receiveTime}`,
+        text: message.content || message.text || message.message,
+        content: message.content || message.text || message.message,
+        senderId: message.senderId || message.sender,
+        senderName: message.senderName || 'Astrologer',
+        timestamp: message.timestamp || new Date().toISOString(),
+        status: 'received',
+        roomId: message.roomId,
+        bookingId: message.bookingId
+      };
+      
+      // Immediate callback notification - use setImmediate for fastest possible execution
+      setImmediate(() => {
+        const processTime = Date.now();
+        console.log('🔴 [USER-APP] Message processed in:', processTime - receiveTime, 'ms');
+        this.notifyMessage(normalizedMessage);
+      });
     });
 
     this.socket.on('typing_started', (data) => {
@@ -302,19 +308,20 @@ class ChatConnectionManager {
    * Handle successful connection
    */
   handleConnect() {
-    console.log('[ChatConnectionManager] Connected successfully');
+    console.log('🔴 [USER-APP] ChatConnectionManager: Socket connected');
     this.isConnected = true;
-    this.isConnecting = false;
     this.reconnectAttempts = 0;
-    this.reconnectDelay = 1000; // Reset delay
+    this.lastHeartbeat = Date.now();
+    this.roomJoined = false; // Reset room joined status
+    this.notifyConnectionStatus('connected', 'Connected to chat server');
     
-    if (this.reconnectTimer) {
-      clearTimeout(this.reconnectTimer);
-      this.reconnectTimer = null;
+    // Start heartbeat monitoring
+    this.startHeartbeat();
+    
+    // Join room if we have booking details
+    if (this.currentBookingId && this.currentUserId) {
+      this.joinRoom();
     }
-
-    this.notifyConnectionStatus('connected');
-
     // Join room and flush queued messages
     this.joinRoom();
     this.flushMessageQueue();
@@ -324,14 +331,16 @@ class ChatConnectionManager {
    * Handle disconnection
    */
   handleDisconnect(reason) {
-    console.log('[ChatConnectionManager] Disconnected:', reason);
+    console.log('🔴 [USER-APP] ChatConnectionManager: Socket disconnected:', reason);
     this.isConnected = false;
-    this.isConnecting = false;
-    this.notifyConnectionStatus('disconnected', reason);
-
-    // Only attempt reconnection for certain disconnect reasons
-    if (reason !== 'io client disconnect' && this.appState === 'active') {
-      this.scheduleReconnect();
+    this.roomJoined = false;
+    this.stopHeartbeat(); // Stop heartbeat on disconnect
+    this.notifyConnectionStatus('disconnected', `Disconnected: ${reason}`);
+    
+    // Attempt reconnection if not manually disconnected
+    if (reason !== 'io client disconnect') {
+      console.log('🔴 [USER-APP] Attempting automatic reconnection due to:', reason);
+      this.handleReconnection();
     }
   }
 
@@ -532,16 +541,79 @@ class ChatConnectionManager {
   }
 
   /**
-   * Notify new message
+   * Start heartbeat mechanism to maintain connection stability
+   */
+  startHeartbeat() {
+    console.log('🔴 [USER-APP] Starting heartbeat mechanism');
+    
+    if (this.heartbeatInterval) {
+      clearInterval(this.heartbeatInterval);
+    }
+    
+    this.heartbeatInterval = setInterval(() => {
+      if (this.socket && this.socket.connected) {
+        this.socket.emit('ping', { timestamp: Date.now() });
+        this.lastHeartbeat = Date.now();
+      } else {
+        console.log('🔴 [USER-APP] Socket disconnected during heartbeat - attempting reconnection');
+        this.handleReconnection();
+      }
+    }, 5000); // Send heartbeat every 5 seconds
+  }
+
+  /**
+   * Stop heartbeat mechanism
+   */
+  stopHeartbeat() {
+    console.log('🔴 [USER-APP] Stopping heartbeat mechanism');
+    if (this.heartbeatInterval) {
+      clearInterval(this.heartbeatInterval);
+      this.heartbeatInterval = null;
+    }
+  }
+
+  /**
+   * Handle reconnection logic
+   */
+  handleReconnection() {
+    if (this.reconnectAttempts >= this.maxReconnectAttempts) {
+      console.log('🔴 [USER-APP] Max reconnection attempts reached');
+      this.notifyConnectionStatus('error', 'Connection lost - please refresh');
+      return;
+    }
+
+    this.reconnectAttempts++;
+    console.log(`🔴 [USER-APP] Reconnection attempt ${this.reconnectAttempts}/${this.maxReconnectAttempts}`);
+    
+    setTimeout(() => {
+      if (this.currentBookingId && this.currentUserId) {
+        this.initialize(this.currentBookingId, this.currentUserId, this.currentAstrologerId);
+      }
+    }, this.reconnectDelay * this.reconnectAttempts);
+  }
+
+  /**
+   * Notify new message - Optimized for instant delivery
    */
   notifyMessage(message) {
-    this.messageCallbacks.forEach(callback => {
+    const callbackTime = Date.now();
+    console.log('🔴 [USER-APP] Notifying message callbacks at:', callbackTime);
+    
+    // Convert Set to Array once for better performance
+    const callbacks = Array.from(this.messageCallbacks);
+    
+    // Use for loop instead of forEach for better performance
+    for (let i = 0; i < callbacks.length; i++) {
       try {
-        callback(message);
+        // Call each callback immediately without any delays
+        callbacks[i](message);
       } catch (error) {
         console.error('[ChatConnectionManager] Error in message callback:', error);
       }
-    });
+    }
+    
+    const endTime = Date.now();
+    console.log('🔴 [USER-APP] All message callbacks completed in:', endTime - callbackTime, 'ms');
   }
 
   /**
@@ -579,33 +651,39 @@ class ChatConnectionManager {
    * Disconnect and cleanup
    */
   disconnect() {
-    console.log('[ChatConnectionManager] Disconnecting...');
+    console.log('🔴 [USER-APP] ChatConnectionManager: Disconnecting...');
     
-    if (this.reconnectTimer) {
-      clearTimeout(this.reconnectTimer);
-      this.reconnectTimer = null;
+    // Stop heartbeat mechanism
+    this.stopHeartbeat();
+    
+    // Stop connection stability timer
+    if (this.connectionStabilityTimer) {
+      clearInterval(this.connectionStabilityTimer);
+      this.connectionStabilityTimer = null;
     }
-
+    
     if (this.socket) {
       this.socket.disconnect();
       this.socket = null;
     }
-
+    
     this.isConnected = false;
-    this.isConnecting = false;
+    this.roomJoined = false;
+    this.currentBookingId = null;
+    this.currentUserId = null;
+    this.currentAstrologerId = null;
     this.reconnectAttempts = 0;
-    this.messageQueue = [];
-
+    
+    // Clear callbacks
+    this.messageCallbacks.clear();
+    this.statusCallbacks.clear();
+    this.connectionCallbacks.clear();
+    this.typingCallbacks.clear();
+    
+    // Remove app state listener
     if (this.appStateSubscription) {
       this.appStateSubscription.remove();
-      this.appStateSubscription = null;
     }
-
-    // Clear all callbacks
-    this.connectionCallbacks.clear();
-    this.messageCallbacks.clear();
-    this.typingCallbacks.clear();
-    this.statusCallbacks.clear();
 
     this.notifyConnectionStatus('disconnected', 'Manually disconnected');
   }

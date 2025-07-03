@@ -122,13 +122,8 @@ export const initSocket = async () => {
             global.eventEmitter.emit('showBookingAcceptedPopup', popupData);
           }
           
-          // Also show alert as fallback (avoiding ToastAndroid for Expo Go compatibility)
-          import('react-native').then((RN) => {
-            const { Alert } = RN;
-            Alert.alert('Booking Accepted', 'Check the popup to join your session!');
-          }).catch(err => {
-            console.error('Error showing fallback alert:', err);
-          });
+          // No longer showing fallback alert to prevent duplicate notifications
+          // The BookingAcceptedModal in HomeScreen will handle the notification
         } else if (data.status === 'rejected') {
           console.log(' [socketService] Booking rejected - showing notification');
           

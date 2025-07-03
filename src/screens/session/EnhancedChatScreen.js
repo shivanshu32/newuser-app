@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { InteractionManager } from 'react-native';
 import {
   StyleSheet,
   View,
@@ -42,12 +43,13 @@ const EnhancedChatScreen = ({ route, navigation }) => {
   const [isAstrologerTyping, setIsAstrologerTyping] = useState(false);
   const [messageText, setMessageText] = useState('');
   const [showConnectionBanner, setShowConnectionBanner] = useState(false);
+  const [connectionRetryCount, setConnectionRetryCount] = useState(0);
   const { user: authUser } = useAuth();
   const flatListRef = useRef(null);
-  const timerRef = useRef(null);
   const typingTimeoutRef = useRef(null);
   const connectionManagerRef = useRef(null);
   const typingTimerRef = useRef(null);
+  const reconnectTimeoutRef = useRef(null);
 
   // Format time as MM:SS
   const formatTime = (seconds) => {
@@ -55,6 +57,8 @@ const EnhancedChatScreen = ({ route, navigation }) => {
     const secs = seconds % 60;
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
+
+
 
   // Initialize component
   useEffect(() => {
@@ -68,11 +72,15 @@ const EnhancedChatScreen = ({ route, navigation }) => {
     
     return () => {
       // Cleanup
+      console.log('🔴 [USER-APP] EnhancedChatScreen: Cleaning up on unmount');
+      
       if (connectionManagerRef.current) {
         connectionManagerRef.current.disconnect();
       }
-      if (timerRef.current) clearInterval(timerRef.current);
+      
+      // Stop all timers and intervals
       if (typingTimerRef.current) clearTimeout(typingTimerRef.current);
+      if (reconnectTimeoutRef.current) clearTimeout(reconnectTimeoutRef.current);
     };
   }, []);
 
@@ -247,32 +255,62 @@ const EnhancedChatScreen = ({ route, navigation }) => {
 
   // Handle new messages
   const handleNewMessage = useCallback((message) => {
-    console.log('🔴 [USER-APP] Received message:', message);
+    const startTime = Date.now();
+    console.log('🔴 [USER-APP] Received message at:', startTime, message);
     
-    setMessages(prevMessages => {
-      // Avoid duplicate messages
-      const exists = prevMessages.some(msg => msg.id === message.id);
-      if (exists) {
-        console.log('🔴 [USER-APP] Duplicate message ignored:', message.id);
-        return prevMessages;
-      }
-      
-      const newMessages = [...prevMessages, message].sort((a, b) => 
-        new Date(a.timestamp) - new Date(b.timestamp)
-      );
-      
-      console.log('🔴 [USER-APP] Messages state updated. Total messages:', newMessages.length);
-      console.log('🔴 [USER-APP] Latest message content check:', {
-        id: message.id,
-        content: message.content,
-        text: message.text,
-        message: message.message
+    // Use InteractionManager to ensure immediate UI update without blocking
+    InteractionManager.runAfterInteractions(() => {
+      setMessages(prevMessages => {
+        // Avoid duplicate messages
+        const exists = prevMessages.some(msg => msg.id === message.id);
+        if (exists) {
+          console.log('🔴 [USER-APP] Duplicate message ignored:', message.id);
+          return prevMessages;
+        }
+        
+        // Optimize: Only sort if message timestamp is older than the last message
+        // Most messages arrive in chronological order, so avoid unnecessary sorting
+        const lastMessage = prevMessages[prevMessages.length - 1];
+        let newMessages;
+        
+        if (!lastMessage || new Date(message.timestamp) >= new Date(lastMessage.timestamp)) {
+          // Message is newer or equal, just append (most common case)
+          newMessages = [...prevMessages, message];
+        } else {
+          // Message is older, need to sort (rare case)
+          newMessages = [...prevMessages, message].sort((a, b) => 
+            new Date(a.timestamp) - new Date(b.timestamp)
+          );
+        }
+        
+        const endTime = Date.now();
+        console.log('🔴 [USER-APP] Message processed in:', endTime - startTime, 'ms');
+        console.log('🔴 [USER-APP] Messages state updated. Total messages:', newMessages.length);
+        console.log('🔴 [USER-APP] Latest message content check:', {
+          id: message.id,
+          content: message.content,
+          text: message.text,
+          message: message.message
+        });
+        
+        return newMessages;
       });
       
-      // Auto-scroll to bottom
-      setTimeout(() => {
-        flatListRef.current?.scrollToEnd({ animated: true });
-      }, 100);
+      // Immediate scroll after state update
+      requestAnimationFrame(() => {
+        flatListRef.current?.scrollToEnd({ animated: false }); // Use non-animated for faster response
+      });
+    });
+    
+    // Also try immediate state update for fastest possible response
+    setMessages(prevMessages => {
+      const exists = prevMessages.some(msg => msg.id === message.id);
+      if (exists) return prevMessages;
+      
+      const lastMessage = prevMessages[prevMessages.length - 1];
+      const newMessages = !lastMessage || new Date(message.timestamp) >= new Date(lastMessage.timestamp)
+        ? [...prevMessages, message]
+        : [...prevMessages, message].sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
       
       return newMessages;
     });
@@ -628,6 +666,17 @@ const EnhancedChatScreen = ({ route, navigation }) => {
         contentContainerStyle={styles.messagesContainer}
         showsVerticalScrollIndicator={false}
         ListFooterComponent={renderTypingIndicator}
+        // Performance optimizations for instant message rendering
+        removeClippedSubviews={true}
+        maxToRenderPerBatch={10}
+        updateCellsBatchingPeriod={50}
+        initialNumToRender={20}
+        windowSize={10}
+        getItemLayout={undefined} // Let FlatList calculate automatically for variable heights
+        // Disable virtualization for better real-time performance
+        disableVirtualization={false}
+        // Optimize for frequent updates
+        legacyImplementation={false}
       />
 
       {/* Message Input */}

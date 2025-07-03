@@ -244,18 +244,7 @@ const RealTimeBookingButton = ({ astrologer, type, onBookingInitiated, onBooking
         </TouchableOpacity>
       )}
 
-      {['rejected', 'expired', 'cancelled'].includes(status) && (
-        <TouchableOpacity
-          style={styles.retryButton}
-          onPress={() => {
-            setStatus('idle');
-            setCurrentBookingId(null);
-            setLoading(false);
-          }}
-        >
-          <Text style={styles.retryButtonText}>Try Again</Text>
-        </TouchableOpacity>
-      )}
+
     </View>
   );
 };
