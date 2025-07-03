@@ -510,18 +510,38 @@ const HomeScreen = ({ navigation }) => {
 
 
 
+  // Get status outline color based on astrologer status
+  const getStatusOutlineColor = (status) => {
+    switch (status) {
+      case 'online':
+        return '#4CAF50'; // Green
+      case 'busy':
+        return '#FFD700'; // Yellow
+      case 'offline':
+      default:
+        return '#9E9E9E'; // Grey
+    }
+  };
+
   // Render astrologer card
   const renderAstrologerCard = ({ item }) => (
     <TouchableOpacity
       style={styles.astrologerCard}
       onPress={() => navigation.navigate('AstrologerProfile', { astrologer: item })}
     >
-      <Image
-        source={{ 
-          uri: item.imageUrl || item.profileImage || 'https://via.placeholder.com/80x80?text=No+Image' 
-        }}
-        style={styles.astrologerImage}
-      />
+      <View style={[
+        styles.astrologerImageContainer,
+        {
+          borderColor: getStatusOutlineColor(item.status),
+        }
+      ]}>
+        <Image
+          source={{ 
+            uri: item.imageUrl || item.profileImage || 'https://via.placeholder.com/80x80?text=No+Image' 
+          }}
+          style={styles.astrologerImage}
+        />
+      </View>
       <View style={styles.astrologerInfo}>
         <Text style={styles.astrologerName}>{item.displayName || item.name}</Text>
         <Text style={styles.astrologerSpecialty}>
@@ -536,25 +556,6 @@ const HomeScreen = ({ navigation }) => {
         </View>
         <View style={styles.priceContainer}>
           <Text style={styles.price}>₹{item.consultationPrices?.video || item.consultationPrices?.call || item.consultationPrices?.chat || '50'}/min</Text>
-          <View style={[
-            styles.statusDot, 
-            { 
-              backgroundColor: 
-                item.status === 'online' ? '#4CAF50' : 
-                item.status === 'busy' ? '#FF9800' : '#9E9E9E' 
-            }
-          ]} />
-          <Text style={[
-            styles.status, 
-            { 
-              color: 
-                item.status === 'online' ? '#4CAF50' : 
-                item.status === 'busy' ? '#FF9800' : '#9E9E9E' 
-            }
-          ]}>
-            {item.status === 'online' ? 'Online' : 
-             item.status === 'busy' ? 'Busy' : 'Offline'}
-          </Text>
         </View>
       </View>
     </TouchableOpacity>
@@ -812,11 +813,19 @@ const styles = StyleSheet.create({
     shadowRadius: 3.84,
     elevation: 5,
   },
+  astrologerImageContainer: {
+    width: 84,
+    height: 84,
+    borderRadius: 42,
+    borderWidth: 2,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 16,
+  },
   astrologerImage: {
     width: 80,
     height: 80,
     borderRadius: 40,
-    marginRight: 16,
   },
   astrologerInfo: {
     flex: 1,
@@ -857,17 +866,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: 'bold',
     color: '#F97316',
-    marginRight: 12,
-  },
-  statusDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    marginRight: 6,
-  },
-  status: {
-    fontSize: 12,
-    fontWeight: '500',
   },
 });
 

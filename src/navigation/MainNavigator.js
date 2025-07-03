@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { View } from 'react-native';
+import { View, Alert } from 'react-native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
 
@@ -115,17 +115,19 @@ const BookingPopupWrapper = () => {
 
   const handleJoinSession = async (bookingData) => {
     try {
-      console.log(' [BookingPopupWrapper] Joining consultation room with data:', JSON.stringify(bookingData, null, 2));
+      console.log(' [BookingPopupWrapper] Starting handleJoinSession with data:', JSON.stringify(bookingData, null, 2));
       
       // Validate required parameters
-      if (!bookingData.bookingId) {
-        console.error(' [BookingPopupWrapper] Missing bookingId in bookingData');
+      if (!bookingData || !bookingData.bookingId) {
+        console.error(' [BookingPopupWrapper] Missing bookingId in bookingData:', bookingData);
         Alert.alert('Error', 'Missing booking information. Please try again.');
         return;
       }
       
+      console.log(' [BookingPopupWrapper] Validation passed, joining consultation room...');
+      
       // Join the consultation room via socket
-      await joinConsultationRoom({
+      const joinResult = await joinConsultationRoom({
         bookingId: bookingData.bookingId,
         sessionId: bookingData.sessionId,
         roomId: bookingData.roomId,
@@ -133,7 +135,7 @@ const BookingPopupWrapper = () => {
         consultationType: bookingData.type
       });
       
-      console.log(' [BookingPopupWrapper] Successfully joined consultation room');
+      console.log(' [BookingPopupWrapper] Successfully joined consultation room:', joinResult);
       
       // Prepare navigation parameters
       const navigationParams = {
@@ -156,21 +158,28 @@ const BookingPopupWrapper = () => {
         navigation.navigate('VoiceCall', navigationParams);
         console.log(' [BookingPopupWrapper] VoiceCall navigation completed');
       } else if (bookingData.type === 'chat') {
-        console.log(' [BookingPopupWrapper] Navigating to EnhancedChat screen');
-        navigation.navigate('EnhancedChat', {
+        console.log(' [BookingPopupWrapper] Navigating to EnhancedConsultationRoom screen');
+        navigation.navigate('EnhancedConsultationRoom', {
           bookingId: bookingData.bookingId,
-          astrologer: bookingData.astrologer,
-          userInfo: bookingData.userInfo
+          sessionId: bookingData.sessionId,
+          roomId: bookingData.roomId,
+          astrologerId: bookingData.astrologerId,
+          consultationType: bookingData.type
         });
-        console.log(' [BookingPopupWrapper] EnhancedChat navigation completed');
+        console.log(' [BookingPopupWrapper] EnhancedConsultationRoom navigation completed');
       } else {
         console.error(' [BookingPopupWrapper] Unknown consultation type:', bookingData.type);
         Alert.alert('Error', `Unknown consultation type: ${bookingData.type}`);
+        return;
       }
       
+      console.log(' [BookingPopupWrapper] handleJoinSession completed successfully');
+      
     } catch (error) {
-      console.error(' [BookingPopupWrapper] Error joining consultation room:', error);
-      throw error;
+      console.error(' [BookingPopupWrapper] Error in handleJoinSession:', error);
+      console.error(' [BookingPopupWrapper] Error stack:', error.stack);
+      Alert.alert('Error', `Failed to join session: ${error.message || 'Unknown error'}`);
+      // Don't re-throw the error, handle it gracefully
     }
   };
 

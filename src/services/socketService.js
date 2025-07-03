@@ -71,6 +71,10 @@ export const initSocket = async () => {
         role: 'user'
       });
       
+      // CRITICAL: Update the global socket variable
+      socket = socketInstance;
+      console.log(' [socketService] Global socket variable updated');
+      
       // Register listeners after connection is established
       console.log(' [socketService] Registering booking_status_update listener after connection');
       
@@ -184,25 +188,11 @@ export const initSocket = async () => {
     
     // Return a promise that resolves when the socket is connected
     return new Promise((resolve, reject) => {
-      // Set a connection timeout
-      const connectionTimeout = setTimeout(() => {
-        reject(new Error('Socket connection timeout'));
-      }, 10000); // 10 seconds timeout
-      
       // Set up event listeners
       socketInstance.on('connect', () => {
         clearTimeout(connectionTimeout);
         socket = socketInstance; // Store the socket instance globally
         resolve(socketInstance);
-      });
-      
-      socketInstance.on('connect_error', (error) => {
-        console.error(' [socketService] Socket connection error:', error);
-        // Don't reject here, let the timeout handle it or wait for connect
-      });
-      
-      socketInstance.on('disconnect', (reason) => {
-        socket = null; // Clear the socket reference on disconnect
       });
     });
   } catch (error) {
@@ -322,55 +312,146 @@ export const initiateRealTimeBooking = async (bookingData) => {
  * @returns {Promise<void>}
  */
 export const joinConsultationRoom = async (consultationData) => {
-  const socketInstance = await getSocket();
-  
-  if (!socketInstance) {
-    throw new Error('Socket not connected');
-  }
-  
-  // Extract parameters from consultationData object
-  const bookingId = consultationData.bookingId;
-  const roomId = consultationData.roomId;
-  const astrologerId = consultationData.astrologerId;
-  const consultationType = consultationData.consultationType;
-  const sessionId = consultationData.sessionId;
-  
-  // Validate required parameters
-  if (!bookingId) {
-    throw new Error('Missing required parameter: bookingId');
-  }
-  
-  console.log(' [socketService] Joining consultation room:', {
-    bookingId,
-    roomId,
-    astrologerId,
-    consultationType,
-    sessionId
-  });
-  
-  return new Promise((resolve, reject) => {
-    // Emit user_joined_consultation event with proper data structure
-    socketInstance.emit('user_joined_consultation', {
+  try {
+    console.log(' [socketService] joinConsultationRoom called with data:', JSON.stringify(consultationData, null, 2));
+    console.log(' [socketService] Current global socket state:', {
+      exists: !!socket,
+      connected: socket ? socket.connected : false,
+      id: socket ? socket.id : 'none'
+    });
+    
+    // Use existing socket connection instead of creating a new one
+    let socketInstance = socket;
+    
+    // If no existing socket or socket is disconnected, get one
+    if (!socketInstance || !socketInstance.connected) {
+      console.log(' [socketService] No existing socket or socket disconnected, getting socket...');
+      socketInstance = await getSocket();
+    } else {
+      console.log(' [socketService] Using existing socket connection:', socketInstance.id);
+    }
+    
+    if (!socketInstance) {
+      console.error(' [socketService] Socket instance is null or undefined');
+      throw new Error('Socket not connected');
+    }
+    
+    if (!socketInstance.connected) {
+      console.error(' [socketService] Socket is not connected. Connection state:', socketInstance.connected);
+      console.log(' [socketService] Attempting to reconnect...');
+      socketInstance = await getSocket();
+      
+      if (!socketInstance || !socketInstance.connected) {
+        throw new Error('Socket is not connected to server');
+      }
+    }
+    
+    console.log(' [socketService] Socket connection verified. Socket ID:', socketInstance.id);
+    
+    // Wait for socket to be fully ready and authenticated
+    console.log(' [socketService] Ensuring socket is ready for event emission...');
+    
+    // If this is a new socket connection, wait for it to be fully authenticated
+    if (socketInstance.id !== socket?.id) {
+      console.log(' [socketService] New socket detected, waiting for authentication...');
+      
+      // Wait for socket to be fully ready with a timeout
+      await new Promise((resolve, reject) => {
+        const timeout = setTimeout(() => {
+          reject(new Error('Socket authentication timeout'));
+        }, 5000);
+        
+        // If socket is already ready, resolve immediately
+        if (socketInstance.connected) {
+          clearTimeout(timeout);
+          resolve();
+          return;
+        }
+        
+        // Wait for connect event if not already connected
+        socketInstance.once('connect', () => {
+          clearTimeout(timeout);
+          // Give a small delay for authentication to complete
+          setTimeout(resolve, 1000);
+        });
+        
+        socketInstance.once('connect_error', (error) => {
+          clearTimeout(timeout);
+          reject(new Error(`Socket connection failed: ${error.message}`));
+        });
+      });
+    }
+    
+    console.log(' [socketService] Socket is ready. Final verification...');
+    
+    // Final verification that socket is connected
+    if (!socketInstance.connected) {
+      throw new Error('Socket connection lost during preparation');
+    }
+    
+    // Update the global socket reference if we created a new connection
+    if (socketInstance !== socket) {
+      console.log(' [socketService] Updating global socket reference');
+      socket = socketInstance;
+    }
+    
+    // Extract parameters from consultationData object
+    const bookingId = consultationData.bookingId;
+    const roomId = consultationData.roomId;
+    const astrologerId = consultationData.astrologerId;
+    const consultationType = consultationData.consultationType;
+    const sessionId = consultationData.sessionId;
+    
+    // Validate required parameters
+    if (!bookingId) {
+      console.error(' [socketService] Missing required parameter: bookingId');
+      throw new Error('Missing required parameter: bookingId');
+    }
+    
+    const eventData = {
       bookingId,
       roomId,
       astrologerId,
       consultationType,
       sessionId
+    };
+    
+    console.log(' [socketService] Joining consultation room with event data:', JSON.stringify(eventData, null, 2));
+    
+    return new Promise((resolve, reject) => {
+      // Set up timeout for the operation
+      const timeoutId = setTimeout(() => {
+        console.log(' [socketService] Join consultation room completed (no confirmation expected)');
+        resolve({ success: true, message: 'Successfully joined consultation room' });
+      }, 2000); // Increased timeout to 2 seconds
+      
+      // Optional: Listen for any error response
+      const errorHandler = (response) => {
+        clearTimeout(timeoutId);
+        console.error(' [socketService] Failed to join consultation room:', response);
+        reject(new Error(response.message || 'Failed to join consultation room'));
+      };
+      
+      socketInstance.once('consultation_join_error', errorHandler);
+      
+      try {
+        // Emit user_joined_consultation event with proper data structure
+        console.log(' [socketService] Emitting user_joined_consultation event...');
+        socketInstance.emit('user_joined_consultation', eventData);
+        console.log(' [socketService] user_joined_consultation event emitted successfully');
+      } catch (emitError) {
+        clearTimeout(timeoutId);
+        socketInstance.off('consultation_join_error', errorHandler);
+        console.error(' [socketService] Error emitting user_joined_consultation event:', emitError);
+        reject(new Error(`Failed to emit socket event: ${emitError.message}`));
+      }
     });
     
-    // Listen for confirmation (if backend sends one)
-    const timeoutId = setTimeout(() => {
-      console.log(' [socketService] Join consultation room completed (no confirmation expected)');
-      resolve({ success: true });
-    }, 1000);
-    
-    // Optional: Listen for any error response
-    socketInstance.once('consultation_join_error', (response) => {
-      clearTimeout(timeoutId);
-      console.error(' [socketService] Failed to join consultation room:', response);
-      reject(new Error(response.message || 'Failed to join consultation room'));
-    });
-  });
+  } catch (error) {
+    console.error(' [socketService] Error in joinConsultationRoom:', error);
+    console.error(' [socketService] Error stack:', error.stack);
+    throw error;
+  }
 };
 
 /**
@@ -680,6 +761,63 @@ export const listenForMessageStatusUpdates = async (onMessageStatusUpdate) => {
   }
 };
 
+/**
+ * Set up ACK handler for reliable socket notifications
+ * @param {Object} socketInstance - Socket instance
+ */
+const setupAckHandler = (socketInstance) => {
+  // Listen for messages that require acknowledgement
+  const handleReliableMessage = (event, data) => {
+    console.log(`📨 [socketService] Received reliable message on event '${event}':`, data);
+    
+    // Check if message requires acknowledgement
+    if (data.meta && data.meta.requiresAck && data.meta.messageId) {
+      console.log(`✅ [socketService] Sending ACK for message ${data.meta.messageId}`);
+      
+      // Send acknowledgement back to server
+      socketInstance.emit('ack', {
+        messageId: data.meta.messageId,
+        status: 'received',
+        timestamp: new Date().toISOString(),
+        clientType: 'user-app'
+      });
+    }
+  };
+  
+  // Set up listeners for critical events that may require ACK
+  const criticalEvents = [
+    'booking_request',
+    'booking_status_update', 
+    'booking_accepted',
+    'booking_rejected',
+    'session_started',
+    'consultation_ended',
+    'user_joined_consultation'
+  ];
+  
+  criticalEvents.forEach(event => {
+    socketInstance.on(event, (data) => {
+      handleReliableMessage(event, data);
+    });
+  });
+  
+  console.log('🔧 [socketService] ACK handler set up for reliable notifications');
+};
+
+/**
+ * Initialize ACK handling for existing socket
+ */
+const initializeAckHandling = async () => {
+  try {
+    const socketInstance = await getSocket();
+    if (socketInstance) {
+      setupAckHandler(socketInstance);
+    }
+  } catch (error) {
+    console.error('❌ [socketService] Failed to initialize ACK handling:', error);
+  }
+};
+
 export default {
   initSocket,
   getSocket,
@@ -696,5 +834,6 @@ export default {
   sendTypingStatus,
   listenForTypingStatus,
   markMessageAsRead,
-  listenForMessageStatusUpdates
+  listenForMessageStatusUpdates,
+  initializeAckHandling
 };

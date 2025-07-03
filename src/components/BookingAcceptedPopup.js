@@ -28,30 +28,44 @@ const BookingAcceptedPopup = ({
   const navigation = useNavigation();
 
   const handleJoinSession = async () => {
+    console.log(' [BookingAcceptedPopup] handleJoinSession called - button pressed!');
+    console.log(' [BookingAcceptedPopup] bookingData:', JSON.stringify(bookingData, null, 2));
+    console.log(' [BookingAcceptedPopup] onJoinSession prop:', typeof onJoinSession);
+    
     if (!bookingData) {
+      console.error(' [BookingAcceptedPopup] No booking data available');
       Alert.alert('Error', 'Booking information not available');
       return;
     }
 
+    console.log(' [BookingAcceptedPopup] Setting isJoining to true');
     setIsJoining(true);
     
     try {
-      console.log(' [BookingAcceptedPopup] Joining session with data:', bookingData);
+      console.log(' [BookingAcceptedPopup] Starting join session process with data:', JSON.stringify(bookingData, null, 2));
       
       // Call the parent handler to join the session
       if (onJoinSession) {
+        console.log(' [BookingAcceptedPopup] Calling onJoinSession prop function...');
         await onJoinSession(bookingData);
+        console.log(' [BookingAcceptedPopup] onJoinSession completed successfully');
+      } else {
+        console.error(' [BookingAcceptedPopup] onJoinSession prop is not provided or is null');
+        Alert.alert('Error', 'Join session handler not available. Please try again.');
+        return;
       }
       
-      console.log(' [BookingAcceptedPopup] Successfully joined session');
+      console.log(' [BookingAcceptedPopup] Successfully joined session, closing popup');
       
       // Close the popup - navigation will be handled by the parent
       onClose();
       
     } catch (error) {
       console.error(' [BookingAcceptedPopup] Error joining session:', error);
-      Alert.alert('Error', 'Failed to join session. Please try again.');
+      console.error(' [BookingAcceptedPopup] Error stack:', error.stack);
+      Alert.alert('Error', `Failed to join session: ${error.message || 'Unknown error'}. Please try again.`);
     } finally {
+      console.log(' [BookingAcceptedPopup] Setting isJoining to false');
       setIsJoining(false);
     }
   };
@@ -68,6 +82,10 @@ const BookingAcceptedPopup = ({
   // Check if this is a voice consultation
   const isVoiceConsultation = bookingData.type === 'voice';
 
+  console.log(' [BookingAcceptedPopup] Rendering popup with visible:', visible);
+  console.log(' [BookingAcceptedPopup] BookingData for rendering:', JSON.stringify(bookingData, null, 2));
+  console.log(' [BookingAcceptedPopup] Popup dimensions - width:', width, 'calculated width:', width * 0.9);
+  
   return (
     <Modal
       visible={visible}
@@ -203,6 +221,7 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     padding: 25,
     width: width * 0.9,
+    minWidth: 300,
     maxWidth: 400,
     shadowColor: '#000',
     shadowOffset: {
