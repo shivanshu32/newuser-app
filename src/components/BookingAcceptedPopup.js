@@ -7,7 +7,8 @@ import {
   Modal,
   Dimensions,
   ActivityIndicator,
-  Alert
+  Alert,
+  Image
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
@@ -192,30 +193,52 @@ const BookingAcceptedPopup = ({
       }}
     >
       <View style={styles.overlay}>
-        <View style={[styles.popup, { 
-          // Add debug styling to identify layout issues
-          borderWidth: 2,
-          borderColor: 'red',
-          backgroundColor: 'yellow' // Temporary debug color
-        }]}>
-          {/* Header */}
+        <View style={styles.popup}>
+          {/* Header with Astrologer Profile */}
           <View style={styles.header}>
-            <View style={styles.iconContainer}>
+            {/* Success Icon */}
+            <View style={styles.successIconContainer}>
               <Ionicons 
                 name={isVoiceConsultation ? "call" : "checkmark-circle"} 
-                size={50} 
+                size={24} 
                 color={isVoiceConsultation ? "#2196F3" : "#4CAF50"} 
               />
             </View>
-            <Text style={styles.title}>
-              {isVoiceConsultation ? 'Voice Call Connecting!' : 'Booking Accepted!'}
-            </Text>
-            <Text style={styles.subtitle}>
-              {isVoiceConsultation 
-                ? 'Your voice consultation is being connected. Please keep your phone available.' 
-                : `Your astrologer has accepted your ${bookingData.type} consultation request`
-              }
-            </Text>
+            
+            {/* Astrologer Profile Section */}
+            <View style={styles.astrologerProfileSection}>
+              <View style={styles.profileImageContainer}>
+                <Image
+                  source={{
+                    uri: bookingData.astrologerImageUrl || 'https://via.placeholder.com/80x80/E0E0E0/666666?text=A'
+                  }}
+                  style={styles.profileImage}
+                  defaultSource={{ uri: 'https://via.placeholder.com/80x80/E0E0E0/666666?text=A' }}
+                />
+                {/* Online Status Indicator */}
+                <View style={styles.onlineIndicator} />
+              </View>
+              
+              <View style={styles.astrologerInfo}>
+                <Text style={styles.astrologerName}>
+                  {bookingData.astrologerDisplayName || bookingData.astrologerName || 'Professional Astrologer'}
+                </Text>
+                <Text style={styles.astrologerTitle}>Astrologer</Text>
+              </View>
+            </View>
+            
+            {/* Status Message */}
+            <View style={styles.statusContainer}>
+              <Text style={styles.statusTitle}>
+                {isVoiceConsultation ? 'Voice Call Connecting!' : 'Booking Accepted!'}
+              </Text>
+              <Text style={styles.statusSubtitle}>
+                {isVoiceConsultation 
+                  ? 'Your voice consultation is being connected. Please keep your phone available.' 
+                  : `Your ${bookingData.type} consultation request has been accepted`
+                }
+              </Text>
+            </View>
           </View>
 
           {/* Booking Details */}
@@ -321,36 +344,95 @@ const styles = StyleSheet.create({
   },
   popup: {
     backgroundColor: '#fff',
-    borderRadius: 20,
-    padding: 25,
+    borderRadius: 24,
+    padding: 28,
     width: width * 0.9,
-    minWidth: 300,
-    maxWidth: 400,
+    minWidth: 320,
+    maxWidth: 420,
     shadowColor: '#000',
     shadowOffset: {
       width: 0,
-      height: 10,
+      height: 15,
     },
-    shadowOpacity: 0.25,
-    shadowRadius: 10,
-    elevation: 10,
+    shadowOpacity: 0.3,
+    shadowRadius: 20,
+    elevation: 15,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 0, 0, 0.05)',
   },
   header: {
     alignItems: 'center',
     marginBottom: 25,
   },
-  iconContainer: {
-    marginBottom: 15,
+  successIconContainer: {
+    position: 'absolute',
+    top: -10,
+    right: 10,
+    backgroundColor: '#fff',
+    borderRadius: 15,
+    padding: 5,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
   },
-  title: {
-    fontSize: 24,
+  astrologerProfileSection: {
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  profileImageContainer: {
+    position: 'relative',
+    marginBottom: 12,
+  },
+  profileImage: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    borderWidth: 3,
+    borderColor: '#F97316',
+  },
+  onlineIndicator: {
+    position: 'absolute',
+    bottom: 2,
+    right: 2,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: '#4CAF50',
+    borderWidth: 3,
+    borderColor: '#fff',
+  },
+  astrologerInfo: {
+    alignItems: 'center',
+  },
+  astrologerName: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#333',
+    marginBottom: 4,
+    textAlign: 'center',
+  },
+  astrologerTitle: {
+    fontSize: 14,
+    color: '#F97316',
+    fontWeight: '600',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  statusContainer: {
+    alignItems: 'center',
+    paddingHorizontal: 10,
+  },
+  statusTitle: {
+    fontSize: 22,
     fontWeight: 'bold',
     color: '#2E7D32',
     marginBottom: 8,
     textAlign: 'center',
   },
-  subtitle: {
-    fontSize: 16,
+  statusSubtitle: {
+    fontSize: 15,
     color: '#666',
     textAlign: 'center',
     lineHeight: 22,
