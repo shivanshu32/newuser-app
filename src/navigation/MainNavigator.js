@@ -22,7 +22,6 @@ import RatingScreen from '../screens/session/RatingScreen';
 // Import components
 import NotificationBadge from '../components/NotificationBadge';
 import BookingAcceptedPopup from '../components/BookingAcceptedPopup';
-import TestBookingPopup from '../components/TestBookingPopup';
 
 // Import context
 import { BookingPopupProvider, useBookingPopup } from '../context/BookingPopupContext';
@@ -154,7 +153,7 @@ const BookingPopupWrapper = () => {
         sessionId: bookingData.sessionId,
         roomId: bookingData.roomId,
         astrologerId: bookingData.astrologerId,
-        consultationType: bookingData.type
+        consultationType: bookingData.bookingType || bookingData.type
       });
       
       console.log(' [BookingPopupWrapper] Successfully joined consultation room:', joinResult);
@@ -165,33 +164,37 @@ const BookingPopupWrapper = () => {
         sessionId: bookingData.sessionId,
         roomId: bookingData.roomId,
         astrologerId: bookingData.astrologerId,
-        consultationType: bookingData.type
+        consultationType: bookingData.bookingType || bookingData.type
       };
       
       console.log(' [BookingPopupWrapper] Navigation params prepared:', JSON.stringify(navigationParams, null, 2));
       
       // Navigate to appropriate session screen after successful join
-      if (bookingData.type === 'video') {
+      const consultationType = bookingData.bookingType || bookingData.type;
+      console.log(' [BookingPopupWrapper] Using consultation type:', consultationType);
+      
+      if (consultationType === 'video') {
         console.log(' [BookingPopupWrapper] Navigating to VideoCall screen');
         navigation.navigate('VideoCall', navigationParams);
         console.log(' [BookingPopupWrapper] VideoCall navigation completed');
-      } else if (bookingData.type === 'voice') {
+      } else if (consultationType === 'voice') {
         console.log(' [BookingPopupWrapper] Navigating to VoiceCall screen');
         navigation.navigate('VoiceCall', navigationParams);
         console.log(' [BookingPopupWrapper] VoiceCall navigation completed');
-      } else if (bookingData.type === 'chat') {
+      } else if (consultationType === 'chat') {
         console.log(' [BookingPopupWrapper] Navigating to EnhancedConsultationRoom screen');
         navigation.navigate('EnhancedConsultationRoom', {
           bookingId: bookingData.bookingId,
           sessionId: bookingData.sessionId,
           roomId: bookingData.roomId,
           astrologerId: bookingData.astrologerId,
-          consultationType: bookingData.type
+          consultationType: consultationType
         });
         console.log(' [BookingPopupWrapper] EnhancedConsultationRoom navigation completed');
       } else {
-        console.error(' [BookingPopupWrapper] Unknown consultation type:', bookingData.type);
-        Alert.alert('Error', `Unknown consultation type: ${bookingData.type}`);
+        console.error(' [BookingPopupWrapper] Unknown consultation type:', consultationType);
+        console.error(' [BookingPopupWrapper] Available booking data:', JSON.stringify(bookingData, null, 2));
+        Alert.alert('Error', `Unknown consultation type: ${consultationType}`);
         return;
       }
       
@@ -206,20 +209,12 @@ const BookingPopupWrapper = () => {
   };
 
   return (
-    <>
-      <BookingAcceptedPopup
-        visible={isVisible}
-        onClose={hideBookingAcceptedPopup}
-        bookingData={popupData}
-        onJoinSession={handleJoinSession}
-      />
-      
-      {/* Test popup to isolate the narrow box issue */}
-      <TestBookingPopup
-        visible={false} // Set to true to test
-        onClose={() => console.log('🧪 [TestBookingPopup] Close called')}
-      />
-    </>
+    <BookingAcceptedPopup
+      visible={isVisible}
+      onClose={hideBookingAcceptedPopup}
+      bookingData={popupData}
+      onJoinSession={handleJoinSession}
+    />
   );
 };
 

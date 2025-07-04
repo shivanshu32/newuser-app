@@ -416,8 +416,8 @@ const HomeScreen = ({ navigation }) => {
       // Listen for booking status updates (acceptance/rejection)
       socket.on('booking_status_update', handleBookingStatusUpdate);
       
-      // Listen for legacy booking accepted event
-      socket.on('booking_accepted', handleBookingAccepted);
+      // DISABLED: Legacy booking accepted event - now handled by modern BookingAcceptedPopup
+      // socket.on('booking_accepted', handleBookingAccepted);
       
       // Listen for booking rejected event
       socket.on('booking_rejected', (data) => {
@@ -453,7 +453,7 @@ const HomeScreen = ({ navigation }) => {
         console.log('🔌 Cleaning up socket listeners in HomeScreen');
         socket.off('astrologer_status_updated', handleAstrologerStatusUpdate);
         socket.off('booking_status_update', handleBookingStatusUpdate);
-        socket.off('booking_accepted', handleBookingAccepted);
+        // socket.off('booking_accepted', handleBookingAccepted); // Disabled - legacy listener
         socket.off('booking_rejected');
         socket.off('voice_call_initiated');
         socket.off('voice_call_failed');
@@ -627,7 +627,8 @@ const HomeScreen = ({ navigation }) => {
         </View>
       )}
       
-      {/* Custom Booking Accepted Modal */}
+      {/* DISABLED: Legacy BookingAcceptedModal - now using modern BookingAcceptedPopup */}
+      {/*
       <BookingAcceptedModal
         visible={showBookingAcceptedModal}
         onClose={handleCloseModal}
@@ -636,6 +637,7 @@ const HomeScreen = ({ navigation }) => {
         astrologerImage={bookingAcceptedData?.astrologerImage}
         bookingType={bookingAcceptedData?.bookingType}
       />
+      */}
     </SafeAreaView>
   );
 };

@@ -80,54 +80,37 @@ export const initSocket = async () => {
       
       // Add global listener for booking_status_update events
       socketInstance.on('booking_status_update', (data) => {
-        console.log(' [socketService] booking_status_update event received! ');
-        console.log(' [socketService] Raw event data:', JSON.stringify(data, null, 2));
-        console.log(' [socketService] Socket ID:', socketInstance?.id);
-        console.log(' [socketService] Socket connected:', socketInstance?.connected);
-        console.log(' [socketService] Event timestamp:', new Date().toISOString());
-        console.log(' [socketService] GLOBAL booking_status_update received:', {
-          bookingId: data.bookingId,
+        console.log('🔔 [socketService] Booking status update received:', {
           status: data.status,
+          bookingId: data.bookingId,
           sessionId: data.sessionId,
-          roomId: data.roomId,
-          message: data.message,
-          timestamp: new Date().toISOString(),
           socketId: socketInstance.id
         });
+        console.log('🔔 [socketService] Full booking status data:', JSON.stringify(data, null, 2));
         
-        // Handle booking acceptance with popup
+        // Handle booking acceptance with popup (global handler for all screens)
         if (data.status === 'accepted') {
-          console.log(' [socketService] Booking accepted - triggering popup');
-          console.log(' [socketService] Raw booking status data:', JSON.stringify(data, null, 2));
+          console.log('🎯 [socketService] Booking accepted - triggering global popup');
+          console.log('🎯 [socketService] Global eventEmitter available:', !!global.eventEmitter);
           
-          // Debug consultation type detection
-          const consultationType = data.consultationType || data.type || data.bookingDetails?.type || data.bookingDetails?.consultationType;
-          console.log(' [socketService] Consultation type detection:');
-          console.log('   - data.consultationType:', data.consultationType);
-          console.log('   - data.type:', data.type);
-          console.log('   - data.bookingDetails?.type:', data.bookingDetails?.type);
-          console.log('   - data.bookingDetails?.consultationType:', data.bookingDetails?.consultationType);
-          console.log('   - Final consultationType:', consultationType);
-          
-          // Emit event to show booking accepted popup
+          // Emit event to show booking accepted popup globally
           if (global.eventEmitter) {
             const popupData = {
               bookingId: data.bookingId,
               sessionId: data.sessionId,
               roomId: data.roomId,
               astrologerId: data.astrologerId,
-              type: consultationType || 'video', // Use comprehensive detection
-              rate: data.rate,
               astrologerName: data.astrologerName,
+              bookingType: 'chat', // Default to chat for now
+              rate: data.rate,
               message: data.message
             };
             
-            console.log(' [socketService] Emitting showBookingAcceptedPopup with data:', JSON.stringify(popupData, null, 2));
+            console.log('📡 [socketService] Emitting showBookingAcceptedPopup with data:', JSON.stringify(popupData, null, 2));
             global.eventEmitter.emit('showBookingAcceptedPopup', popupData);
+          } else {
+            console.warn('⚠️ [socketService] Global eventEmitter not available for booking acceptance!');
           }
-          
-          // No longer showing fallback alert to prevent duplicate notifications
-          // The BookingAcceptedModal in HomeScreen will handle the notification
         } else if (data.status === 'rejected') {
           console.log(' [socketService] Booking rejected - showing notification');
           

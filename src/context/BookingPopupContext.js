@@ -52,6 +52,46 @@ export const BookingPopupProvider = ({ children }) => {
     console.log('🔴 [BookingPopupContext] Hide state update calls completed');
   };
 
+  // Listen for global event emitter events from socketService
+  // This ensures booking acceptance works regardless of which screen user is on
+  useEffect(() => {
+    console.log('🔍 [BookingPopupContext] Setting up global event listeners...');
+    
+    const handleShowBookingAcceptedPopup = (eventData) => {
+      console.log('📡 [BookingPopupContext] Received showBookingAcceptedPopup event from socketService');
+      console.log('📡 [BookingPopupContext] Event data:', JSON.stringify(eventData, null, 2));
+      
+      // Transform socketService data to BookingAcceptedPopup format
+      const transformedData = {
+        bookingId: eventData.bookingId,
+        sessionId: eventData.sessionId,
+        roomId: eventData.roomId,
+        astrologerId: eventData.astrologerId,
+        astrologerName: eventData.astrologerName,
+        bookingType: eventData.bookingType || 'chat',
+        rate: eventData.rate,
+        message: eventData.message
+      };
+      
+      console.log('🔄 [BookingPopupContext] Transformed data for popup:', JSON.stringify(transformedData, null, 2));
+      showBookingAcceptedPopup(transformedData);
+    };
+    
+    if (global.eventEmitter) {
+      console.log('✅ [BookingPopupContext] Global event emitter found, adding listener');
+      global.eventEmitter.on('showBookingAcceptedPopup', handleShowBookingAcceptedPopup);
+    } else {
+      console.warn('⚠️ [BookingPopupContext] Global event emitter not found!');
+    }
+    
+    return () => {
+      console.log('🧽 [BookingPopupContext] Cleaning up global event listeners...');
+      if (global.eventEmitter) {
+        global.eventEmitter.off('showBookingAcceptedPopup', handleShowBookingAcceptedPopup);
+      }
+    };
+  }, []); // Empty dependency array - only run once
+
   const value = {
     popupData,
     isVisible,

@@ -1,10 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   TouchableOpacity,
-  Alert,
   ActivityIndicator,
   Image
 } from 'react-native';
@@ -12,10 +11,12 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { socketService } from '../../services/socketService';
 import { bookingsAPI } from '../../services/api';
+import { useBookingPopup } from '../../context/BookingPopupContext';
 
 const BookingWaitingScreen = () => {
   const navigation = useNavigation();
   const route = useRoute();
+  const { showBookingAcceptedPopup } = useBookingPopup();
   
   console.log(' [BookingWaiting] Component mounting...');
   console.log(' [BookingWaiting] Route params:', JSON.stringify(route.params, null, 2));
@@ -115,22 +116,28 @@ const BookingWaitingScreen = () => {
   console.log('🔍 [BookingWaiting] About to render main UI...');
 
   const handleBookingStatusUpdate = (data) => {
-    console.log(' [BookingWaiting] Received booking status update:', data);
+    console.log('📨 [BookingWaiting] Received booking status update:', data);
+    console.log('📨 [BookingWaiting] Current bookingId:', bookingId);
+    console.log('📨 [BookingWaiting] Data bookingId:', data.bookingId);
+    console.log('📨 [BookingWaiting] BookingId match:', data.bookingId === bookingId);
     
     if (data.bookingId === bookingId) {
+      console.log('✅ [BookingWaiting] BookingId matches - processing status update');
       setBookingStatus(data.status);
       
       if (data.status === 'accepted') {
-        Alert.alert(
-          'Booking Accepted!',
-          'Your booking has been accepted. You can now join the consultation.',
-          [
-            {
-              text: 'Join Now',
-              onPress: () => navigation.navigate('PendingConsultations')
-            }
-          ]
-        );
+        console.log('🎉 [BookingWaiting] Booking accepted - global socketService will handle popup');
+        console.log('🎉 [BookingWaiting] BookingWaitingScreen only handles navigation/state updates');
+        
+        // Note: Popup is now handled globally by socketService to ensure it works
+        // regardless of which screen the user is on. BookingWaitingScreen only
+        // handles local state updates and navigation if needed.
+        
+        // Update local state to reflect acceptance
+        console.log('✅ [BookingWaiting] Booking acceptance handled by global event system');
+        
+        // Optional: Navigate away from waiting screen since booking is accepted
+        // navigation.goBack(); // Uncomment if you want to auto-navigate
       } else if (data.status === 'rejected') {
         Alert.alert(
           'Booking Rejected',
