@@ -12,6 +12,7 @@ import {
   Modal,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useNavigation } from '@react-navigation/native';
 import { useAuth } from '../../context/AuthContext';
 import { walletAPI, offersAPI } from '../../services/api';
 import RazorpayWebView from '../../components/RazorpayWebView';
@@ -32,6 +33,7 @@ const WalletScreen = () => {
   const [razorpayConfig, setRazorpayConfig] = useState(null);
   const [walletBalance, setWalletBalance] = useState(0);
   const { user, updateUser } = useAuth();
+  const navigation = useNavigation();
   const initialLoadDone = useRef(false);
   const isLoadingTransactions = useRef(false);
   const lastBalanceUpdate = useRef(null);
@@ -171,72 +173,15 @@ const WalletScreen = () => {
     }
   };
 
-  const handleAddMoney = async () => {
+  const handleAddMoney = () => {
     const numAmount = parseFloat(amount);
     if (!numAmount || numAmount < 10) {
       Alert.alert('Invalid Amount', 'Please enter a valid amount (minimum ₹10)');
       return;
     }
 
-    try {
-      setProcessingPayment(true);
-      
-      // Get Razorpay configuration
-      const configResponse = await walletAPI.getRazorpayConfig();
-      console.log('Razorpay config response:', configResponse);
-      
-      // Handle the response structure - API interceptor returns response.data directly
-      let config;
-      if (configResponse.success && configResponse.data) {
-        // Direct response from API interceptor
-        config = configResponse.data;
-      } else if (configResponse.data && configResponse.data.success) {
-        // Nested response structure
-        config = configResponse.data.data;
-      } else {
-        throw new Error('Failed to get payment configuration');
-      }
-      
-      console.log('Razorpay config extracted:', config);
-      setRazorpayConfig(config);
-      
-      // Create order on backend
-      const orderResponse = await walletAPI.createOrder(numAmount);
-      console.log('Order creation response:', orderResponse);
-      
-      // Handle the response structure - API interceptor returns response.data directly
-      let order;
-      if (orderResponse.success && orderResponse.data) {
-        // Direct response from API interceptor
-        order = orderResponse.data;
-      } else if (orderResponse.data && orderResponse.data.success) {
-        // Nested response structure
-        order = orderResponse.data.data;
-      } else {
-        const errorMsg = orderResponse.message || orderResponse.data?.message || 'Failed to create order';
-        throw new Error(errorMsg);
-      }
-      
-      console.log('Order extracted:', order);
-      setPaymentOrder(order);
-      
-      // Show payment modal with WebView
-      setShowPaymentModal(true);
-      
-    } catch (error) {
-      console.error('Payment initialization error:', error);
-      
-      let errorMessage = 'Failed to initialize payment. Please try again.';
-      if (error.response?.data?.message) {
-        errorMessage = error.response.data.message;
-      } else if (error.message) {
-        errorMessage = error.message;
-      }
-      
-      Alert.alert('Payment Error', errorMessage);
-    } finally {
-      setProcessingPayment(false);
-    }
+    // Navigate to the GST summary screen with the entered amount
+    navigation.navigate('WalletTopUpSummary', { amount: numAmount.toString() });
   };
 
   const handlePaymentSuccess = async (paymentData) => {

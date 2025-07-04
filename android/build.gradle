@@ -30,6 +30,7 @@ allprojects {
     google()
     mavenCentral()
     maven { url 'https://www.jitpack.io' }
+    maven { url "https://maven.razorpay.com" } // Add this line
     // LogRocket Maven repository
     maven { url "https://storage.googleapis.com/logrocket-maven/" }
   }

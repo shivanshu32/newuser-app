@@ -8,6 +8,7 @@ import { Ionicons } from '@expo/vector-icons';
 import HomeScreen from '../screens/main/HomeScreen';
 import BookingScreen from '../screens/main/BookingScreen';
 import WalletScreen from '../screens/main/WalletScreen';
+import WalletTopUpSummaryScreen from '../screens/main/WalletTopUpSummaryScreen';
 import ProfileScreen from '../screens/main/ProfileScreen';
 import AstrologerProfileScreen from '../screens/main/AstrologerProfileScreen';
 import BookingWaitingScreen from '../screens/main/BookingWaitingScreen';
@@ -281,6 +282,11 @@ const MainNavigator = () => {
         <Stack.Screen 
           name="PendingConsultations" 
           component={PendingConsultationsScreen} 
+          options={{ headerShown: false }}
+        />
+        <Stack.Screen 
+          name="WalletTopUpSummary" 
+          component={WalletTopUpSummaryScreen} 
           options={{ headerShown: false }}
         />
       </Stack.Navigator>

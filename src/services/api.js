@@ -38,6 +38,12 @@ console.log('API Configuration:', { API_URL, isDev: __DEV__, appOwnership: Const
 // Create axios instance
 const API = axios.create({
   baseURL: API_BASE,
+  timeout: 30000, // 30 second timeout
+  headers: {
+    'Content-Type': 'application/json',
+    'User-Agent': 'JyotishCall-UserApp/1.0.0',
+    'Accept': 'application/json',
+  },
 });
 
 // Add authorization header to every request if token exists
@@ -50,16 +56,19 @@ API.interceptors.request.use(
     } else {
       console.log(' [API] Request without auth token:', config.method?.toUpperCase(), config.url);
     }
+    
     console.log(' [API] Request config:', {
       method: config.method,
       url: config.url,
       baseURL: config.baseURL,
-      data: config.data
+      data: config.data,
+      headers: config.headers
     });
+    
     return config;
   },
   (error) => {
-    console.error(' [API] Request interceptor error:', error);
+    console.error(' [API] Request error:', error);
     return Promise.reject(error);
   }
 );
@@ -67,16 +76,31 @@ API.interceptors.request.use(
 // Add response interceptor for better error handling
 API.interceptors.response.use(
   (response) => {
-    console.log(' [API] Response received:', response.status, response.config.url);
+    console.log(' [API] Response success:', response.status, response.config.url);
     return response.data; // Return only the data part
   },
   (error) => {
+    // Enhanced error logging for network debugging
     console.error(' [API] Response error:', {
+      url: error.config?.url,
+      method: error.config?.method?.toUpperCase(),
       status: error.response?.status,
       statusText: error.response?.statusText,
-      url: error.config?.url,
-      data: error.response?.data
+      data: error.response?.data,
+      message: error.message,
+      code: error.code,
+      isNetworkError: error.message === 'Network Error',
+      isTimeout: error.code === 'ECONNABORTED'
     });
+    
+    // Add specific handling for common network issues
+    if (error.message === 'Network Error') {
+      console.error(' [API] Network Error - Check internet connection and backend availability');
+    } else if (error.code === 'ECONNABORTED') {
+      console.error(' [API] Request Timeout - Backend took too long to respond');
+    }
+    
+    // Return a rejected promise with the error
     return Promise.reject(error);
   }
 );

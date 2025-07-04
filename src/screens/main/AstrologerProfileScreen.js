@@ -15,7 +15,7 @@ import {
   StatusBar,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { astrologersAPI } from '../../services/api';
+import { astrologersAPI, walletAPI } from '../../services/api';
 import { initiateRealTimeBooking, listenForBookingStatusUpdates } from '../../services/socketService';
 import { addPendingConsultation, getPendingConsultations } from '../../utils/pendingConsultationsStore';
 
@@ -462,6 +462,103 @@ const AstrologerProfileScreen = ({ route, navigation }) => {
     }
   };
 
+  // Check wallet balance before booking (for voice/video consultations)
+  const checkWalletBalance = async (consultationType) => {
+    try {
+      console.log('[AstrologerProfileScreen] Checking wallet balance for', consultationType, 'consultation...');
+      
+      // Fetch current wallet balance
+      const balanceResponse = await walletAPI.getBalance();
+      const currentBalance = balanceResponse.data?.balance || 0;
+      
+      console.log('[AstrologerProfileScreen] Current wallet balance:', currentBalance);
+      
+      // Get per-minute rate for the selected consultation type
+      let perMinuteRate = 0;
+      if (astrologer?.consultationPrices) {
+        switch (consultationType) {
+          case 'chat':
+            perMinuteRate = astrologer.consultationPrices.chat || 20;
+            break;
+          case 'call':
+          case 'voice':
+            perMinuteRate = astrologer.consultationPrices.call || 30;
+            break;
+          case 'video':
+            perMinuteRate = astrologer.consultationPrices.video || 40;
+            break;
+          default:
+            perMinuteRate = 30; // Default fallback for voice
+        }
+      } else {
+        // Fallback rates if consultationPrices not available
+        perMinuteRate = consultationType === 'chat' ? 20 : consultationType === 'call' || consultationType === 'voice' ? 30 : 40;
+      }
+      
+      // Calculate minimum required balance for 5 minutes
+      const minimumRequiredBalance = perMinuteRate * 5;
+      
+      console.log('[AstrologerProfileScreen] Per-minute rate:', perMinuteRate);
+      console.log('[AstrologerProfileScreen] Minimum required balance (5 mins):', minimumRequiredBalance);
+      console.log('[AstrologerProfileScreen] Balance check:', currentBalance >= minimumRequiredBalance ? 'PASS' : 'FAIL');
+      
+      if (currentBalance < minimumRequiredBalance) {
+        // Insufficient balance - show alert and redirect to wallet
+        const shortfall = minimumRequiredBalance - currentBalance;
+        
+        Alert.alert(
+          'Insufficient Wallet Balance',
+          `You need at least ₹${minimumRequiredBalance} for a 5-minute ${consultationType} consultation (₹${perMinuteRate}/min).\n\nCurrent Balance: ₹${currentBalance.toFixed(2)}\nRequired: ₹${minimumRequiredBalance}\nShortfall: ₹${shortfall.toFixed(2)}\n\nPlease add funds to your wallet to continue.`,
+          [
+            {
+              text: 'Cancel',
+              style: 'cancel'
+            },
+            {
+              text: 'Add Funds',
+              onPress: () => {
+                // Navigate to wallet screen
+                navigation.navigate('Main', { 
+                  screen: 'Wallet',
+                  params: { 
+                    suggestedAmount: Math.ceil(shortfall / 100) * 100 // Round up to nearest 100
+                  }
+                });
+              }
+            }
+          ]
+        );
+        
+        return false; // Balance check failed
+      }
+      
+      return true; // Balance check passed
+      
+    } catch (error) {
+      console.error('[AstrologerProfileScreen] Error checking wallet balance:', error);
+      
+      // Show error alert but allow user to proceed (in case of API issues)
+      Alert.alert(
+        'Unable to Check Balance',
+        'We could not verify your wallet balance. Please ensure you have sufficient funds before proceeding.',
+        [
+          {
+            text: 'Cancel',
+            style: 'cancel'
+          },
+          {
+            text: 'Continue Anyway',
+            onPress: () => {
+              return true;
+            }
+          }
+        ]
+      );
+      
+      return false; // Don't proceed if balance check fails
+    }
+  };
+
   // Handle real-time booking via socket
   const handleBookNow = async (type) => {
     console.log(`handleBookNow called for session type: ${type}`);
@@ -508,6 +605,12 @@ const AstrologerProfileScreen = ({ route, navigation }) => {
       }
       
       // Prepare for booking with resolved astrologer name
+      
+      // Check wallet balance before proceeding with booking
+      const hasEnoughBalance = await checkWalletBalance(type);
+      if (!hasEnoughBalance) {
+        return; // Stop booking process if insufficient balance
+      }
       
       // Show confirmation dialog before initiating booking
       const now = new Date();
@@ -882,11 +985,11 @@ const AstrologerProfileScreen = ({ route, navigation }) => {
         {/* Booking Buttons */}
         <View style={styles.bookingSection}>
           <Text style={styles.bookingSectionTitle}>Book a Consultation</Text>
-          <Text style={styles.bookingSubtitle}>
+          {/* <Text style={styles.bookingSubtitle}>
             {astrologer.status === 'Online' 
               ? 'Astrologer is available now. Choose a consultation type:' 
               : 'Astrologer is currently offline. The astrologer will be notified once they come online.'}
-          </Text>
+          </Text> */}
           
           <View style={styles.bookingButtonsContainer}>
             <TouchableOpacity 
