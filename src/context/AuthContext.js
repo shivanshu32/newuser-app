@@ -2,6 +2,7 @@ import React, { createContext, useState, useContext, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
 import { Alert } from 'react-native';
+import { walletAPI } from '../services/api';
 // import LogRocket from '@logrocket/react-native'; // Temporarily disabled due to build issues
 
 // Create context
@@ -219,6 +220,34 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
+  // Update wallet balance
+  const updateWalletBalance = async () => {
+    try {
+      console.log('Updating wallet balance...');
+      const response = await walletAPI.getBalance();
+      
+      if (response.success && response.data) {
+        const walletBalance = response.data.balance;
+        console.log('New wallet balance:', walletBalance);
+        
+        // Update user data with new wallet balance
+        const updatedUser = { ...user, walletBalance };
+        setUser(updatedUser);
+        
+        // Update AsyncStorage
+        await AsyncStorage.setItem('userData', JSON.stringify(updatedUser));
+        
+        return { success: true, balance: walletBalance };
+      } else {
+        console.log('Failed to fetch wallet balance:', response);
+        return { success: false, message: 'Failed to fetch wallet balance' };
+      }
+    } catch (error) {
+      console.log('Error updating wallet balance:', error);
+      return { success: false, message: 'Error updating wallet balance' };
+    }
+  };
+
   // Logout
   const logout = async () => {
     try {
@@ -259,6 +288,7 @@ export const AuthProvider = ({ children }) => {
         requestOtp,
         verifyOtp,
         updateUser,
+        updateWalletBalance,
         logout,
       }}
     >

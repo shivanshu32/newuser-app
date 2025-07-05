@@ -26,6 +26,9 @@
       "channel": "preview-debug"
     },
     "production": {
+      "android": {
+        "buildType": "app-bundle" 
+      },
       "autoIncrement": true,
       "channel": "production"
     }

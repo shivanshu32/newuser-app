@@ -17,7 +17,7 @@
     ],
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.jyotishcall.user",
+      "bundleIdentifier": "com.jyotishtalk",
       "infoPlist": {
         "NSMicrophoneUsageDescription": "Allow Jyotish Call to access your microphone for voice consultations with astrologers",
         "NSCameraUsageDescription": "Allow Jyotish Call to access your camera for video consultations with astrologers"
@@ -28,7 +28,8 @@
         "foregroundImage": "./assets/icon-square.png",
         "backgroundColor": "#ffffff"
       },
-      "package": "com.jyotishcall.user",
+      "package": "com.jyotishtalk",
+      "versionCode": 10,
       "minSdkVersion": 25,
       "permissions": [
         "CAMERA",

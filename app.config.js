@@ -40,7 +40,8 @@ export default ({ config }) => ({
       "BLUETOOTH_CONNECT",
       "WAKE_LOCK"
     ],
-    package: "com.jyotishcall.user"
+    package: "com.jyotishtalk",
+    "versionCode": 10,
   },
   web: {
     favicon: "./assets/favicon.png"

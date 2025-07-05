@@ -9,6 +9,7 @@ import HomeScreen from '../screens/main/HomeScreen';
 import BookingScreen from '../screens/main/BookingScreen';
 import WalletScreen from '../screens/main/WalletScreen';
 import WalletTopUpSummaryScreen from '../screens/main/WalletTopUpSummaryScreen';
+import RazorpayPaymentScreen from '../screens/main/RazorpayPaymentScreen';
 import ProfileScreen from '../screens/main/ProfileScreen';
 import AstrologerProfileScreen from '../screens/main/AstrologerProfileScreen';
 import BookingWaitingScreen from '../screens/main/BookingWaitingScreen';
@@ -288,6 +289,11 @@ const MainNavigator = () => {
           name="WalletTopUpSummary" 
           component={WalletTopUpSummaryScreen} 
           options={{ headerShown: false }}
+        />
+        <Stack.Screen 
+          name="RazorpayPayment" 
+          component={RazorpayPaymentScreen} 
+          options={{ headerShown: true, title: 'Payment' }}
         />
       </Stack.Navigator>
       <BookingPopupWrapper />

@@ -9,10 +9,15 @@ import {
   SafeAreaView,
   ScrollView,
 } from 'react-native';
-import RazorpayCheckout from 'react-native-razorpay';
+import { Linking } from 'react-native';
+// Using Razorpay Web Checkout instead of native SDK for better compatibility
+// import RazorpayCheckout from 'react-native-razorpay';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { walletAPI } from '../../services/api';
+
+// API Base URL for payment link creation
+const API_BASE_URL = 'https://jyotishcall-backend.onrender.com';
 import { useAuth } from '../../context/AuthContext';
 
 const WalletTopUpSummaryScreen = () => {
@@ -94,18 +99,15 @@ const WalletTopUpSummaryScreen = () => {
       
       console.log('Opening Razorpay with options:', options);
       
-      // Check if RazorpayCheckout is available
-      if (!RazorpayCheckout || typeof RazorpayCheckout.open !== 'function') {
-        console.error('RazorpayCheckout object:', RazorpayCheckout);
-        throw new Error('Razorpay SDK not properly initialized. Please restart the app and ensure native module is linked.');
-      }
+      // Navigate to WebView payment screen with payment details
+      navigation.navigate('RazorpayPayment', {
+        order: order,
+        config: config,
+        finalAmount: finalAmount,
+        user: user
+      });
       
-      // Open Razorpay native checkout
-      const paymentData = await RazorpayCheckout.open(options);
-      console.log('Payment successful:', paymentData);
-      
-      // Handle payment success
-      await handlePaymentSuccess(paymentData);
+      console.log('Navigating to Razorpay WebView payment screen');
       
     } catch (error) {
       console.error('Payment error:', error);
@@ -126,6 +128,8 @@ const WalletTopUpSummaryScreen = () => {
       setProcessingPayment(false);
     }
   };
+
+
 
   const handlePaymentSuccess = async (paymentData) => {
     try {
