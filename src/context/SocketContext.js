@@ -13,7 +13,19 @@ import { useAuth } from './AuthContext';
 
 const SOCKET_SERVER_URL = 'https://jyotishcallbackend-2uxrv.ondigitalocean.app';
 
-
+// Enhanced socket configuration for stability
+const SOCKET_CONFIG = {
+  reconnection: true,
+  reconnectionAttempts: 10,
+  reconnectionDelay: 1000,
+  reconnectionDelayMax: 30000,
+  maxReconnectionAttempts: 10,
+  timeout: 20000,
+  forceNew: false,
+  transports: ['websocket', 'polling'],
+  upgrade: true,
+  rememberUpgrade: true
+};
 
 // Create context
 const SocketContext = createContext(null);
@@ -22,6 +34,8 @@ const SocketContext = createContext(null);
 const PING_INTERVAL = 20000; // 20 seconds
 const RECONNECT_DELAY = 3000; // 3 seconds
 const MAX_RECONNECT_ATTEMPTS = 10;
+const HEARTBEAT_INTERVAL = 30000; // 30 seconds
+const HEARTBEAT_TIMEOUT = 60000; // 60 seconds
 
 export const SocketProvider = ({ children }) => {
   const { token, user } = useAuth();
