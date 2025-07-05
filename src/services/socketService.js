@@ -75,12 +75,12 @@ export const initSocket = async () => {
       socket = socketInstance;
       console.log(' [socketService] Global socket variable updated');
       
-      // Register listeners after connection is established
-      console.log(' [socketService] Registering booking_status_update listener after connection');
+      // Remove any existing booking_status_update listeners to avoid duplicates
+      socketInstance.removeAllListeners('booking_status_update');
       
       // Add global listener for booking_status_update events
       socketInstance.on('booking_status_update', (data) => {
-        console.log('🔔 [socketService] Booking status update received:', {
+        console.log('🔔 [socketService] Global booking status update received:', {
           status: data.status,
           bookingId: data.bookingId,
           sessionId: data.sessionId,
@@ -100,8 +100,9 @@ export const initSocket = async () => {
               sessionId: data.sessionId,
               roomId: data.roomId,
               astrologerId: data.astrologerId,
-              astrologerName: data.astrologerName,
-              bookingType: 'chat', // Default to chat for now
+              astrologerName: data.astrologerDisplayName || data.astrologerName,
+              astrologerImageUrl: data.astrologerImageUrl,
+              bookingType: data.consultationType || 'chat',
               rate: data.rate,
               message: data.message
             };
@@ -112,7 +113,7 @@ export const initSocket = async () => {
             console.warn('⚠️ [socketService] Global eventEmitter not available for booking acceptance!');
           }
         } else if (data.status === 'rejected') {
-          console.log(' [socketService] Booking rejected - showing notification');
+          console.log('🔴 [socketService] Booking rejected - showing notification');
           
           // Show rejection notification (avoiding ToastAndroid for Expo Go compatibility)
           import('react-native').then((RN) => {

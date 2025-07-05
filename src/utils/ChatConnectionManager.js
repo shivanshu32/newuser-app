@@ -1,6 +1,6 @@
 import { AppState, Alert } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import io from 'socket.io-client';
+import { getSocket } from '../services/socketService';
 
 /**
  * Enhanced Chat Connection Manager
@@ -16,10 +16,12 @@ class ChatConnectionManager {
     this.statusCallbacks = new Set();
     this.connectionCallbacks = new Set();
     this.typingCallbacks = new Set();
+    this.messageQueue = []; // Initialize message queue array
     this.isConnected = false;
     this.reconnectAttempts = 0;
     this.maxReconnectAttempts = 5;
     this.reconnectDelay = 1000;
+    this.maxReconnectDelay = 30000; // 30 seconds max delay
     this.roomJoined = false;
     this.lastHeartbeat = Date.now();
     this.heartbeatInterval = null;
@@ -62,37 +64,26 @@ class ChatConnectionManager {
       this.isConnecting = true;
       this.notifyConnectionStatus('connecting');
 
-      // Get authentication token
-      const userToken = await AsyncStorage.getItem('userToken');
-      if (!userToken) {
-        throw new Error('No authentication token found');
+      console.log('[ChatConnectionManager] Using global socket from socketService');
+      
+      // Get the global socket instance from socketService
+      this.socket = await getSocket();
+      
+      if (!this.socket) {
+        throw new Error('Failed to get global socket instance');
       }
-
-      // Socket configuration
-      const socketUrl = 'https://jyotishcallbackend-2uxrv.ondigitalocean.app';
-      const socketOptions = {
-        query: {
-          userId: this.currentUserId,
-          astrologerId: this.currentAstrologerId,
-          bookingId: this.currentBookingId,
-          sessionType: 'chat',
-        },
-        auth: {
-          token: userToken,
-          id: this.currentUserId,
-          role: 'user'
-        },
-        path: '/ws',
-        reconnection: false, // We'll handle reconnection manually
-        timeout: 10000,
-        transports: ['websocket', 'polling']
-      };
-
-      console.log('[ChatConnectionManager] Connecting to:', socketUrl);
-      this.socket = io(socketUrl, socketOptions);
-
-      // Set up event listeners
-      this.setupEventListeners();
+      
+      console.log('[ChatConnectionManager] Got global socket instance:', this.socket.id);
+      
+      // Check if socket is already connected
+      if (this.socket.connected) {
+        console.log('[ChatConnectionManager] Socket already connected');
+        this.handleConnect();
+      } else {
+        console.log('[ChatConnectionManager] Socket not connected, waiting for connection');
+        // Set up event listeners and wait for connection
+        this.setupEventListeners();
+      }
 
     } catch (error) {
       console.error('[ChatConnectionManager] Connection failed:', error);
@@ -242,13 +233,8 @@ class ChatConnectionManager {
       }
     });
 
-    // Status update events
-    this.socket.on('booking_status_update', (data) => {
-      console.log('[ChatConnectionManager] Booking status update:', data);
-      if (data.bookingId === this.currentBookingId) {
-        this.notifyStatusUpdate({ type: 'booking_update', data });
-      }
-    });
+    // Note: booking_status_update events are handled by global socketService for popups
+    // ChatConnectionManager focuses only on chat-specific events
 
     this.socket.on('message_status_update', (data) => {
       if (data.bookingId === this.currentBookingId) {
@@ -318,12 +304,10 @@ class ChatConnectionManager {
     // Start heartbeat monitoring
     this.startHeartbeat();
     
-    // Join room if we have booking details
+    // Join room if we have booking details and flush queued messages
     if (this.currentBookingId && this.currentUserId) {
       this.joinRoom();
     }
-    // Join room and flush queued messages
-    this.joinRoom();
     this.flushMessageQueue();
   }
 
@@ -417,25 +401,46 @@ class ChatConnectionManager {
    * Join chat room
    */
   joinRoom() {
-    if (this.isConnected && this.socket && this.currentBookingId) {
-      console.log('[ChatConnectionManager] Joining consultation room:', this.currentBookingId);
+    try {
+      console.log('[ChatConnectionManager] DEBUG: Starting joinRoom method');
+      console.log('[ChatConnectionManager] DEBUG: isConnected:', this.isConnected);
+      console.log('[ChatConnectionManager] DEBUG: socket exists:', !!this.socket);
+      console.log('[ChatConnectionManager] DEBUG: currentBookingId:', this.currentBookingId);
       
-      // Construct roomId in the format expected by backend
-      const roomId = `room:${this.currentBookingId}`;
+      if (this.isConnected && this.socket && this.currentBookingId) {
+        console.log('[ChatConnectionManager] Joining consultation room:', this.currentBookingId);
+        
+        // Construct roomId in the format expected by backend
+        const roomId = `room:${this.currentBookingId}`;
+        console.log('[ChatConnectionManager] DEBUG: Constructed roomId:', roomId);
+        
+        // Use the same join_consultation_room event as video/voice consultations
+        const joinData = {
+          bookingId: this.currentBookingId,
+          roomId: roomId,
+          sessionId: this.currentBookingId, // Use bookingId as sessionId for chat
+          userId: this.currentUserId,
+          userType: 'user',
+          consultationType: 'chat'
+        };
+        
+        console.log('[ChatConnectionManager] DEBUG: About to emit join_consultation_room with data:', joinData);
+        this.socket.emit('join_consultation_room', joinData);
+        console.log('[ChatConnectionManager] DEBUG: Successfully emitted join_consultation_room');
+        
+        console.log('[ChatConnectionManager] DEBUG: About to call notifyConnectionStatus');
+        this.notifyConnectionStatus('joining', 'Joining consultation room...');
+        console.log('[ChatConnectionManager] DEBUG: Successfully called notifyConnectionStatus');
+      } else {
+        console.warn('[ChatConnectionManager] Cannot join room - not connected or missing booking ID');
+        console.warn('[ChatConnectionManager] DEBUG: isConnected:', this.isConnected, 'socket:', !!this.socket, 'bookingId:', this.currentBookingId);
+      }
       
-      // Use the same join_consultation_room event as video/voice consultations
-      this.socket.emit('join_consultation_room', {
-        bookingId: this.currentBookingId,
-        roomId: roomId,
-        sessionId: this.currentBookingId, // Use bookingId as sessionId for chat
-        userId: this.currentUserId,
-        userType: 'user',
-        consultationType: 'chat'
-      });
-      
-      this.notifyConnectionStatus('joining', 'Joining consultation room...');
-    } else {
-      console.warn('[ChatConnectionManager] Cannot join room - not connected or missing booking ID');
+      console.log('[ChatConnectionManager] DEBUG: joinRoom method completed successfully');
+    } catch (error) {
+      console.error('[ChatConnectionManager] ERROR in joinRoom method:', error);
+      console.error('[ChatConnectionManager] ERROR stack:', error.stack);
+      throw error; // Re-throw to see where it's caught
     }
   }
 

@@ -74,9 +74,10 @@ const EnhancedChatScreen = ({ route, navigation }) => {
       // Cleanup
       console.log('🔴 [USER-APP] EnhancedChatScreen: Cleaning up on unmount');
       
-      if (connectionManagerRef.current) {
-        connectionManagerRef.current.disconnect();
-      }
+      // Note: We don't disconnect the ConnectionManager here to maintain
+      // socket connection for consecutive bookings. The socket should only
+      // disconnect when the user logs out or exits the app completely.
+      console.log('🟡 [USER-APP] EnhancedChatScreen cleanup - keeping socket connected for consecutive bookings');
       
       // Stop all timers and intervals
       if (typingTimerRef.current) clearTimeout(typingTimerRef.current);
@@ -261,24 +262,27 @@ const EnhancedChatScreen = ({ route, navigation }) => {
     // Use InteractionManager to ensure immediate UI update without blocking
     InteractionManager.runAfterInteractions(() => {
       setMessages(prevMessages => {
+        // Ensure prevMessages is always an array
+        const messages = prevMessages || [];
+        
         // Avoid duplicate messages
-        const exists = prevMessages.some(msg => msg.id === message.id);
+        const exists = messages.some(msg => msg.id === message.id);
         if (exists) {
           console.log('🔴 [USER-APP] Duplicate message ignored:', message.id);
-          return prevMessages;
+          return messages;
         }
         
         // Optimize: Only sort if message timestamp is older than the last message
         // Most messages arrive in chronological order, so avoid unnecessary sorting
-        const lastMessage = prevMessages[prevMessages.length - 1];
+        const lastMessage = messages.length > 0 ? messages[messages.length - 1] : null;
         let newMessages;
         
         if (!lastMessage || new Date(message.timestamp) >= new Date(lastMessage.timestamp)) {
           // Message is newer or equal, just append (most common case)
-          newMessages = [...prevMessages, message];
+          newMessages = [...messages, message];
         } else {
           // Message is older, need to sort (rare case)
-          newMessages = [...prevMessages, message].sort((a, b) => 
+          newMessages = [...messages, message].sort((a, b) => 
             new Date(a.timestamp) - new Date(b.timestamp)
           );
         }
@@ -304,13 +308,16 @@ const EnhancedChatScreen = ({ route, navigation }) => {
     
     // Also try immediate state update for fastest possible response
     setMessages(prevMessages => {
-      const exists = prevMessages.some(msg => msg.id === message.id);
-      if (exists) return prevMessages;
+      // Ensure prevMessages is always an array
+      const messages = prevMessages || [];
       
-      const lastMessage = prevMessages[prevMessages.length - 1];
+      const exists = messages.some(msg => msg.id === message.id);
+      if (exists) return messages;
+      
+      const lastMessage = messages.length > 0 ? messages[messages.length - 1] : null;
       const newMessages = !lastMessage || new Date(message.timestamp) >= new Date(lastMessage.timestamp)
-        ? [...prevMessages, message]
-        : [...prevMessages, message].sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+        ? [...messages, message]
+        : [...messages, message].sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
       
       return newMessages;
     });

@@ -62,12 +62,10 @@ const AstrologerProfileScreen = ({ route, navigation }) => {
     // Set up booking status listener when component mounts
     setupBookingStatusListener();
     
-    // Clean up listener when component unmounts
-    return () => {
-      if (statusListenerCleanup.current && typeof statusListenerCleanup.current === 'function') {
-        statusListenerCleanup.current();
-      }
-    };
+    // Note: We don't clean up the booking status listener here to maintain
+    // persistent listening for consecutive bookings. The global listener in
+    // socketService should handle booking status updates throughout the session.
+    console.log('🟡 [USER-APP] AstrologerProfileScreen: Keeping booking status listener active for consecutive bookings');
   }, []);
   
   // Add timeout for booking requests
