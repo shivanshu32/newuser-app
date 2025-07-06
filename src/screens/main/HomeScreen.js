@@ -246,15 +246,34 @@ const HomeScreen = ({ navigation }) => {
     }
 
     try {
+      // Extract astrologer ID from the booking object structure
+      const astrologerId = bookingToCancel.astrologer?._id || bookingToCancel.astrologerId || bookingToCancel.astrologer;
+      const bookingId = bookingToCancel.bookingId || bookingToCancel._id;
+      
       console.log('🚫 Confirming booking cancellation:', {
-        bookingId: bookingToCancel.bookingId || bookingToCancel._id,
-        astrologerId: bookingToCancel.astrologerId
+        bookingId,
+        astrologerId,
+        bookingStructure: {
+          hasAstrologer: !!bookingToCancel.astrologer,
+          astrologerType: typeof bookingToCancel.astrologer,
+          hasAstrologerId: !!bookingToCancel.astrologerId
+        }
       });
-
+      
+      if (!astrologerId) {
+        console.error('❌ Cannot cancel booking: astrologerId not found in booking object');
+        Alert.alert(
+          'Error',
+          'Unable to cancel booking. Please try again.',
+          [{ text: 'OK' }]
+        );
+        return;
+      }
+      
       // Emit cancel booking event to backend
       socket.emit('cancel_booking', {
-        bookingId: bookingToCancel.bookingId || bookingToCancel._id,
-        astrologerId: bookingToCancel.astrologerId,
+        bookingId,
+        astrologerId,
         reason: 'user_cancelled'
       });
 
@@ -366,13 +385,29 @@ const HomeScreen = ({ navigation }) => {
 
   // Handle booking status updates (when astrologer accepts/rejects booking)
   const handleBookingStatusUpdate = useCallback(async (data) => {
-    console.log('📢 Booking status update received:', data);
+    console.log('🔥🔥🔥 [HOMESCREEN] BOOKING STATUS UPDATE RECEIVED 🔥🔥🔥');
+    console.log('📢 [DEBUG] Booking status update received:', JSON.stringify(data, null, 2));
+    
+    // Handle rejection first (before filtering out from state)
+    if (data.status === 'rejected') {
+      console.log('🔴 [DEBUG] Processing booking rejection:', data.bookingId);
+      
+      // Show rejection alert using backend message or fallback
+      const rejectionMessage = data.message || 'Your consultation request was declined by the astrologer.';
+      Alert.alert(
+        'Booking Declined',
+        rejectionMessage,
+        [{ text: 'OK' }]
+      );
+    }
     
     // Update pending bookings state in real-time
     setPendingBookings(prevBookings => {
-      return prevBookings.map(booking => {
+      console.log('📢 [DEBUG] Updating pending bookings, current count:', prevBookings.length);
+      
+      const updatedBookings = prevBookings.map(booking => {
         if (booking.bookingId === data.bookingId || booking._id === data.bookingId) {
-          console.log('✅ Updating pending booking status:', {
+          console.log('✅ [DEBUG] Found matching booking to update:', {
             bookingId: data.bookingId,
             oldStatus: booking.status,
             newStatus: data.status
@@ -389,8 +424,23 @@ const HomeScreen = ({ navigation }) => {
         return booking;
       }).filter(booking => {
         // Remove rejected, expired, or cancelled bookings from pending list
-        return !['rejected', 'expired', 'cancelled'].includes(booking.status);
+        const shouldRemove = ['rejected', 'expired', 'cancelled'].includes(booking.status);
+        if (shouldRemove) {
+          console.log('🗑️ [DEBUG] Removing booking from pending list:', {
+            bookingId: booking.bookingId || booking._id,
+            status: booking.status
+          });
+        }
+        return !shouldRemove;
       });
+      
+      console.log('📊 [DEBUG] Pending bookings after update:', {
+        before: prevBookings.length,
+        after: updatedBookings.length,
+        removed: prevBookings.length - updatedBookings.length
+      });
+      
+      return updatedBookings;
     });
     
     if (data.status === 'accepted') {
@@ -497,12 +547,6 @@ const HomeScreen = ({ navigation }) => {
       await addPendingConsultation(consultationData);
       
       // Consultation data added to pending list
-    } else if (data.status === 'rejected') {
-      Alert.alert(
-        'Booking Declined',
-        `Your ${data.bookingType || 'consultation'} request was declined by the astrologer.`,
-        [{ text: 'OK' }]
-      );
     }
   }, [navigation, user]);
 
@@ -603,28 +647,102 @@ const HomeScreen = ({ navigation }) => {
 
   // Socket listener for real-time updates
   useEffect(() => {
+    console.log('🔌 [DEBUG] Socket useEffect triggered, socket available:', !!socket);
+    console.log('🔌 [DEBUG] Socket connection state:', socket?.connected);
+    
     if (socket) {
-      console.log('🔌 Setting up socket listeners in HomeScreen');
+      const setupListeners = () => {
+        console.log('🔌 Setting up socket listeners in HomeScreen (connected:', socket.connected, ')');
+        
+        // Remove any existing listeners first to avoid duplicates
+        socket.off('astrologer_status_updated', handleAstrologerStatusUpdate);
+        socket.off('booking_status_update', handleBookingStatusUpdate);
+        socket.off('user_pending_bookings_updated', handleUserPendingBookingUpdates);
+        socket.off('session_end', handleSessionEnd);
+        socket.off('session_ended', handleSessionEnd);
+        
+        // Listen for astrologer status updates
+        socket.on('astrologer_status_updated', handleAstrologerStatusUpdate);
+        
+        // Listen for booking status updates (acceptance/rejection)
+        socket.on('booking_status_update', handleBookingStatusUpdate);
+        
+        // Listen for user pending booking updates
+        socket.on('user_pending_bookings_updated', handleUserPendingBookingUpdates);
+        
+        // Listen for session end events to clean up pending bookings
+        socket.on('session_end', handleSessionEnd);
+        socket.on('session_ended', handleSessionEnd);
+      };
       
-      // Listen for astrologer status updates
-      socket.on('astrologer_status_updated', handleAstrologerStatusUpdate);
+      // Set up listeners immediately if already connected
+      if (socket.connected) {
+        setupListeners();
+      } else {
+        // Wait for connection and then set up listeners
+        console.log('🔌 Socket not connected yet, waiting for connection...');
+        socket.on('connect', setupListeners);
+      }
       
-      // Listen for booking status updates (acceptance/rejection)
-      socket.on('booking_status_update', handleBookingStatusUpdate);
-      
-      // Listen for user pending booking updates
-      socket.on('user_pending_bookings_updated', handleUserPendingBookingUpdates);
-      
-      // Listen for session end events to clean up pending bookings
-      socket.on('session_end', handleSessionEnd);
-      socket.on('session_ended', handleSessionEnd);
+      // Also listen for reconnection events
+      socket.on('reconnect', setupListeners);
       
       // DISABLED: Legacy booking accepted event - now handled by modern BookingAcceptedPopup
       // socket.on('booking_accepted', handleBookingAccepted);
       
       // Listen for booking rejected event
       socket.on('booking_rejected', (data) => {
-        console.log('📢 Booking rejected event received:', data);
+        console.log('📢 [DEBUG] Booking rejected event received:', JSON.stringify(data, null, 2));
+        console.log('📢 [DEBUG] Event data bookingId:', data.bookingId);
+        console.log('📢 [DEBUG] Event data type:', typeof data.bookingId);
+        
+        // Remove the rejected booking from pending bookings list for real-time UI update
+        setPendingBookings(prevBookings => {
+          console.log('📢 [DEBUG] Current pending bookings before filtering:', prevBookings.length);
+          console.log('📢 [DEBUG] Pending bookings details:', prevBookings.map(b => ({
+            id: b._id,
+            bookingId: b.bookingId,
+            astrologerId: b.astrologerId,
+            status: b.status
+          })));
+          
+          const filteredBookings = prevBookings.filter(booking => {
+            const bookingId = booking.bookingId || booking._id;
+            const shouldRemove = bookingId === data.bookingId || bookingId?.toString() === data.bookingId?.toString();
+            
+            console.log('📢 [DEBUG] Comparing booking:', {
+              bookingInList: bookingId,
+              bookingInListType: typeof bookingId,
+              eventBookingId: data.bookingId,
+              eventBookingIdType: typeof data.bookingId,
+              shouldRemove: shouldRemove
+            });
+            
+            if (shouldRemove) {
+              console.log('✅ [DEBUG] FOUND MATCH - Removing rejected booking from pending list:', {
+                bookingId: bookingId,
+                astrologerId: booking.astrologerId,
+                bookingType: booking.type
+              });
+            }
+            
+            return !shouldRemove;
+          });
+          
+          console.log('📊 [DEBUG] Pending bookings after rejection removal:', {
+            before: prevBookings.length,
+            after: filteredBookings.length,
+            removed: prevBookings.length - filteredBookings.length
+          });
+          
+          if (prevBookings.length === filteredBookings.length) {
+            console.warn('⚠️ [DEBUG] WARNING: No booking was removed! Possible ID mismatch.');
+          }
+          
+          return filteredBookings;
+        });
+        
+        // Show rejection alert
         Alert.alert(
           'Booking Declined',
           data.message || 'Your booking request was declined.',
@@ -657,13 +775,16 @@ const HomeScreen = ({ navigation }) => {
         socket.off('astrologer_status_updated', handleAstrologerStatusUpdate);
         socket.off('booking_status_update', handleBookingStatusUpdate);
         socket.off('user_pending_bookings_updated', handleUserPendingBookingUpdates);
-        // socket.off('booking_accepted', handleBookingAccepted); // Disabled - legacy listener
+        socket.off('session_end', handleSessionEnd);
+        socket.off('session_ended', handleSessionEnd);
+        socket.off('connect', setupListeners);
+        socket.off('reconnect', setupListeners);
         socket.off('booking_rejected');
         socket.off('voice_call_initiated');
         socket.off('voice_call_failed');
       };
     }
-  }, [socket, handleAstrologerStatusUpdate, handleBookingStatusUpdate, handleBookingAccepted, handleUserPendingBookingUpdates]);
+  }, [socket, handleAstrologerStatusUpdate, handleBookingStatusUpdate, handleUserPendingBookingUpdates, handleSessionEnd]);
 
   // Render booking card
   const renderBookingCard = ({ item }) => (
@@ -714,56 +835,161 @@ const HomeScreen = ({ navigation }) => {
 
 
 
-  // Get status outline color based on astrologer status
-  const getStatusOutlineColor = (status) => {
-    switch (status) {
-      case 'online':
-        return '#4CAF50'; // Green
-      case 'busy':
-        return '#FFD700'; // Yellow
-      case 'offline':
-      default:
-        return '#9E9E9E'; // Grey
+  // Get status outline color based on astrologer onlineStatus
+  const getStatusOutlineColor = (astrologer) => {
+    // Check if astrologer is online based on onlineStatus field
+    const isOnline = astrologer.onlineStatus?.chat === 1 || astrologer.onlineStatus?.call === 1;
+    
+    if (isOnline) {
+      // Check if astrologer has legacy status field for busy state
+      if (astrologer.status === 'busy') {
+        return '#FF9800'; // Orange for busy
+      }
+      return '#4CAF50'; // Green for online
     }
+    return '#9E9E9E'; // Grey for offline
   };
 
   // Render astrologer card
-  const renderAstrologerCard = ({ item }) => (
-    <TouchableOpacity
-      style={styles.astrologerCard}
-      onPress={() => navigation.navigate('AstrologerProfile', { astrologer: item })}
-    >
-      <View style={[
-        styles.astrologerImageContainer,
-        {
-          borderColor: getStatusOutlineColor(item.status),
+  const renderAstrologerCard = ({ item }) => {
+    // Determine status based on onlineStatus field
+    const getStatusText = (astrologer) => {
+      const isOnline = astrologer.onlineStatus?.chat === 1 || astrologer.onlineStatus?.call === 1;
+      
+      if (isOnline) {
+        // Check if astrologer has legacy status field for busy state
+        if (astrologer.status === 'busy') {
+          return 'Busy';
         }
-      ]}>
-        <Image
-          source={{ 
-            uri: item.imageUrl || item.profileImage || 'https://via.placeholder.com/80x80?text=No+Image' 
-          }}
-          style={styles.astrologerImage}
-        />
-      </View>
-      <View style={styles.astrologerInfo}>
-        <Text style={styles.astrologerName}>{item.displayName || item.name}</Text>
-        <Text style={styles.astrologerSpecialty}>
-          {item.specialties?.join(', ') || item.specializations?.join(', ') || 'Astrologer'}
-        </Text>
-        <View style={styles.ratingContainer}>
-          <FontAwesome name="star" size={14} color="#FFD700" />
-          <Text style={styles.rating}>
-            {item.rating?.average ? item.rating.average.toFixed(1) : '4.5'}
-          </Text>
-          <Text style={styles.experience}>• {item.experience || '5'}+ years</Text>
+        return 'Available';
+      }
+      return 'Offline';
+    };
+
+    const getStatusGradient = (astrologer) => {
+      const isOnline = astrologer.onlineStatus?.chat === 1 || astrologer.onlineStatus?.call === 1;
+      
+      if (isOnline) {
+        // Check if astrologer has legacy status field for busy state
+        if (astrologer.status === 'busy') {
+          return ['#F59E0B', '#D97706']; // Orange for busy
+        }
+        return ['#10B981', '#059669']; // Green for online
+      }
+      return ['#9CA3AF', '#6B7280']; // Grey for offline
+    };
+
+    return (
+      <TouchableOpacity
+        style={styles.astrologerCard}
+        onPress={() => navigation.navigate('AstrologerProfile', { astrologer: item })}
+        activeOpacity={0.8}
+      >
+        {/* Header Section with Image and Status */}
+        <View style={styles.cardHeader}>
+          <View style={styles.imageSection}>
+            <View style={[
+              styles.astrologerImageContainer,
+              {
+                borderColor: getStatusOutlineColor(item),
+              }
+            ]}>
+              <Image
+                source={{ 
+                  uri: item.imageUrl || item.profileImage || 'https://via.placeholder.com/80x80?text=No+Image' 
+                }}
+                style={styles.astrologerImage}
+              />
+              {/* Status Badge */}
+              <View style={[
+                styles.statusBadge,
+                { backgroundColor: getStatusOutlineColor(item) }
+              ]}>
+                <View style={styles.statusDot} />
+              </View>
+            </View>
+          </View>
+          
+          <View style={styles.astrologerMainInfo}>
+            <View style={styles.nameAndStatus}>
+              <Text style={styles.astrologerName} numberOfLines={1}>
+                {item.displayName || item.name}
+              </Text>
+              <View style={[
+                styles.statusChip,
+                { backgroundColor: getStatusOutlineColor(item) + '20' }
+              ]}>
+                <Text style={[
+                  styles.statusText,
+                  { color: getStatusOutlineColor(item) }
+                ]}>
+                  {getStatusText(item)}
+                </Text>
+              </View>
+            </View>
+            
+            <Text style={styles.astrologerSpecialty} numberOfLines={2}>
+              {item.specialties?.join(', ') || item.specializations?.join(', ') || 'Vedic Astrology, Numerology'}
+            </Text>
+            
+            {/* Enhanced Rating Section */}
+            <View style={styles.ratingSection}>
+              <View style={styles.ratingContainer}>
+                <View style={styles.starContainer}>
+                  <FontAwesome name="star" size={16} color="#FFD700" />
+                  <Text style={styles.rating}>
+                    {item.rating?.average ? item.rating.average.toFixed(1) : '4.8'}
+                  </Text>
+                </View>
+                <Text style={styles.reviewCount}>
+                  ({item.rating?.count || '150'} reviews)
+                </Text>
+              </View>
+              <Text style={styles.experience}>{item.experience || '8'}+ years exp</Text>
+            </View>
+          </View>
         </View>
-        <View style={styles.priceContainer}>
-          <Text style={styles.price}>₹{item.consultationPrices?.video || item.consultationPrices?.call || item.consultationPrices?.chat || '50'}/min</Text>
+
+        {/* Price and Quick Actions Section */}
+        <View style={styles.cardFooter}>
+          <View style={styles.priceSection}>
+            <Text style={styles.priceLabel}>Chat starting from</Text>
+            <Text style={styles.price}>
+              ₹{item.consultationPrices?.chat || '50'}/min
+            </Text>
+          </View>
+          
+          {/* Quick Action Buttons - Dynamic visibility based on onlineStatus */}
+          <View style={styles.quickActions}>
+            {/* Show Chat button only if onlineStatus.chat === 1 and consultationPrices.chat exists */}
+            {item.onlineStatus?.chat === 1 && item.consultationPrices?.chat && (
+              <TouchableOpacity 
+                style={[styles.quickActionBtn, styles.chatBtn]}
+                onPress={(e) => {
+                  e.stopPropagation();
+                  navigation.navigate('AstrologerProfile', { astrologer: item });
+                }}
+              >
+                <Ionicons name="chatbubble" size={16} color="#10B981" />
+              </TouchableOpacity>
+            )}
+            {/* Show Call button only if onlineStatus.call === 1 and consultationPrices.call exists */}
+            {item.onlineStatus?.call === 1 && item.consultationPrices?.call && (
+              <TouchableOpacity 
+                style={[styles.quickActionBtn, styles.callBtn]}
+                onPress={(e) => {
+                  e.stopPropagation();
+                  navigation.navigate('AstrologerProfile', { astrologer: item });
+                }}
+              >
+                <Ionicons name="call" size={16} color="#3B82F6" />
+              </TouchableOpacity>
+            )}
+          </View>
         </View>
-      </View>
-    </TouchableOpacity>
-  );
+      </TouchableOpacity>
+    );
+  };
 
   // Render pending booking card
   const renderPendingBookingCard = ({ item }) => {
@@ -1195,73 +1421,179 @@ const styles = StyleSheet.create({
     marginRight: 4,
   },
   astrologerCard: {
-    flexDirection: 'row',
     backgroundColor: '#fff',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 12,
+    borderRadius: 16,
+    padding: 20,
+    marginBottom: 16,
+    marginHorizontal: 4,
     shadowColor: '#000',
     shadowOffset: {
       width: 0,
-      height: 2,
+      height: 4,
     },
-    shadowOpacity: 0.1,
-    shadowRadius: 3.84,
-    elevation: 5,
+    shadowOpacity: 0.12,
+    shadowRadius: 8,
+    elevation: 8,
+    borderWidth: 1,
+    borderColor: '#f0f0f0',
   },
-  astrologerImageContainer: {
-    width: 84,
-    height: 84,
-    borderRadius: 42,
-    borderWidth: 2,
-    justifyContent: 'center',
-    alignItems: 'center',
+  cardHeader: {
+    flexDirection: 'row',
+    marginBottom: 16,
+  },
+  imageSection: {
     marginRight: 16,
   },
-  astrologerImage: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
+  astrologerImageContainer: {
+    width: 88,
+    height: 88,
+    borderRadius: 44,
+    borderWidth: 3,
+    justifyContent: 'center',
+    alignItems: 'center',
+    position: 'relative',
   },
-  astrologerInfo: {
+  astrologerImage: {
+    width: 82,
+    height: 82,
+    borderRadius: 41,
+  },
+  statusBadge: {
+    position: 'absolute',
+    bottom: 2,
+    right: 2,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: '#fff',
+  },
+  statusDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#fff',
+  },
+  astrologerMainInfo: {
     flex: 1,
-    justifyContent: 'flex-start',
+    justifyContent: 'space-between',
+  },
+  nameAndStatus: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 6,
   },
   astrologerName: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#333',
-    marginBottom: 4,
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#1F2937',
+    flex: 1,
+    marginRight: 8,
+  },
+  statusChip: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+    alignSelf: 'flex-start',
+  },
+  statusText: {
+    fontSize: 11,
+    fontWeight: '600',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
   astrologerSpecialty: {
     fontSize: 14,
-    color: '#666',
+    color: '#6B7280',
     marginBottom: 8,
+    lineHeight: 20,
+  },
+  ratingSection: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
   },
   ratingContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 8,
+  },
+  starContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FEF3C7',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+    marginRight: 8,
   },
   rating: {
     fontSize: 14,
-    color: '#333',
+    color: '#92400E',
     marginLeft: 4,
-    fontWeight: '600',
+    fontWeight: '700',
+  },
+  reviewCount: {
+    fontSize: 12,
+    color: '#9CA3AF',
+    fontWeight: '500',
   },
   experience: {
-    fontSize: 14,
-    color: '#666',
-    marginLeft: 8,
+    fontSize: 12,
+    color: '#6B7280',
+    fontWeight: '600',
+    backgroundColor: '#F3F4F6',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
   },
-  priceContainer: {
+  cardFooter: {
     flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
+    paddingTop: 16,
+    borderTopWidth: 1,
+    borderTopColor: '#F3F4F6',
+  },
+  priceSection: {
+    flex: 1,
+  },
+  priceLabel: {
+    fontSize: 12,
+    color: '#9CA3AF',
+    fontWeight: '500',
+    marginBottom: 2,
   },
   price: {
-    fontSize: 16,
-    fontWeight: 'bold',
+    fontSize: 18,
+    fontWeight: '800',
     color: '#F97316',
+  },
+  quickActions: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  quickActionBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1.5,
+  },
+  chatBtn: {
+    backgroundColor: '#ECFDF5',
+    borderColor: '#10B981',
+  },
+  callBtn: {
+    backgroundColor: '#EFF6FF',
+    borderColor: '#3B82F6',
+  },
+  videoBtn: {
+    backgroundColor: '#F3E8FF',
+    borderColor: '#8B5CF6',
   },
   // Pending Booking Styles
   pendingBookingsIndicator: {

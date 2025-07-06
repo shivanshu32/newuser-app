@@ -412,6 +412,34 @@ const AstrologerProfileScreen = ({ route, navigation }) => {
     }
   }, [currentBookingId, bookingStatus, astrologer, navigation]);
 
+  // Helper function to get status color based on onlineStatus
+  const getStatusColor = (astrologer) => {
+    if (!astrologer) return '#9E9E9E'; // Gray for unknown
+    
+    // Check if astrologer is busy (legacy status field)
+    if (astrologer.status === 'busy') {
+      return '#FF9800'; // Orange for busy
+    }
+    
+    // Check onlineStatus for availability
+    const isOnline = astrologer.onlineStatus?.chat === 1 || astrologer.onlineStatus?.call === 1;
+    return isOnline ? '#4CAF50' : '#9E9E9E'; // Green for online, Gray for offline
+  };
+  
+  // Helper function to get status text based on onlineStatus
+  const getStatusText = (astrologer) => {
+    if (!astrologer) return 'Status Unknown';
+    
+    // Check if astrologer is busy (legacy status field)
+    if (astrologer.status === 'busy') {
+      return 'Currently Busy';
+    }
+    
+    // Check onlineStatus for availability
+    const isOnline = astrologer.onlineStatus?.chat === 1 || astrologer.onlineStatus?.call === 1;
+    return isOnline ? 'Available now' : 'Currently Offline';
+  };
+
   const fetchAstrologerDetails = async () => {
     try {
       setLoading(true);
@@ -873,8 +901,7 @@ const AstrologerProfileScreen = ({ route, navigation }) => {
             <View
               style={[
                 styles.statusIndicator,
-                // { backgroundColor: astrologer.status === 'Online' ? '#4CAF50' : '#F44336' },
-                 { backgroundColor: '#4CAF50' },
+                { backgroundColor: getStatusColor(astrologer) },
               ]}
             />
           </View>
@@ -893,8 +920,7 @@ const AstrologerProfileScreen = ({ route, navigation }) => {
             
             <View style={styles.statusTextContainer}>
               <Text style={styles.statusText}>
-                Online
-                {/* {astrologer.status === 'Online' ? 'Available now' : 'Currently unavailable'} */}
+                {getStatusText(astrologer)}
               </Text>
             </View>
           </View>
@@ -990,41 +1016,47 @@ const AstrologerProfileScreen = ({ route, navigation }) => {
           </Text> */}
           
           <View style={styles.bookingButtonsContainer}>
-            <TouchableOpacity 
-              style={[styles.bookingButton, styles.chatButton]} 
-              onPress={handleBookChat}
-              accessibilityLabel="Book Chat Consultation"
-            >
-              <Ionicons 
-                name="chatbubble" 
-                size={24} 
-                color="#fff" 
-              />
-              <Text style={styles.bookingButtonText}>
-                Chat
-              </Text>
-              <Text style={styles.bookingButtonPrice}>
-                ₹{astrologer.consultationPrices?.chat || '20'}/min
-              </Text>
-            </TouchableOpacity>
+            {/* Chat Button - Show only if onlineStatus.chat === 1 and consultation price exists */}
+            {(astrologer.onlineStatus?.chat === 1 && astrologer.consultationPrices?.chat) && (
+              <TouchableOpacity 
+                style={[styles.bookingButton, styles.chatButton]} 
+                onPress={handleBookChat}
+                accessibilityLabel="Book Chat Consultation"
+              >
+                <Ionicons 
+                  name="chatbubble" 
+                  size={24} 
+                  color="#fff" 
+                />
+                <Text style={styles.bookingButtonText}>
+                  Chat
+                </Text>
+                <Text style={styles.bookingButtonPrice}>
+                  ₹{astrologer.consultationPrices?.chat || '20'}/min
+                </Text>
+              </TouchableOpacity>
+            )}
             
-            <TouchableOpacity 
-              style={[styles.bookingButton, styles.voiceButton]} 
-              onPress={handleBookVoiceCall}
-              accessibilityLabel="Book Voice Call Consultation"
-            >
-              <Ionicons 
-                name="call" 
-                size={24} 
-                color="#fff" 
-              />
-              <Text style={styles.bookingButtonText}>
-                Voice Call
-              </Text>
-              <Text style={styles.bookingButtonPrice}>
-                ₹{astrologer.consultationPrices?.call || '30'}/min
-              </Text>
-            </TouchableOpacity>
+            {/* Voice Call Button - Show only if onlineStatus.call === 1 and consultation price exists */}
+            {(astrologer.onlineStatus?.call === 1 && astrologer.consultationPrices?.call) && (
+              <TouchableOpacity 
+                style={[styles.bookingButton, styles.voiceButton]} 
+                onPress={handleBookVoiceCall}
+                accessibilityLabel="Book Voice Call Consultation"
+              >
+                <Ionicons 
+                  name="call" 
+                  size={24} 
+                  color="#fff" 
+                />
+                <Text style={styles.bookingButtonText}>
+                  Voice Call
+                </Text>
+                <Text style={styles.bookingButtonPrice}>
+                  ₹{astrologer.consultationPrices?.call || '30'}/min
+                </Text>
+              </TouchableOpacity>
+            )}
             
             {/* Video Call booking button temporarily hidden */}
             {/* <TouchableOpacity 

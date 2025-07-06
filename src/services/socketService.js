@@ -1,5 +1,6 @@
 import { io } from 'socket.io-client';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Alert } from 'react-native';
 
 // Constants for typing indicator
 const TYPING_DEBOUNCE_TIME = 1000; // 1 second
@@ -13,6 +14,18 @@ const API_URL = 'https://jyotishcallbackend-2uxrv.ondigitalocean.app';
 // Old production URL: const API_URL = 'http://3.110.171.85';
 
 let socket = null;
+let sharedSocket = null; // Socket from SocketContext
+
+/**
+ * Set the shared socket instance from SocketContext
+ * This ensures we use the same socket instance across the app
+ * @param {Object} socketInstance - Socket instance from SocketContext
+ */
+export const setSharedSocket = (socketInstance) => {
+  console.log('🔗 [socketService] Setting shared socket from SocketContext:', !!socketInstance);
+  sharedSocket = socketInstance;
+  socket = socketInstance; // Use shared socket as primary
+};
 
 /**
  * Initialize socket connection
@@ -115,13 +128,18 @@ export const initSocket = async () => {
         } else if (data.status === 'rejected') {
           console.log('🔴 [socketService] Booking rejected - showing notification');
           
-          // Show rejection notification (avoiding ToastAndroid for Expo Go compatibility)
-          import('react-native').then((RN) => {
-            const { Alert } = RN;
-            Alert.alert('Booking Rejected', 'Your booking request was declined.');
-          }).catch(err => {
+          try {
+            // Use the message from backend if available, otherwise use fallback
+            const rejectionMessage = data.message || 'Your booking request was declined.';
+            
+            Alert.alert(
+              'Booking Declined',
+              rejectionMessage,
+              [{ text: 'OK' }]
+            );
+          } catch (err) {
             console.error('Error showing rejection alert:', err);
-          });
+          }
         }
       });
     });
@@ -186,11 +204,20 @@ export const initSocket = async () => {
 };
 
 /**
- * Get the current socket instance or initialize if not exists
+ * Get the current socket instance - prioritize shared socket from SocketContext
  * @returns {Promise<Object>} - Socket instance
  */
 export const getSocket = async () => {
+  // Prioritize shared socket from SocketContext
+  if (sharedSocket && sharedSocket.connected) {
+    console.log('🔗 [socketService] Using shared socket from SocketContext');
+    socket = sharedSocket;
+    return sharedSocket;
+  }
+  
+  // Fallback to creating own socket if shared socket not available
   if (!socket) {
+    console.log('🔗 [socketService] No shared socket, creating own socket');
     return await initSocket();
   }
   
@@ -805,6 +832,7 @@ const initializeAckHandling = async () => {
 export default {
   initSocket,
   getSocket,
+  setSharedSocket,
   disconnectSocket,
   initiateRealTimeBooking,
   joinConsultationRoom,

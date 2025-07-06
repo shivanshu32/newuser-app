@@ -3,6 +3,7 @@ import { AppState } from 'react-native';
 import { io } from 'socket.io-client';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAuth } from './AuthContext';
+import { setSharedSocket } from '../services/socketService';
 
 // Socket Server URL Configuration - Comment/Uncomment as needed
 // Local Development
@@ -106,6 +107,10 @@ export const SocketProvider = ({ children }) => {
         setConnectionAttempts(0);
         reconnectAttempts.current = 0;
         isInitializingRef.current = false;
+        
+        // CRITICAL: Share socket instance with socketService to ensure single socket
+        console.log('🔗 [SOCKET] Sharing socket instance with socketService');
+        setSharedSocket(newSocket);
         
         // Start ping interval
         startPingInterval(newSocket);
