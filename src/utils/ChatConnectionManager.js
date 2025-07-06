@@ -75,14 +75,16 @@ class ChatConnectionManager {
       
       console.log('[ChatConnectionManager] Got global socket instance:', this.socket.id);
       
+      // CRITICAL FIX: Always set up event listeners first
+      console.log('[ChatConnectionManager] Setting up event listeners');
+      this.setupEventListeners();
+      
       // Check if socket is already connected
       if (this.socket.connected) {
         console.log('[ChatConnectionManager] Socket already connected');
         this.handleConnect();
       } else {
         console.log('[ChatConnectionManager] Socket not connected, waiting for connection');
-        // Set up event listeners and wait for connection
-        this.setupEventListeners();
       }
 
     } catch (error) {
@@ -97,7 +99,13 @@ class ChatConnectionManager {
    * Set up socket event listeners
    */
   setupEventListeners() {
-    if (!this.socket) return;
+    if (!this.socket) {
+      console.log('🔴 [USER-APP] setupEventListeners: No socket available');
+      return;
+    }
+
+    console.log('🔴 [USER-APP] setupEventListeners: Setting up event listeners for socket:', this.socket.id);
+    console.log('🔴 [USER-APP] Socket connected status:', this.socket.connected);
 
     this.socket.on('connect', this.handleConnect);
     this.socket.on('disconnect', this.handleDisconnect);
@@ -184,19 +192,29 @@ class ChatConnectionManager {
     });
 
     this.socket.on('session_started', (data) => {
-      console.log('🔴 [USER-APP] Session started event received:', data);
+      console.log('🔴 [USER-APP] ===== SESSION_STARTED EVENT RECEIVED =====');
+      console.log('🔴 [USER-APP] Session started event received:', JSON.stringify(data, null, 2));
       console.log('🔴 [USER-APP] Current booking ID:', this.currentBookingId);
       console.log('🔴 [USER-APP] Event booking ID:', data.bookingId);
-      console.log('🔴 [USER-APP] Booking IDs match:', data.bookingId === this.currentBookingId);
+      console.log('🔴 [USER-APP] Booking ID types:', typeof this.currentBookingId, 'vs', typeof data.bookingId);
+      console.log('🔴 [USER-APP] Booking IDs match (===):', data.bookingId === this.currentBookingId);
+      console.log('🔴 [USER-APP] Booking IDs match (==):', data.bookingId == this.currentBookingId);
       
-      if (data.bookingId === this.currentBookingId) {
-        console.log('🔴 [USER-APP] Activating session and notifying status update');
+      if (data.bookingId === this.currentBookingId || data.bookingId == this.currentBookingId) {
+        console.log('🔴 [USER-APP] ✅ BOOKING ID MATCH - Activating session and notifying status update');
         this.notifyConnectionStatus('session_active', 'Chat session is now active');
         this.notifyStatusUpdate({ type: 'session_started', data });
       } else {
-        console.log('🔴 [USER-APP] Session started event ignored - booking ID mismatch');
+        console.log('🔴 [USER-APP] ❌ BOOKING ID MISMATCH - Session started event ignored');
+        console.log('🔴 [USER-APP] Expected:', this.currentBookingId);
+        console.log('🔴 [USER-APP] Received:', data.bookingId);
       }
+      console.log('🔴 [USER-APP] ===== END SESSION_STARTED EVENT =====');
     });
+    
+    console.log('🔴 [USER-APP] session_started event listener registered successfully');
+    // Note: listenerCount not available in React Native socket.io client
+    console.log('🔴 [USER-APP] Event listeners setup completed');
 
     this.socket.on('session_timer', (data) => {
       console.log('🔴 [USER-APP] Session timer event received:', data);
@@ -380,7 +398,7 @@ class ChatConnectionManager {
   handleAppStateChange(nextAppState) {
     console.log('[ChatConnectionManager] App state changed:', this.appState, '->', nextAppState);
     
-    if (this.appState.match(/inactive|background/) && nextAppState === 'active') {
+    if (this.appState && this.appState.match(/inactive|background/) && nextAppState === 'active') {
       // App came to foreground
       if (!this.isConnected && !this.isConnecting) {
         console.log('[ChatConnectionManager] App foregrounded, reconnecting...');

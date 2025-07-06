@@ -338,7 +338,7 @@ export const SocketProvider = ({ children }) => {
       
       // App has come to the foreground
       if (
-        appStateRef.current.match(/inactive|background/) && 
+        appStateRef.current && appStateRef.current.match(/inactive|background/) && 
         nextAppState === 'active' &&
         token
       ) {
