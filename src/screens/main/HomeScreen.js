@@ -31,6 +31,8 @@ const HomeScreen = ({ navigation }) => {
   const [loadingWallet, setLoadingWallet] = useState(false);
   const [showBookingAcceptedModal, setShowBookingAcceptedModal] = useState(false);
   const [bookingAcceptedData, setBookingAcceptedData] = useState(null);
+  const [pendingBookings, setPendingBookings] = useState([]);
+  const [loadingPendingBookings, setLoadingPendingBookings] = useState(false);
 
   // Fetch all astrologers data with pagination
   const fetchAstrologers = useCallback(async () => {
@@ -100,6 +102,35 @@ const HomeScreen = ({ navigation }) => {
     }
   }, []);
 
+  // Fetch user pending bookings
+  const fetchUserPendingBookings = useCallback(async () => {
+    if (!socket) {
+      console.log('Socket not available for fetching pending bookings');
+      return;
+    }
+
+    try {
+      setLoadingPendingBookings(true);
+      console.log('🔄 Fetching user pending bookings...');
+      
+      // Emit socket event to get user pending bookings
+      socket.emit('get_user_pending_bookings', {}, (response) => {
+        if (response && response.success) {
+          console.log('✅ User pending bookings fetched:', response.pendingBookings);
+          setPendingBookings(response.pendingBookings || []);
+        } else {
+          console.error('❌ Failed to fetch user pending bookings:', response?.message);
+          setPendingBookings([]);
+        }
+        setLoadingPendingBookings(false);
+      });
+    } catch (error) {
+      console.error('❌ Error fetching user pending bookings:', error);
+      setPendingBookings([]);
+      setLoadingPendingBookings(false);
+    }
+  }, [socket]);
+
   // Handle join consultation
   const handleJoinConsultation = useCallback(async (booking) => {
     try {
@@ -158,13 +189,53 @@ const HomeScreen = ({ navigation }) => {
     }
   }, []);
 
+  // Handle user pending booking updates
+  const handleUserPendingBookingUpdates = useCallback((data) => {
+    console.log('📢 User pending booking update received:', data);
+    setPendingBookings(data.pendingBookings || []);
+  }, []);
+
+  // Handle join session from pending booking
+  const handleJoinSession = useCallback(async (booking) => {
+    try {
+      console.log('HomeScreen: Joining session from pending booking:', booking);
+      
+      // Navigate based on consultation type
+      if (booking.type === 'video') {
+        navigation.navigate('VideoConsultation', {
+          sessionId: booking.sessionId,
+          bookingId: booking.bookingId,
+          astrologerId: booking.astrologer._id,
+          userId: user._id || user.id
+        });
+      } else if (booking.type === 'voice') {
+        Alert.alert(
+          'Voice Call Ready! 📞',
+          'Your voice consultation is ready. You should receive a phone call shortly from our system. Please answer the call to connect with the astrologer.',
+          [{ text: 'OK' }]
+        );
+      } else if (booking.type === 'chat') {
+        navigation.navigate('EnhancedChat', {
+          sessionId: booking.sessionId,
+          bookingId: booking.bookingId,
+          astrologerId: booking.astrologer._id,
+          userId: user._id || user.id
+        });
+      }
+    } catch (error) {
+      console.error('HomeScreen: Error joining session:', error);
+      Alert.alert('Error', 'Failed to join session. Please try again.');
+    }
+  }, [navigation, user]);
+
   // Load initial data
   const loadInitialData = useCallback(async () => {
     await Promise.all([
       fetchAstrologers(),
-      fetchWalletBalance()
+      fetchWalletBalance(),
+      fetchUserPendingBookings()
     ]);
-  }, [fetchAstrologers, fetchWalletBalance]);
+  }, [fetchAstrologers, fetchWalletBalance, fetchUserPendingBookings]);
 
   // Handle refresh
   const onRefresh = useCallback(async () => {
@@ -416,6 +487,9 @@ const HomeScreen = ({ navigation }) => {
       // Listen for booking status updates (acceptance/rejection)
       socket.on('booking_status_update', handleBookingStatusUpdate);
       
+      // Listen for user pending booking updates
+      socket.on('user_pending_bookings_updated', handleUserPendingBookingUpdates);
+      
       // DISABLED: Legacy booking accepted event - now handled by modern BookingAcceptedPopup
       // socket.on('booking_accepted', handleBookingAccepted);
       
@@ -453,13 +527,14 @@ const HomeScreen = ({ navigation }) => {
         console.log('🔌 Cleaning up socket listeners in HomeScreen');
         socket.off('astrologer_status_updated', handleAstrologerStatusUpdate);
         socket.off('booking_status_update', handleBookingStatusUpdate);
+        socket.off('user_pending_bookings_updated', handleUserPendingBookingUpdates);
         // socket.off('booking_accepted', handleBookingAccepted); // Disabled - legacy listener
         socket.off('booking_rejected');
         socket.off('voice_call_initiated');
         socket.off('voice_call_failed');
       };
     }
-  }, [socket, handleAstrologerStatusUpdate, handleBookingStatusUpdate, handleBookingAccepted]);
+  }, [socket, handleAstrologerStatusUpdate, handleBookingStatusUpdate, handleBookingAccepted, handleUserPendingBookingUpdates]);
 
   // Render booking card
   const renderBookingCard = ({ item }) => (
@@ -561,6 +636,92 @@ const HomeScreen = ({ navigation }) => {
     </TouchableOpacity>
   );
 
+  // Render pending booking card
+  const renderPendingBookingCard = ({ item }) => {
+    const booking = item.data;
+    const isAccepted = booking.status === 'accepted';
+    const isExpired = booking.status === 'expired' || booking.status === 'cancelled';
+    
+    // Don't render expired or cancelled bookings
+    if (isExpired) {
+      return null;
+    }
+
+    const getStatusMessage = () => {
+      if (isAccepted) {
+        return 'Booking Accepted - Ready to Join!';
+      }
+      return 'Waiting for astrologer response...';
+    };
+
+    const getStatusColor = () => {
+      if (isAccepted) {
+        return '#10B981'; // Green for accepted
+      }
+      return '#F59E0B'; // Orange for pending
+    };
+
+    const getConsultationTypeIcon = () => {
+      switch (booking.type) {
+        case 'video':
+          return 'videocam';
+        case 'voice':
+          return 'call';
+        case 'chat':
+          return 'chatbubble';
+        default:
+          return 'help-circle';
+      }
+    };
+
+    return (
+      <View style={styles.pendingBookingCard}>
+        <View style={styles.pendingBookingHeader}>
+          <View style={styles.astrologerInfo}>
+            <Image
+              source={{
+                uri: booking.astrologer?.image || 'https://via.placeholder.com/50x50.png?text=A'
+              }}
+              style={styles.pendingAstrologerImage}
+            />
+            <View style={styles.pendingAstrologerDetails}>
+              <Text style={styles.pendingAstrologerName}>
+                {booking.astrologer?.name || 'Professional Astrologer'}
+              </Text>
+              <View style={styles.consultationTypeContainer}>
+                <Ionicons 
+                  name={getConsultationTypeIcon()} 
+                  size={16} 
+                  color="#6B7280" 
+                />
+                <Text style={styles.consultationType}>
+                  {booking.type?.charAt(0).toUpperCase() + booking.type?.slice(1)} Consultation
+                </Text>
+              </View>
+            </View>
+          </View>
+        </View>
+        
+        <View style={styles.pendingBookingStatus}>
+          <View style={[styles.statusIndicator, { backgroundColor: getStatusColor() }]} />
+          <Text style={[styles.statusMessage, { color: getStatusColor() }]}>
+            {getStatusMessage()}
+          </Text>
+        </View>
+
+        {isAccepted && (
+          <TouchableOpacity
+            style={styles.joinSessionButton}
+            onPress={() => handleJoinSession(booking)}
+          >
+            <Ionicons name="play-circle" size={20} color="#fff" />
+            <Text style={styles.joinSessionText}>Join Session</Text>
+          </TouchableOpacity>
+        )}
+      </View>
+    );
+  };
+
   // Note: renderAstrologersSection removed - now handled in single FlatList
 
 
@@ -568,14 +729,31 @@ const HomeScreen = ({ navigation }) => {
   // Prepare data for single FlatList
   const getFlatListData = () => {
     const data = [
-      { type: 'header', id: 'header' },
-      { type: 'astrologersHeader', id: 'astrologersHeader' },
-      ...astrologers.map((astrologer, index) => ({
-        type: 'astrologer',
-        id: `astrologer_${astrologer._id || astrologer.id || index}`,
-        data: astrologer
-      }))
+      { type: 'header', id: 'header' }
     ];
+
+    // Add pending bookings section if there are any
+    const activePendingBookings = pendingBookings.filter(booking => 
+      booking.status !== 'expired' && booking.status !== 'cancelled'
+    );
+    
+    if (activePendingBookings.length > 0) {
+      data.push({ type: 'pendingBookingsHeader', id: 'pendingBookingsHeader' });
+      data.push(...activePendingBookings.map((booking, index) => ({
+        type: 'pendingBooking',
+        id: `pending_booking_${booking.bookingId || booking._id || index}`,
+        data: booking
+      })));
+    }
+
+    // Add astrologers section
+    data.push({ type: 'astrologersHeader', id: 'astrologersHeader' });
+    data.push(...astrologers.map((astrologer, index) => ({
+      type: 'astrologer',
+      id: `astrologer_${astrologer._id || astrologer.id || index}`,
+      data: astrologer
+    })));
+    
     return data;
   };
 
@@ -584,6 +762,20 @@ const HomeScreen = ({ navigation }) => {
     switch (item.type) {
       case 'header':
         return renderHeader();
+      case 'pendingBookingsHeader':
+        return (
+          <View style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>Pending Booking Requests ({pendingBookings.filter(b => b.status !== 'expired' && b.status !== 'cancelled').length})</Text>
+              <View style={styles.pendingBookingsIndicator}>
+                <View style={styles.pulsingDot} />
+                <Text style={styles.liveText}>LIVE</Text>
+              </View>
+            </View>
+          </View>
+        );
+      case 'pendingBooking':
+        return renderPendingBookingCard({ item });
       case 'astrologersHeader':
         return (
           <View style={styles.section}>
@@ -868,6 +1060,104 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: 'bold',
     color: '#F97316',
+  },
+  // Pending Booking Styles
+  pendingBookingsIndicator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  pulsingDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#10B981',
+    marginRight: 6,
+    opacity: 0.8,
+  },
+  liveText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#10B981',
+    letterSpacing: 0.5,
+  },
+  pendingBookingCard: {
+    backgroundColor: '#fff',
+    marginHorizontal: 16,
+    marginVertical: 8,
+    borderRadius: 12,
+    padding: 16,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.1,
+    shadowRadius: 3.84,
+    elevation: 5,
+    borderLeftWidth: 4,
+    borderLeftColor: '#F97316',
+  },
+  pendingBookingHeader: {
+    marginBottom: 12,
+  },
+  astrologerInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  pendingAstrologerImage: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    marginRight: 12,
+  },
+  pendingAstrologerDetails: {
+    flex: 1,
+  },
+  pendingAstrologerName: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#1F2937',
+    marginBottom: 4,
+  },
+  consultationTypeContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  consultationType: {
+    fontSize: 14,
+    color: '#6B7280',
+    marginLeft: 6,
+  },
+  pendingBookingStatus: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  statusIndicator: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    marginRight: 8,
+  },
+  statusMessage: {
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  joinSessionButton: {
+    backgroundColor: '#10B981',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    borderRadius: 8,
+    marginTop: 8,
+  },
+  joinSessionText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+    marginLeft: 8,
   },
 });
 
