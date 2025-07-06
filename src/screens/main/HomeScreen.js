@@ -383,6 +383,19 @@ const HomeScreen = ({ navigation }) => {
     );
   }, []);
 
+  // Handle astrologer availability updates (chat/call toggle)
+  const handleAstrologerAvailabilityUpdate = useCallback((data) => {
+    console.log('🔄 Astrologer availability update received:', data);
+    
+    setAstrologers(prevAstrologers => 
+      prevAstrologers.map(astrologer => 
+        astrologer._id === data.astrologerId 
+          ? { ...astrologer, onlineStatus: data.onlineStatus }
+          : astrologer
+      )
+    );
+  }, []);
+
   // Handle booking status updates (when astrologer accepts/rejects booking)
   const handleBookingStatusUpdate = useCallback(async (data) => {
     console.log('🔥🔥🔥 [HOMESCREEN] BOOKING STATUS UPDATE RECEIVED 🔥🔥🔥');
@@ -656,6 +669,7 @@ const HomeScreen = ({ navigation }) => {
         
         // Remove any existing listeners first to avoid duplicates
         socket.off('astrologer_status_updated', handleAstrologerStatusUpdate);
+        socket.off('astrologer_availability_updated', handleAstrologerAvailabilityUpdate);
         socket.off('booking_status_update', handleBookingStatusUpdate);
         socket.off('user_pending_bookings_updated', handleUserPendingBookingUpdates);
         socket.off('session_end', handleSessionEnd);
@@ -663,8 +677,7 @@ const HomeScreen = ({ navigation }) => {
         
         // Listen for astrologer status updates
         socket.on('astrologer_status_updated', handleAstrologerStatusUpdate);
-        
-        // Listen for booking status updates (acceptance/rejection)
+        socket.on('astrologer_availability_updated', handleAstrologerAvailabilityUpdate);
         socket.on('booking_status_update', handleBookingStatusUpdate);
         
         // Listen for user pending booking updates
@@ -773,6 +786,7 @@ const HomeScreen = ({ navigation }) => {
       return () => {
         console.log('🔌 Cleaning up socket listeners in HomeScreen');
         socket.off('astrologer_status_updated', handleAstrologerStatusUpdate);
+        socket.off('astrologer_availability_updated', handleAstrologerAvailabilityUpdate);
         socket.off('booking_status_update', handleBookingStatusUpdate);
         socket.off('user_pending_bookings_updated', handleUserPendingBookingUpdates);
         socket.off('session_end', handleSessionEnd);
@@ -784,7 +798,7 @@ const HomeScreen = ({ navigation }) => {
         socket.off('voice_call_failed');
       };
     }
-  }, [socket, handleAstrologerStatusUpdate, handleBookingStatusUpdate, handleUserPendingBookingUpdates, handleSessionEnd]);
+  }, [socket, handleAstrologerStatusUpdate, handleAstrologerAvailabilityUpdate, handleBookingStatusUpdate, handleUserPendingBookingUpdates, handleSessionEnd]);
 
   // Render booking card
   const renderBookingCard = ({ item }) => (
