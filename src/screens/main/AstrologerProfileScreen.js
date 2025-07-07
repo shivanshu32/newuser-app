@@ -15,11 +15,13 @@ import {
   StatusBar,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useSocket } from '../../context/SocketContext';
 import { astrologersAPI, walletAPI } from '../../services/api';
 import { initiateRealTimeBooking, listenForBookingStatusUpdates } from '../../services/socketService';
 import { addPendingConsultation, getPendingConsultations } from '../../utils/pendingConsultationsStore';
 
 const AstrologerProfileScreen = ({ route, navigation }) => {
+  const { socket } = useSocket();
   const [astrologer, setAstrologer] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -62,11 +64,25 @@ const AstrologerProfileScreen = ({ route, navigation }) => {
     // Set up booking status listener when component mounts
     setupBookingStatusListener();
     
+    // Set up socket listener for astrologer availability updates
+    if (socket) {
+      console.log('🔌 [AstrologerProfile] Setting up availability update listener');
+      socket.on('astrologer_availability_updated', handleAstrologerAvailabilityUpdate);
+    }
+    
     // Note: We don't clean up the booking status listener here to maintain
     // persistent listening for consecutive bookings. The global listener in
     // socketService should handle booking status updates throughout the session.
     console.log('🟡 [USER-APP] AstrologerProfileScreen: Keeping booking status listener active for consecutive bookings');
-  }, []);
+    
+    // Cleanup function
+    return () => {
+      if (socket) {
+        console.log('🧹 [AstrologerProfile] Cleaning up availability update listener');
+        socket.off('astrologer_availability_updated', handleAstrologerAvailabilityUpdate);
+      }
+    };
+  }, [socket, handleAstrologerAvailabilityUpdate]);
   
   // Add timeout for booking requests
   useEffect(() => {
@@ -118,6 +134,40 @@ const AstrologerProfileScreen = ({ route, navigation }) => {
     }
   }, [bookingStatus]);
   
+  // Handle astrologer availability updates (chat/call toggle)
+  const handleAstrologerAvailabilityUpdate = useCallback((data) => {
+    console.log('🔄 [AstrologerProfile] Astrologer availability update received:', data);
+    console.log('🔄 [AstrologerProfile] Current astrologer ID:', actualAstrologerId);
+    console.log('🔄 [AstrologerProfile] Update for astrologer ID:', data.astrologerId);
+    
+    // Only update if this is the same astrologer being viewed
+    if (actualAstrologerId && actualAstrologerId === data.astrologerId) {
+      console.log('✅ [AstrologerProfile] Updating availability for current astrologer:', {
+        astrologerId: data.astrologerId,
+        newOnlineStatus: data.onlineStatus,
+        previousOnlineStatus: astrologer?.onlineStatus
+      });
+      
+      setAstrologer(prevAstrologer => {
+        if (!prevAstrologer) return prevAstrologer;
+        
+        const updatedAstrologer = {
+          ...prevAstrologer,
+          onlineStatus: data.onlineStatus
+        };
+        
+        console.log('🔄 [AstrologerProfile] Astrologer state updated:', {
+          before: prevAstrologer.onlineStatus,
+          after: updatedAstrologer.onlineStatus
+        });
+        
+        return updatedAstrologer;
+      });
+    } else {
+      console.log('⚠️ [AstrologerProfile] Availability update ignored - different astrologer');
+    }
+  }, [actualAstrologerId]);
+
   // Set up listener for booking status updates
   const setupBookingStatusListener = async () => {
     try {
@@ -1017,7 +1067,15 @@ const AstrologerProfileScreen = ({ route, navigation }) => {
           
           <View style={styles.bookingButtonsContainer}>
             {/* Chat Button - Show only if onlineStatus.chat === 1 and consultation price exists */}
-            {(astrologer.onlineStatus?.chat === 1 && astrologer.consultationPrices?.chat) && (
+            {(() => {
+              const shouldShowChat = astrologer.onlineStatus?.chat === 1 && astrologer.consultationPrices?.chat;
+              console.log('🔍 [AstrologerProfile] Chat button visibility check:', {
+                onlineStatusChat: astrologer.onlineStatus?.chat,
+                hasConsultationPrice: !!astrologer.consultationPrices?.chat,
+                shouldShow: shouldShowChat
+              });
+              return shouldShowChat;
+            })() && (
               <TouchableOpacity 
                 style={[styles.bookingButton, styles.chatButton]} 
                 onPress={handleBookChat}
@@ -1038,7 +1096,15 @@ const AstrologerProfileScreen = ({ route, navigation }) => {
             )}
             
             {/* Voice Call Button - Show only if onlineStatus.call === 1 and consultation price exists */}
-            {(astrologer.onlineStatus?.call === 1 && astrologer.consultationPrices?.call) && (
+            {(() => {
+              const shouldShowCall = astrologer.onlineStatus?.call === 1 && astrologer.consultationPrices?.call;
+              console.log('🔍 [AstrologerProfile] Call button visibility check:', {
+                onlineStatusCall: astrologer.onlineStatus?.call,
+                hasConsultationPrice: !!astrologer.consultationPrices?.call,
+                shouldShow: shouldShowCall
+              });
+              return shouldShowCall;
+            })() && (
               <TouchableOpacity 
                 style={[styles.bookingButton, styles.voiceButton]} 
                 onPress={handleBookVoiceCall}

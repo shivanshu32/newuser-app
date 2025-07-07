@@ -121,10 +121,18 @@ const BookingCard = ({ consultation, onJoin, onDismiss, onCancel, onReschedule }
   };
 
   const canJoin = () => {
+    // Voice consultations should not have join session button
+    if (isVoiceCall) {
+      return false;
+    }
     return ['confirmed', 'waiting_for_user', 'in-progress'].includes(booking.status) && !isExpired;
   };
 
   const canCancel = () => {
+    // Voice consultations should not have cancel button
+    if (isVoiceCall) {
+      return false;
+    }
     return ['pending', 'confirmed'].includes(booking.status) && !isExpired;
   };
 
