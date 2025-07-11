@@ -23,7 +23,7 @@ import { useAuth } from '../../context/AuthContext';
 const WalletTopUpSummaryScreen = () => {
   const navigation = useNavigation();
   const route = useRoute();
-  const { amount } = route.params;
+  const { amount, selectedPackage, isFirstTimeUser = true } = route.params;
   const { user, updateUser } = useAuth();
   
   const [processingPayment, setProcessingPayment] = useState(false);
@@ -33,6 +33,14 @@ const WalletTopUpSummaryScreen = () => {
   const gstRate = 0.18; // 18% GST
   const gstAmount = baseAmount * gstRate;
   const finalAmount = baseAmount + gstAmount;
+  
+  // Calculate bonus if package is selected
+  const bonusAmount = selectedPackage ? (
+    selectedPackage.percentageBonus > 0 
+      ? Math.round(baseAmount * selectedPackage.percentageBonus / 100)
+      : (selectedPackage.flatBonus || 0)
+  ) : 0;
+  const totalWalletCredit = baseAmount + bonusAmount;
 
   const handleProceedToPay = async () => {
     if (baseAmount <= 0) {
@@ -207,11 +215,41 @@ const WalletTopUpSummaryScreen = () => {
       </View>
 
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+        {selectedPackage && (
+          <View style={styles.packageCard}>
+            <View style={styles.packageHeader}>
+              <Ionicons name="gift" size={24} color="#F97316" />
+              <Text style={styles.packageTitle}>Recharge Package Selected</Text>
+            </View>
+            <Text style={styles.packageName}>{selectedPackage.name}</Text>
+            {selectedPackage.firstRecharge && isFirstTimeUser && (
+              <View style={styles.firstRechargeBadge}>
+                <Text style={styles.firstRechargeText}>First Recharge Offer</Text>
+              </View>
+            )}
+            
+            <View style={styles.packageBenefits}>
+              <View style={styles.benefitRow}>
+                <Text style={styles.benefitLabel}>Recharge Amount:</Text>
+                <Text style={styles.benefitValue}>₹{baseAmount.toFixed(2)}</Text>
+              </View>
+              <View style={styles.benefitRow}>
+                <Text style={styles.benefitLabel}>Bonus Amount:</Text>
+                <Text style={styles.bonusValue}>+₹{bonusAmount.toFixed(2)}</Text>
+              </View>
+              <View style={[styles.benefitRow, styles.totalBenefitRow]}>
+                <Text style={styles.totalBenefitLabel}>Total Wallet Credit:</Text>
+                <Text style={styles.totalBenefitValue}>₹{totalWalletCredit.toFixed(2)}</Text>
+              </View>
+            </View>
+          </View>
+        )}
+        
         <View style={styles.summaryCard}>
-          <Text style={styles.cardTitle}>Wallet Top-Up Summary</Text>
+          <Text style={styles.cardTitle}>Payment Summary</Text>
           
           <View style={styles.amountRow}>
-            <Text style={styles.amountLabel}>Top-up Amount</Text>
+            <Text style={styles.amountLabel}>Recharge Amount</Text>
             <Text style={styles.amountValue}>₹{baseAmount.toFixed(2)}</Text>
           </View>
           
@@ -237,7 +275,7 @@ const WalletTopUpSummaryScreen = () => {
           </View>
           <Text style={styles.infoText}>
             • GST is applicable as per government regulations{'\n'}
-            • The wallet amount credited will be ₹{baseAmount.toFixed(2)}{'\n'}
+            • The wallet amount credited will be ₹{totalWalletCredit.toFixed(2)}{selectedPackage ? ` (₹${baseAmount.toFixed(2)} + ₹${bonusAmount.toFixed(2)} bonus)` : ''}{'\n'}
             • GST amount (₹{gstAmount.toFixed(2)}) is charged separately{'\n'}
             • Payment is processed securely through Razorpay
           </Text>
@@ -320,6 +358,91 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 3,
+  },
+  packageCard: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 20,
+    marginBottom: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+    borderLeftWidth: 4,
+    borderLeftColor: '#F97316',
+  },
+  packageHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  packageTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#F97316',
+    marginLeft: 8,
+  },
+  packageName: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#333',
+    marginBottom: 8,
+  },
+  firstRechargeBadge: {
+    backgroundColor: '#4CAF50',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+    alignSelf: 'flex-start',
+    marginBottom: 16,
+  },
+  firstRechargeText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  packageBenefits: {
+    backgroundColor: '#f8f9fa',
+    borderRadius: 8,
+    padding: 16,
+  },
+  benefitRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  benefitLabel: {
+    fontSize: 14,
+    color: '#666',
+  },
+  benefitValue: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#333',
+  },
+  bonusValue: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#4CAF50',
+  },
+  totalBenefitRow: {
+    borderTopWidth: 1,
+    borderTopColor: '#e9ecef',
+    paddingTop: 8,
+    marginTop: 8,
+    marginBottom: 0,
+  },
+  totalBenefitLabel: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#333',
+  },
+  totalBenefitValue: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#F97316',
   },
   cardTitle: {
     fontSize: 18,

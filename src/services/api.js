@@ -168,6 +168,8 @@ export const walletAPI = {
 // Offers API
 export const offersAPI = {
   getActiveOffers: (amount) => API.get('/offers/active', { params: { amount } }),
+  getRechargePackages: () => API.get('/offers/active'), // Get all active recharge packages
+  getPackageById: (id) => API.get(`/offers/${id}`), // Get specific package details
 };
 
 // Sessions API

@@ -25,6 +25,7 @@ const WalletScreen = () => {
   const [offers, setOffers] = useState([]);
   const [selectedOffer, setSelectedOffer] = useState(null);
   const [loadingOffers, setLoadingOffers] = useState(false);
+  const [isFirstTimeUser, setIsFirstTimeUser] = useState(true); // Track if user has never recharged
   const [page, setPage] = useState(1);
   const [hasMoreTransactions, setHasMoreTransactions] = useState(true);
   const [loadingMoreTransactions, setLoadingMoreTransactions] = useState(false);
@@ -32,6 +33,8 @@ const WalletScreen = () => {
   const [paymentOrder, setPaymentOrder] = useState(null);
   const [razorpayConfig, setRazorpayConfig] = useState(null);
   const [walletBalance, setWalletBalance] = useState(0);
+  const [showPaymentSummary, setShowPaymentSummary] = useState(false);
+  const [selectedPackage, setSelectedPackage] = useState(null);
   const { user, updateUser } = useAuth();
   const navigation = useNavigation();
   const initialLoadDone = useRef(false);
@@ -39,6 +42,26 @@ const WalletScreen = () => {
   const lastBalanceUpdate = useRef(null);
 
   const quickAmounts = [100, 500, 1000, 2000];
+
+  // Fetch recharge packages on component mount and when screen comes into focus
+  useEffect(() => {
+    const unsubscribe = navigation.addListener('focus', () => {
+      fetchOffers();
+      if (!initialLoadDone.current) {
+        fetchTransactions();
+        initialLoadDone.current = true;
+      }
+    });
+
+    // Initial load
+    fetchOffers();
+    if (!initialLoadDone.current) {
+      fetchTransactions();
+      initialLoadDone.current = true;
+    }
+
+    return unsubscribe;
+  }, [navigation]);
 
   const fetchTransactions = async () => {
     // Prevent multiple simultaneous calls
@@ -91,9 +114,18 @@ const WalletScreen = () => {
       if (transactionsResponse && transactionsResponse.data && Array.isArray(transactionsResponse.data)) {
         setTransactions(transactionsResponse.data);
         console.log('✅ Transactions loaded:', transactionsResponse.data.length);
+        
+        // Check if user has made any previous wallet top-ups
+        const hasWalletTopups = transactionsResponse.data.some(transaction => 
+          transaction.type === 'wallet_topup' && transaction.status === 'completed'
+        );
+        setIsFirstTimeUser(!hasWalletTopups);
+        console.log('🔍 User first time recharge status:', !hasWalletTopups);
       } else {
         console.log('❌ No transactions found in response');
         setTransactions([]);
+        // If no transactions, user is definitely first time
+        setIsFirstTimeUser(true);
       }
       
       setLoading(false);
@@ -156,18 +188,35 @@ const WalletScreen = () => {
   const fetchOffers = async () => {
     try {
       setLoadingOffers(true);
+      console.log('🔄 Starting fetchOffers...');
       
-      const offersResponse = await offersAPI.getActiveOffers(amount);
+      // Fetch all active recharge packages
+      console.log('📡 Calling offersAPI.getRechargePackages()...');
+      const offersResponse = await offersAPI.getRechargePackages();
+      console.log('📦 Offers API Response:', offersResponse);
       
-      if (offersResponse.data && offersResponse.data.success) {
-        setOffers(offersResponse.data.data || []);
+      // API interceptor returns response.data, so offersResponse is already the data object
+      if (offersResponse && offersResponse.success) {
+        const packages = offersResponse.data || [];
+        console.log('✅ Found packages:', packages.length, packages);
+        // Sort by priority (lower number = higher priority)
+        const sortedPackages = packages.sort((a, b) => (a.priority || 0) - (b.priority || 0));
+        console.log('📊 Sorted packages:', sortedPackages);
+        setOffers(sortedPackages);
       } else {
+        console.log('❌ No valid offers response:', offersResponse);
         setOffers([]);
       }
       
       setLoadingOffers(false);
     } catch (error) {
-      console.error('Error fetching offers:', error);
+      console.error('❌ Error fetching recharge packages:', error);
+      console.error('Error details:', {
+        message: error.message,
+        response: error.response?.data,
+        status: error.response?.status,
+        config: error.config
+      });
       setLoadingOffers(false);
       setOffers([]);
     }
@@ -180,8 +229,54 @@ const WalletScreen = () => {
       return;
     }
 
-    // Navigate to the GST summary screen with the entered amount
-    navigation.navigate('WalletTopUpSummary', { amount: numAmount.toString() });
+    // Prepare navigation data
+    const navigationData = {
+      amount: numAmount.toString(),
+      isFirstTimeUser: isFirstTimeUser,
+      selectedPackage: selectedOffer ? {
+        id: selectedOffer.id,
+        name: selectedOffer.name,
+        percentageBonus: selectedOffer.percentageBonus || 0,
+        flatBonus: selectedOffer.flatBonus || 0,
+        minRechargeAmount: selectedOffer.minRechargeAmount || 0,
+        firstRecharge: selectedOffer.firstRecharge || false
+      } : null
+    };
+
+    // If a package is selected, validate the amount matches the package
+    if (selectedOffer) {
+      const packageAmount = selectedOffer.minRechargeAmount || 0;
+      if (numAmount !== packageAmount) {
+        Alert.alert(
+          'Amount Mismatch', 
+          `Selected package requires exactly ₹${packageAmount}. Please use the correct amount or deselect the package.`,
+          [
+            { text: 'Fix Amount', onPress: () => setAmount(packageAmount.toString()) },
+            { text: 'Deselect Package', onPress: () => setSelectedOffer(null) },
+            { text: 'Cancel', style: 'cancel' }
+          ]
+        );
+        return;
+      }
+      
+      // Show confirmation for package selection
+      const bonusAmount = selectedOffer.percentageBonus > 0 
+        ? Math.round(numAmount * selectedOffer.percentageBonus / 100)
+        : (selectedOffer.flatBonus || 0);
+      const totalAmount = numAmount + bonusAmount;
+      
+      Alert.alert(
+        'Confirm Recharge Package',
+        `Package: ${selectedOffer.name}\n\nYou Pay: ₹${numAmount}\nBonus: +₹${bonusAmount}\nYou Get: ₹${totalAmount}\n\nProceed with this recharge?`,
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Proceed', onPress: () => navigation.navigate('WalletTopUpSummary', navigationData) }
+        ]
+      );
+    } else {
+      // Navigate to the GST summary screen with the entered amount
+      navigation.navigate('WalletTopUpSummary', navigationData);
+    }
   };
 
   const handlePaymentSuccess = async (paymentData) => {
@@ -272,6 +367,52 @@ const WalletScreen = () => {
     setRazorpayConfig(null);
   };
 
+  const handleConfirmPayment = async () => {
+    if (!selectedPackage) return;
+    
+    const rechargeAmount = selectedPackage.minRechargeAmount || 0;
+    const gstAmount = Math.round(rechargeAmount * 0.18); // 18% GST
+    const totalPayableAmount = rechargeAmount + gstAmount; // Total amount including GST
+    
+    try {
+      setProcessingPayment(true);
+      setShowPaymentSummary(false); // Close summary modal
+      
+      // Create payment order with total payable amount (including GST)
+      const orderResponse = await walletAPI.createOrder(totalPayableAmount);
+      console.log('📦 Order created:', orderResponse);
+      
+      if (orderResponse && orderResponse.success) {
+        setPaymentOrder(orderResponse.data);
+        
+        // Get Razorpay config
+        const configResponse = await walletAPI.getRazorpayConfig();
+        console.log('⚙️ Razorpay config:', configResponse);
+        
+        if (configResponse && configResponse.success) {
+          setRazorpayConfig(configResponse.data);
+          setShowPaymentModal(true);
+        } else {
+          throw new Error('Failed to get payment configuration');
+        }
+      } else {
+        throw new Error(orderResponse?.message || 'Failed to create payment order');
+      }
+    } catch (error) {
+      console.error('❌ Error initiating payment:', error);
+      Alert.alert('Error', error.message || 'Failed to initiate payment. Please try again.');
+    } finally {
+      setProcessingPayment(false);
+    }
+  };
+
+  const handleCancelPayment = () => {
+    setShowPaymentSummary(false);
+    setSelectedPackage(null);
+    setSelectedOffer(null);
+    setAmount('');
+  };
+
   const renderTransaction = ({ item }) => {
     // For users: wallet_topup, bonus_credit, refund, admin_credit are credits (+)
     // session_payment, admin_debit are debits (-)
@@ -331,33 +472,77 @@ const WalletScreen = () => {
     );
   };
 
-  const renderOffer = ({ item }) => (
-    <TouchableOpacity
-      style={[
-        styles.offerCard,
-        selectedOffer?.id === item.id && styles.selectedOfferCard
-      ]}
-      onPress={() => setSelectedOffer(selectedOffer?.id === item.id ? null : item)}
-    >
-      <View style={styles.offerHeader}>
-        <Text style={styles.offerName}>{item.name}</Text>
-        <View style={styles.offerBadge}>
-          <Text style={styles.offerBadgeText}>
-            {item.percentageBonus > 0 ? `${item.percentageBonus}%` : `₹${item.flatBonus}`}
-          </Text>
+  const renderOffer = ({ item }) => {
+    // Calculate what user gets (recharge amount + bonus)
+    const rechargeAmount = item.minRechargeAmount || 0;
+    const bonusAmount = item.percentageBonus > 0 
+      ? Math.round(rechargeAmount * item.percentageBonus / 100)
+      : (item.flatBonus || 0);
+    const totalAmount = rechargeAmount + bonusAmount;
+    
+    // Use _id for comparison (API returns _id, not id)
+    const isSelected = selectedOffer?._id === item._id;
+
+    const handlePackagePress = () => {
+      console.log('🎯 Package selected:', item.name, 'Amount:', rechargeAmount);
+      
+      // Set the selected package and show payment summary
+      setSelectedPackage(item);
+      setSelectedOffer(item);
+      setAmount(rechargeAmount.toString());
+      setShowPaymentSummary(true);
+    };
+
+    return (
+      <TouchableOpacity
+        style={[
+          styles.rechargePackageCard,
+          isSelected && styles.selectedPackageCard
+        ]}
+        onPress={handlePackagePress}
+        disabled={processingPayment}
+      >
+        <View style={styles.packageHeader}>
+          <Text style={styles.packageName}>{item.name}</Text>
+          {item.firstRecharge && isFirstTimeUser && (
+            <View style={styles.firstRechargeBadge}>
+              <Text style={styles.firstRechargeText}>First Recharge</Text>
+            </View>
+          )}
         </View>
-      </View>
-      <Text style={styles.offerDescription}>{item.description}</Text>
-      <Text style={styles.offerMinAmount}>
-        Min. recharge: ₹{item.minRechargeAmount}
-      </Text>
-      {item.maxBonusAmount && (
-        <Text style={styles.offerMaxBonus}>
-          Max bonus: ₹{item.maxBonusAmount}
-        </Text>
-      )}
-    </TouchableOpacity>
-  );
+        
+        <View style={styles.packagePricing}>
+          <View style={styles.pricingRow}>
+            <Text style={styles.pricingLabel}>You Pay:</Text>
+            <Text style={styles.payAmount}>₹{rechargeAmount}</Text>
+          </View>
+          
+          <View style={styles.pricingRow}>
+            <Text style={styles.pricingLabel}>Bonus:</Text>
+            <Text style={styles.bonusAmount}>+₹{bonusAmount}</Text>
+          </View>
+          
+          <View style={[styles.pricingRow, styles.totalRow]}>
+            <Text style={styles.totalLabel}>You Get:</Text>
+            <Text style={styles.totalAmount}>₹{totalAmount}</Text>
+          </View>
+        </View>
+        
+        {item.percentageBonus > 0 && (
+          <View style={styles.bonusBadge}>
+            <Text style={styles.bonusBadgeText}>{item.percentageBonus}% Bonus</Text>
+          </View>
+        )}
+        
+        {processingPayment && isSelected && (
+          <View style={styles.selectedIndicator}>
+            <ActivityIndicator size="small" color="#F97316" />
+            <Text style={styles.selectedText}>Processing...</Text>
+          </View>
+        )}
+      </TouchableOpacity>
+    );
+  };
 
   const handleLoadMoreTransactions = async () => {
     console.log('🔄 handleLoadMoreTransactions called - hasMoreTransactions:', hasMoreTransactions, 'loadingMoreTransactions:', loadingMoreTransactions, 'page:', page);
@@ -439,7 +624,7 @@ const WalletScreen = () => {
               </View>
               
               <View style={styles.offersContainer}>
-                <Text style={styles.offersTitle}>Offers</Text>
+                <Text style={styles.offersTitle}>Recharge Packages</Text>
                 {loadingOffers ? (
                   <ActivityIndicator style={styles.loader} size="large" color="#F97316" />
                 ) : offers.length === 0 ? (
@@ -473,6 +658,107 @@ const WalletScreen = () => {
           <ActivityIndicator style={styles.loader} size="small" color="#F97316" />
         ) : null}
       />
+      
+      {/* Payment Summary Modal */}
+      <Modal
+        visible={showPaymentSummary}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={handleCancelPayment}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.paymentSummaryModal}>
+            {selectedPackage && (() => {
+              const rechargeAmount = selectedPackage.minRechargeAmount || 0;
+              const bonusAmount = selectedPackage.percentageBonus > 0 
+                ? Math.round(rechargeAmount * selectedPackage.percentageBonus / 100)
+                : (selectedPackage.flatBonus || 0);
+              const gstAmount = Math.round(rechargeAmount * 0.18); // 18% GST
+              const totalPayableAmount = rechargeAmount + gstAmount; // What user actually pays
+              const totalWalletCredit = rechargeAmount + bonusAmount; // What user gets in wallet
+              
+              return (
+                <>
+                  <View style={styles.summaryHeader}>
+                    <Text style={styles.summaryTitle}>Payment Summary</Text>
+                    <TouchableOpacity onPress={handleCancelPayment}>
+                      <Ionicons name="close" size={24} color="#666" />
+                    </TouchableOpacity>
+                  </View>
+                  
+                  <View style={styles.packageSummary}>
+                    <Text style={styles.packageSummaryName}>{selectedPackage.name}</Text>
+                    <Text style={styles.packageSummaryDesc}>{selectedPackage.description}</Text>
+                    
+                    {selectedPackage.firstRecharge && isFirstTimeUser && (
+                      <View style={styles.firstRechargeBadge}>
+                        <Text style={styles.firstRechargeText}>First Recharge Offer</Text>
+                      </View>
+                    )}
+                  </View>
+                  
+                  <View style={styles.summaryBreakdown}>
+                    <View style={styles.summaryRow}>
+                      <Text style={styles.summaryLabel}>Recharge Amount:</Text>
+                      <Text style={styles.summaryAmount}>₹{rechargeAmount}</Text>
+                    </View>
+                    
+                    <View style={styles.summaryRow}>
+                      <Text style={styles.summaryLabel}>GST (18%):</Text>
+                      <Text style={styles.summaryAmount}>₹{gstAmount}</Text>
+                    </View>
+                    
+                    <View style={[styles.summaryRow, styles.payableRow]}>
+                      <Text style={styles.summaryPayableLabel}>Total Payable:</Text>
+                      <Text style={styles.summaryPayable}>₹{totalPayableAmount}</Text>
+                    </View>
+                    
+                    <View style={styles.walletCreditSection}>
+                      <Text style={styles.walletCreditTitle}>Wallet Credit Breakdown:</Text>
+                      
+                      <View style={styles.summaryRow}>
+                        <Text style={styles.summaryLabel}>Base Credit:</Text>
+                        <Text style={styles.summaryAmount}>₹{rechargeAmount}</Text>
+                      </View>
+                      
+                      <View style={styles.summaryRow}>
+                        <Text style={styles.summaryLabel}>Bonus ({selectedPackage.percentageBonus}%):</Text>
+                        <Text style={styles.summaryBonus}>+₹{bonusAmount}</Text>
+                      </View>
+                      
+                      <View style={[styles.summaryRow, styles.totalRow]}>
+                        <Text style={styles.summaryTotalLabel}>You Get in Wallet:</Text>
+                        <Text style={styles.summaryTotal}>₹{totalWalletCredit}</Text>
+                      </View>
+                    </View>
+                  </View>
+                  
+                  <View style={styles.summaryActions}>
+                    <TouchableOpacity 
+                      style={styles.cancelButton} 
+                      onPress={handleCancelPayment}
+                    >
+                      <Text style={styles.cancelButtonText}>Cancel</Text>
+                    </TouchableOpacity>
+                    
+                    <TouchableOpacity 
+                      style={[styles.confirmButton, processingPayment && styles.disabledButton]} 
+                      onPress={handleConfirmPayment}
+                      disabled={processingPayment}
+                    >
+                      {processingPayment ? (
+                        <ActivityIndicator color="#fff" size="small" />
+                      ) : (
+                        <Text style={styles.confirmButtonText}>Proceed to Payment</Text>
+                      )}
+                    </TouchableOpacity>
+                  </View>
+                </>
+              );
+            })()}
+          </View>
+        </View>
+      </Modal>
       
       {/* Razorpay Payment Modal */}
       <Modal
@@ -595,6 +881,7 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     marginBottom: 10,
   },
+  // Legacy offer styles (keeping for compatibility)
   offerCard: {
     backgroundColor: '#fff',
     borderRadius: 10,
@@ -640,6 +927,115 @@ const styles = StyleSheet.create({
   offerMaxBonus: {
     fontSize: 14,
     color: '#666',
+  },
+  // New recharge package styles
+  rechargePackageCard: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+    borderWidth: 1,
+    borderColor: '#f0f0f0',
+  },
+  selectedPackageCard: {
+    backgroundColor: '#fef3e2',
+    borderColor: '#F97316',
+    borderWidth: 2,
+  },
+  packageHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  packageName: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#333',
+    flex: 1,
+  },
+  firstRechargeBadge: {
+    backgroundColor: '#10B981',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  firstRechargeText: {
+    color: '#fff',
+    fontSize: 10,
+    fontWeight: 'bold',
+  },
+  packagePricing: {
+    marginBottom: 12,
+  },
+  pricingRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 6,
+  },
+  totalRow: {
+    borderTopWidth: 1,
+    borderTopColor: '#e0e0e0',
+    paddingTop: 8,
+    marginTop: 4,
+  },
+  pricingLabel: {
+    fontSize: 14,
+    color: '#666',
+  },
+  payAmount: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#333',
+  },
+  bonusAmount: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#10B981',
+  },
+  totalLabel: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#333',
+  },
+  totalAmount: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#F97316',
+  },
+  bonusBadge: {
+    backgroundColor: '#F97316',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 16,
+    alignSelf: 'flex-start',
+    marginBottom: 8,
+  },
+  bonusBadgeText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: 'bold',
+  },
+  selectedIndicator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 8,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: '#F97316',
+  },
+  selectedText: {
+    marginLeft: 6,
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: '#F97316',
   },
   emptyOffers: {
     alignItems: 'center',
@@ -703,6 +1099,167 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: 'bold',
     marginLeft: 20,
+  },
+  // Payment Summary Modal Styles
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  paymentSummaryModal: {
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    padding: 24,
+    width: '100%',
+    maxWidth: 400,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+  summaryHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 20,
+    paddingBottom: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f0f0',
+  },
+  summaryTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#333',
+  },
+  packageSummary: {
+    marginBottom: 20,
+    padding: 16,
+    backgroundColor: '#f8f9fa',
+    borderRadius: 12,
+  },
+  packageSummaryName: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#333',
+    marginBottom: 4,
+  },
+  packageSummaryDesc: {
+    fontSize: 14,
+    color: '#666',
+    marginBottom: 8,
+  },
+  summaryBreakdown: {
+    marginBottom: 24,
+  },
+  summaryRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 8,
+  },
+  summaryLabel: {
+    fontSize: 16,
+    color: '#666',
+  },
+  summaryAmount: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#333',
+  },
+  summaryBonus: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#10B981',
+  },
+  totalRow: {
+    borderTopWidth: 1,
+    borderTopColor: '#f0f0f0',
+    marginTop: 8,
+    paddingTop: 12,
+  },
+  summaryTotalLabel: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#333',
+  },
+  summaryTotal: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#F97316',
+  },
+  payableRow: {
+    backgroundColor: '#fff3cd',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    marginVertical: 8,
+    borderWidth: 1,
+    borderColor: '#ffeaa7',
+  },
+  summaryPayableLabel: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#856404',
+  },
+  summaryPayable: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#856404',
+  },
+  walletCreditSection: {
+    marginTop: 16,
+    padding: 16,
+    backgroundColor: '#e8f5e8',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#c3e6c3',
+  },
+  walletCreditTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#155724',
+    marginBottom: 12,
+    textAlign: 'center',
+  },
+  summaryActions: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  cancelButton: {
+    flex: 1,
+    backgroundColor: '#f8f9fa',
+    paddingVertical: 14,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#e9ecef',
+  },
+  cancelButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#666',
+    textAlign: 'center',
+  },
+  confirmButton: {
+    flex: 1,
+    backgroundColor: '#F97316',
+    paddingVertical: 14,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  confirmButtonText: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#fff',
+    textAlign: 'center',
+  },
+  disabledButton: {
+    backgroundColor: '#ccc',
   },
 });
 
