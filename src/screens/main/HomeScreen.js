@@ -641,56 +641,67 @@ const HomeScreen = ({ navigation }) => {
     if (astrologerInfo.name === 'Professional Astrologer' && data.astrologerName) {
       console.log('🔄 [USER-APP] Using astrologerName from legacy event data:', data.astrologerName);
       astrologerInfo.name = data.astrologerName;
-    }
-    
-    console.log('📋 [USER-APP] Final astrologer info (legacy):', astrologerInfo);
-    
-    // Use the modern BookingAcceptedModal
-    setBookingAcceptedData({
-      astrologerName: astrologerInfo.name,
-      astrologerImage: astrologerInfo.image,
-      bookingType: data.consultationType || data.type || 'chat', // Default to chat if unknown
-      sessionId: data.sessionId,
-      bookingId: data.bookingId,
-      astrologerId: data.astrologerId,
-      userInfo: data.userInfo
-    });
-    setShowBookingAcceptedModal(true);
-  }, [astrologers, navigation, user]);
 
-  // Socket listener for real-time updates
-  useEffect(() => {
-    console.log('🔌 [DEBUG] Socket useEffect triggered, socket available:', !!socket);
-    console.log('🔌 [DEBUG] Socket connection state:', socket?.connected);
-    
-    if (socket) {
-      const setupListeners = () => {
-        console.log('🔌 Setting up socket listeners in HomeScreen (connected:', socket.connected, ')');
-        
-        // Remove any existing listeners first to avoid duplicates
-        socket.off('astrologer_status_updated', handleAstrologerStatusUpdate);
-        socket.off('astrologer_availability_updated', handleAstrologerAvailabilityUpdate);
-        socket.off('booking_status_update', handleBookingStatusUpdate);
-        socket.off('user_pending_bookings_updated', handleUserPendingBookingUpdates);
-        socket.off('session_end', handleSessionEnd);
-        socket.off('session_ended', handleSessionEnd);
-        
-        // Listen for astrologer status updates
-        socket.on('astrologer_status_updated', handleAstrologerStatusUpdate);
-        socket.on('astrologer_availability_updated', handleAstrologerAvailabilityUpdate);
-        socket.on('booking_status_update', handleBookingStatusUpdate);
-        
-        // Listen for user pending booking updates
-        socket.on('user_pending_bookings_updated', handleUserPendingBookingUpdates);
-        
-        // Listen for session end events to clean up pending bookings
-        socket.on('session_end', handleSessionEnd);
-        socket.on('session_ended', handleSessionEnd);
-      };
-      
-      // Set up listeners immediately if already connected
-      if (socket.connected) {
-        setupListeners();
+      // Remove any existing listeners first to avoid duplicates
+      socket.off('astrologer_status_updated', handleAstrologerStatusUpdate);
+      socket.off('astrologer_availability_updated', handleAstrologerAvailabilityUpdate);
+      socket.off('booking_status_update', handleBookingStatusUpdate);
+      socket.off('user_pending_bookings_updated', handleUserPendingBookingUpdates);
+      socket.off('session_end', handleSessionEnd);
+      socket.off('session_ended', handleSessionEnd);
+      socket.off('call_status_update', handleCallStatusUpdate); // Add this line
+
+      // Listen for astrologer status updates
+      socket.on('astrologer_status_updated', handleAstrologerStatusUpdate);
+      socket.on('astrologer_availability_updated', handleAstrologerAvailabilityUpdate);
+      socket.on('booking_status_update', handleBookingStatusUpdate);
+
+      // Listen for user pending booking updates
+      socket.on('user_pending_bookings_updated', handleUserPendingBookingUpdates);
+
+      // Listen for session end events to clean up pending bookings
+      socket.on('session_end', handleSessionEnd);
+      socket.on('session_ended', handleSessionEnd);
+
+      // Listen for call status updates from Exotel
+      socket.on('call_status_update', (data) => {
+        console.log('📞 Call status update received:', data);
+
+        // Show notification for call status updates
+        if (data.message) {
+          // Use different notification styles based on status
+          let notificationType = 'info';
+          if (data.status === 'completed') {
+            notificationType = 'success';
+          } else if (data.status === 'failed' || data.failureReason) {
+            notificationType = 'error';
+          } else if (data.status === 'in-progress') {
+            notificationType = 'info';
+          }
+
+          // Show toast notification
+          Toast.show({
+            type: notificationType,
+            text1: data.title || 'Call Update',
+            text2: data.message,
+            visibilityTime: 4000,
+            autoHide: true,
+            topOffset: 50,
+          });
+        }
+
+        // If call is completed or failed, refresh pending bookings
+        if (data.status === 'completed' || data.status === 'failed') {
+          console.log('📱 Refreshing pending bookings after call status update');
+          fetchUserPendingBookings();
+
+          // Also refresh wallet balance if call is completed (as it may have been charged)
+          if (data.status === 'completed') {
+            fetchWalletBalance();
+          }
+        }
+      });
+
       } else {
         // Wait for connection and then set up listeners
         console.log('🔌 Socket not connected yet, waiting for connection...');

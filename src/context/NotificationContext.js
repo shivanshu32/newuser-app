@@ -9,8 +9,8 @@ import { useAuth } from './AuthContext';
 // Create context
 const NotificationContext = createContext();
 
-// API URL
-const API_URL = 'http://your-backend-url.com/api/v1';
+// Import API service
+import { authAPI } from '../services/api';
 
 // Configure notification handler
 Notifications.setNotificationHandler({
@@ -30,15 +30,28 @@ export const NotificationProvider = ({ children }) => {
 
   useEffect(() => {
     // Register for push notifications
-    registerForPushNotificationsAsync().then(token => setExpoPushToken(token));
+    registerForPushNotificationsAsync().then(token => {
+      if (token) {
+        setExpoPushToken(token);
+        console.log('Expo push token obtained:', token);
+      }
+    });
 
     // Set up notification listeners
     notificationListener.current = Notifications.addNotificationReceivedListener(notification => {
+      console.log('Notification received:', notification);
       setNotification(notification);
+      
+      // Handle offer notifications specially
+      const data = notification.request.content.data;
+      if (data && data.type === 'offer') {
+        console.log('Offer notification received:', data);
+        // You could store offer notifications in AsyncStorage or state for later display
+      }
     });
 
     responseListener.current = Notifications.addNotificationResponseReceivedListener(response => {
-      console.log(response);
+      console.log('Notification response received:', response);
       // Handle notification tap here
       const data = response.notification.request.content.data;
       handleNotificationNavigation(data);
@@ -49,17 +62,49 @@ export const NotificationProvider = ({ children }) => {
       registerTokenWithBackend(expoPushToken);
     }
 
+    // Setup socket listener for real-time offer notifications
+    const setupSocketListener = async () => {
+      try {
+        const { socket } = require('../context/SocketContext');
+        if (socket && socket.connected) {
+          socket.on('offer_notification', (data) => {
+            console.log('Real-time offer notification received:', data);
+            // Display the notification immediately
+            scheduleLocalNotification(
+              data.title,
+              data.message,
+              { type: 'offer', notificationId: data.notificationId }
+            );
+          });
+        }
+      } catch (error) {
+        console.log('Error setting up socket listener for offers:', error);
+      }
+    };
+    
+    setupSocketListener();
+
     return () => {
       Notifications.removeNotificationSubscription(notificationListener.current);
       Notifications.removeNotificationSubscription(responseListener.current);
+      
+      // Clean up socket listener
+      try {
+        const { socket } = require('../context/SocketContext');
+        if (socket) {
+          socket.off('offer_notification');
+        }
+      } catch (error) {
+        console.log('Error cleaning up socket listener:', error);
+      }
     };
   }, [token, expoPushToken]);
 
   // Register token with backend
   const registerTokenWithBackend = async (pushToken) => {
     try {
-      // In a real app, this would call your backend API
-      // await axios.post(`${API_URL}/notifications/register-token`, { token: pushToken });
+      // Call the backend API to register the token
+      await authAPI.registerDeviceToken(pushToken);
       console.log('FCM token registered with backend:', pushToken);
     } catch (error) {
       console.log('Error registering token with backend:', error);
@@ -68,16 +113,20 @@ export const NotificationProvider = ({ children }) => {
 
   // Handle notification navigation
   const handleNotificationNavigation = (data) => {
-    // This function would be implemented to navigate to the appropriate screen
-    // based on the notification data
     console.log('Handling notification navigation with data:', data);
     
-    // Example navigation logic:
-    // if (data.type === 'booking' && data.bookingId) {
-    //   navigation.navigate('Bookings', { screen: 'BookingDetails', params: { id: data.bookingId } });
-    // } else if (data.type === 'chat' && data.sessionId) {
-    //   navigation.navigate('Chat', { sessionId: data.sessionId });
-    // }
+    // Navigation logic based on notification type
+    if (data.type === 'booking' && data.bookingId) {
+      // Navigate to booking details
+      // navigation.navigate('Bookings', { screen: 'BookingDetails', params: { id: data.bookingId } });
+    } else if (data.type === 'chat' && data.sessionId) {
+      // Navigate to chat session
+      // navigation.navigate('Chat', { sessionId: data.sessionId });
+    } else if (data.type === 'offer') {
+      // Navigate to wallet or offers screen for promotional offers
+      // navigation.navigate('Wallet');
+      console.log('Received offer notification:', data.title, data.message);
+    }
   };
 
   // Send test notification
@@ -120,6 +169,8 @@ export const NotificationProvider = ({ children }) => {
         notification,
         sendTestNotification,
         scheduleLocalNotification,
+        handleNotificationNavigation,
+        registerTokenWithBackend
       }}
     >
       {children}
@@ -140,12 +191,24 @@ export const useNotification = () => {
 async function registerForPushNotificationsAsync() {
   let token;
   
+  // Create offer notification channel for Android
   if (Platform.OS === 'android') {
+    // Default channel
     await Notifications.setNotificationChannelAsync('default', {
-      name: 'default',
+      name: 'Default',
       importance: Notifications.AndroidImportance.MAX,
       vibrationPattern: [0, 250, 250, 250],
       lightColor: '#FF231F7C',
+    });
+    
+    // Special channel for offers
+    await Notifications.setNotificationChannelAsync('offers', {
+      name: 'Offers & Promotions',
+      description: 'Notifications for special offers and promotions',
+      importance: Notifications.AndroidImportance.HIGH,
+      vibrationPattern: [0, 100, 200, 300],
+      lightColor: '#FF9800',
+      sound: 'default',
     });
   }
 
@@ -159,16 +222,23 @@ async function registerForPushNotificationsAsync() {
     }
     
     if (finalStatus !== 'granted') {
-      alert('Failed to get push token for push notification!');
-      return;
+      console.log('Failed to get push notification permissions');
+      return null;
     }
     
-    token = (await Notifications.getExpoPushTokenAsync({
-      projectId: "your-project-id" // Replace with your actual Expo project ID
-    })).data;
-    console.log('Expo push token:', token);
+    try {
+      token = (await Notifications.getExpoPushTokenAsync({
+        projectId: "your-project-id" // Replace with your actual Expo project ID
+      })).data;
+      console.log('Expo push token:', token);
+      
+      // Store token in AsyncStorage for persistence
+      await AsyncStorage.setItem('expoPushToken', token);
+    } catch (error) {
+      console.log('Error getting push token:', error);
+    }
   } else {
-    alert('Must use physical device for Push Notifications');
+    console.log('Must use physical device for Push Notifications');
   }
 
   return token;
