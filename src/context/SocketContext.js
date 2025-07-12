@@ -83,6 +83,14 @@ export const SocketProvider = ({ children }) => {
       }
       
       // Create new socket connection
+      console.log('🔥 [DEBUG] Creating socket connection with auth:', {
+        hasToken: !!token,
+        tokenPreview: token ? token.substring(0, 20) + '...' : 'null',
+        userId: userId,
+        role: 'user',
+        serverUrl: SOCKET_SERVER_URL
+      });
+      
       const newSocket = io(SOCKET_SERVER_URL, {
         auth: {
           token,
@@ -101,6 +109,13 @@ export const SocketProvider = ({ children }) => {
       // Set up event listeners
       newSocket.on('connect', () => {
         console.log('🔗 [SOCKET] User connected successfully');
+        console.log('🔥 [DEBUG] Socket connection details:', {
+          socketId: newSocket.id,
+          connected: newSocket.connected,
+          userId: userId,
+          timestamp: new Date().toISOString()
+        });
+        
         setIsConnected(true);
         setIsConnecting(false);
         setConnectionStatus('connected');
@@ -112,6 +127,27 @@ export const SocketProvider = ({ children }) => {
         console.log('🔗 [SOCKET] Sharing socket instance with socketService');
         setSharedSocket(newSocket);
         
+        // CRITICAL: Explicitly join user notification room to ensure call_status_update delivery
+        const userNotificationRoom = `user_${userId}`;
+        console.log('🔥 [DEBUG] Explicitly joining user notification room:', userNotificationRoom);
+        newSocket.emit('join_user_notification_room', { userId, role: 'user' }, (response) => {
+          console.log('🔥 [DEBUG] Join notification room response:', response);
+          
+          // Verify room joining by emitting a test event
+          console.log('🔥 [DEBUG] Requesting room verification for user:', userId);
+          newSocket.emit('verify_room_membership', { userId, role: 'user' }, (response) => {
+            console.log('🔥 [DEBUG] Room membership verification response:', response);
+            
+            if (!response.isInRoom) {
+              console.error('❌ [CRITICAL] User is NOT in notification room after explicit join attempt!');
+              console.error('❌ [CRITICAL] Expected room:', response.expectedRoom);
+              console.error('❌ [CRITICAL] Socket rooms:', response.socketRooms);
+            } else {
+              console.log('✅ [SUCCESS] User successfully joined notification room for call_status_update events');
+            }
+          });
+        });
+        
         // Start ping interval
         startPingInterval(newSocket);
         
@@ -121,6 +157,15 @@ export const SocketProvider = ({ children }) => {
       
       newSocket.on('connect_error', (error) => {
         console.error('❌ [SOCKET] Connection error:', error);
+        console.log('🔥 [DEBUG] Connection error details:', {
+          errorType: error.type,
+          errorMessage: error.message,
+          errorDescription: error.description,
+          errorContext: error.context,
+          userId: userId,
+          hasToken: !!token,
+          serverUrl: SOCKET_SERVER_URL
+        });
         setIsConnecting(false);
         setConnectionStatus('disconnected');
         setConnectionAttempts(prev => prev + 1);
@@ -172,6 +217,27 @@ export const SocketProvider = ({ children }) => {
       
       newSocket.on('error', (error) => {
         console.error('SocketContext: Socket error:', error);
+        console.log('🔥 [DEBUG] Socket error details:', {
+          errorType: error.type,
+          errorMessage: error.message,
+          errorCode: error.code,
+          userId: userId,
+          socketId: newSocket.id,
+          connected: newSocket.connected
+        });
+      });
+      
+      // Add authentication error handler
+      newSocket.on('connect_error', (error) => {
+        if (error.message && error.message.includes('Authentication')) {
+          console.error('❌ [AUTH_ERROR] Socket authentication failed:', error.message);
+          console.log('🔥 [DEBUG] Auth failure details:', {
+            userId: userId,
+            hasToken: !!token,
+            tokenLength: token ? token.length : 0,
+            role: 'user'
+          });
+        }
       });
       
       // Set the socket in state

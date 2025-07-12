@@ -24,6 +24,7 @@ import RatingScreen from '../screens/session/RatingScreen';
 // Import components
 import NotificationBadge from '../components/NotificationBadge';
 import BookingAcceptedPopup from '../components/BookingAcceptedPopup';
+import BookingAcceptedModal from '../components/BookingAcceptedModal';
 
 // Import context
 import { BookingPopupProvider, useBookingPopup } from '../context/BookingPopupContext';
@@ -210,14 +211,35 @@ const BookingPopupWrapper = () => {
     }
   };
 
-  return (
-    <BookingAcceptedPopup
-      visible={isVisible}
-      onClose={hideBookingAcceptedPopup}
-      bookingData={popupData}
-      onJoinSession={handleJoinSession}
-    />
-  );
+  // Determine which popup component to render based on booking type
+  const bookingType = popupData?.bookingType || 'chat';
+  const shouldUseModal = bookingType === 'voice' || bookingType === 'video';
+  
+  console.log('🎯 [BookingPopupWrapper] Rendering popup - bookingType:', bookingType, 'shouldUseModal:', shouldUseModal);
+  
+  if (shouldUseModal) {
+    // Use BookingAcceptedModal for voice and video consultations
+    return (
+      <BookingAcceptedModal
+        visible={isVisible}
+        onClose={hideBookingAcceptedPopup}
+        onJoinNow={() => handleJoinSession(popupData)}
+        astrologerName={popupData?.astrologerName}
+        astrologerImage={popupData?.astrologerImage}
+        bookingType={bookingType}
+      />
+    );
+  } else {
+    // Use BookingAcceptedPopup for chat consultations
+    return (
+      <BookingAcceptedPopup
+        visible={isVisible}
+        onClose={hideBookingAcceptedPopup}
+        bookingData={popupData}
+        onJoinSession={handleJoinSession}
+      />
+    );
+  }
 };
 
 // Main stack navigator that includes the tab navigator and other screens

@@ -61,8 +61,8 @@ const AstrologerProfileScreen = ({ route, navigation }) => {
   useEffect(() => {
     fetchAstrologerDetails();
     
-    // Set up booking status listener when component mounts
-    setupBookingStatusListener();
+    // Note: Removed setupBookingStatusListener() to prevent duplicate listeners
+    // Global socketService handles booking_status_update events and shows popups
     
     // Set up socket listener for astrologer availability updates
     if (socket) {
@@ -637,7 +637,11 @@ const AstrologerProfileScreen = ({ route, navigation }) => {
 
   // Handle real-time booking via socket
   const handleBookNow = async (type) => {
-    console.log(`handleBookNow called for session type: ${type}`);
+    console.log(`📞 [USER-APP] handleBookNow called for session type: ${type}`);
+    
+    // Track the current booking type
+    currentBookingTypeRef.current = type;
+    
     try {
       // If astrologer data isn't loaded yet, try fetching it again
       if (!astrologer) {
@@ -727,6 +731,30 @@ const AstrologerProfileScreen = ({ route, navigation }) => {
                   // Update both state and ref
                   setCurrentBookingId(response.bookingId);
                   currentBookingIdRef.current = response.bookingId;
+                  
+                  // For voice calls, redirect to Home screen immediately instead of showing waiting popup
+                  if (type === 'voice') {
+                    console.log(' [USER-APP] Voice call booking initiated, redirecting to Home screen');
+                    
+                    // Show success toast
+                    if (Platform.OS === 'android') {
+                      ToastAndroid.show(
+                        `Voice call request sent to ${astrologerName}. Check Pending Bookings on Home screen.`,
+                        ToastAndroid.LONG
+                      );
+                    } else {
+                      Alert.alert(
+                        'Request Sent',
+                        `Voice call request sent to ${astrologerName}. Check Pending Bookings on Home screen.`
+                      );
+                    }
+                    
+                    // Navigate to Home screen
+                    navigation.navigate('Home');
+                    return;
+                  }
+                  
+                  // For other booking types, show the waiting modal
                   setBookingStatus('pending');
                 }
                 
@@ -792,9 +820,12 @@ const AstrologerProfileScreen = ({ route, navigation }) => {
 
   // Booking request pending modal
   const renderBookingPendingModal = () => {
+    // Don't show modal for voice calls as they redirect to Home immediately
+    const shouldShowModal = bookingStatus === 'pending' && currentBookingTypeRef.current !== 'voice';
+    
     return (
       <Modal
-        visible={bookingStatus === 'pending'}
+        visible={shouldShowModal}
         transparent={true}
         animationType="fade"
       >

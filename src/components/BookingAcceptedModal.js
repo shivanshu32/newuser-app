@@ -91,17 +91,22 @@ const BookingAcceptedModal = ({
           
           {/* Message */}
           <Text style={styles.message}>
-            Your {bookingType || 'consultation'} has been accepted! Join now to start your session.
+            {bookingType === 'voice' 
+              ? 'Your voice consultation has been accepted! You will receive a phone call shortly from our system. Please answer the call to connect with the astrologer.'
+              : `Your ${bookingType || 'consultation'} has been accepted! Join now to start your session.`
+            }
           </Text>
           
-          {/* Action Button - Only Join Now */}
-          <TouchableOpacity 
-            style={styles.joinButton}
-            onPress={onJoinNow}
-          >
-            <Ionicons name="play-circle" size={20} color="#FFFFFF" />
-            <Text style={styles.joinButtonText}>Join Now</Text>
-          </TouchableOpacity>
+          {/* Action Button - Only for non-voice consultations */}
+          {bookingType !== 'voice' && (
+            <TouchableOpacity 
+              style={styles.joinButton}
+              onPress={onJoinNow}
+            >
+              <Ionicons name="play-circle" size={20} color="#FFFFFF" />
+              <Text style={styles.joinButtonText}>Join Now</Text>
+            </TouchableOpacity>
+          )}
           
           {/* Close Button */}
           <TouchableOpacity 

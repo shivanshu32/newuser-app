@@ -17,10 +17,12 @@ import {
   Modal,
 } from 'react-native';
 import { Ionicons, MaterialIcons, FontAwesome } from '@expo/vector-icons';
+import Toast from 'react-native-toast-message';
 import { useAuth } from '../../context/AuthContext';
 import { useSocket } from '../../context/SocketContext';
 import { astrologersAPI, walletAPI } from '../../services/api';
 import BookingAcceptedModal from '../../components/BookingAcceptedModal';
+
 
 const HomeScreen = ({ navigation }) => {
   const { user } = useAuth();
@@ -119,8 +121,107 @@ const HomeScreen = ({ navigation }) => {
       // Emit socket event to get user pending bookings
       socket.emit('get_user_pending_bookings', {}, (response) => {
         if (response && response.success) {
-          console.log('✅ User pending bookings fetched:', response.pendingBookings);
-          setPendingBookings(response.pendingBookings || []);
+          console.log('✅ [FETCH_BOOKINGS] Raw response from backend:', JSON.stringify(response, null, 2));
+          console.log('✅ [FETCH_BOOKINGS] User pending bookings fetched:', response.pendingBookings);
+          
+          // Debug each booking's structure and status
+          (response.pendingBookings || []).forEach((booking, index) => {
+            console.log(`📝 [BOOKING_DEBUG] Booking ${index + 1}:`, {
+              id: booking._id || booking.bookingId,
+              status: booking.status,
+              callStatus: booking.callStatus,
+              type: booking.type,
+              astrologerName: booking.astrologer?.name,
+              createdAt: booking.createdAt,
+              fullBooking: JSON.stringify(booking, null, 2)
+            });
+          });
+          
+          // Get only the most recent booking with valid status (accepted, pending, in-progress)
+          let latestValidBooking = null;
+          
+          if (response.pendingBookings && response.pendingBookings.length > 0) {
+            // Sort bookings by creation date (most recent first)
+            const sortedBookings = [...response.pendingBookings].sort((a, b) => {
+              const dateA = new Date(a.createdAt || a.timestamp || 0);
+              const dateB = new Date(b.createdAt || b.timestamp || 0);
+              return dateB - dateA; // Most recent first
+            });
+            
+            console.log('📋 [LATEST_BOOKING] Sorted bookings by date:', sortedBookings.map(b => ({
+              id: b.bookingId || b._id,
+              status: b.status,
+              createdAt: b.createdAt,
+              type: b.type
+            })));
+            
+            // Find the most recent booking
+            const mostRecentBooking = sortedBookings[0];
+            
+            if (mostRecentBooking) {
+              const mainStatus = mostRecentBooking.status;
+              const callStatus = mostRecentBooking.callStatus;
+              const bookingStatus = mostRecentBooking.bookingStatus;
+              
+              console.log('🔍 [LATEST_BOOKING] Checking most recent booking:', {
+                id: mostRecentBooking.bookingId || mostRecentBooking._id,
+                mainStatus,
+                callStatus,
+                bookingStatus,
+                type: mostRecentBooking.type,
+                createdAt: mostRecentBooking.createdAt
+              });
+              
+              // Check if the most recent booking has a valid status
+              const validStatuses = ['accepted', 'pending', 'in-progress'];
+              const hasValidMainStatus = validStatuses.includes(mainStatus);
+              const hasValidCallStatus = validStatuses.includes(callStatus);
+              const hasValidBookingStatus = validStatuses.includes(bookingStatus);
+              
+              const hasValidStatus = hasValidMainStatus || hasValidCallStatus || hasValidBookingStatus;
+              
+              if (hasValidStatus) {
+                latestValidBooking = mostRecentBooking;
+                console.log('✅ [LATEST_BOOKING] Most recent booking has valid status - showing it:', {
+                  bookingId: mostRecentBooking.bookingId || mostRecentBooking._id,
+                  mainStatus,
+                  callStatus,
+                  bookingStatus,
+                  type: mostRecentBooking.type,
+                  validBy: {
+                    mainStatus: hasValidMainStatus,
+                    callStatus: hasValidCallStatus,
+                    bookingStatus: hasValidBookingStatus
+                  }
+                });
+              } else {
+                console.log('🗑️ [LATEST_BOOKING] Most recent booking does not have valid status - hiding it:', {
+                  bookingId: mostRecentBooking.bookingId || mostRecentBooking._id,
+                  mainStatus,
+                  callStatus,
+                  bookingStatus,
+                  type: mostRecentBooking.type,
+                  reason: 'Latest booking status not in [accepted, pending, in-progress]'
+                });
+              }
+            }
+          }
+          
+          const validPendingBookings = latestValidBooking ? [latestValidBooking] : [];
+          
+          console.log('📋 [INITIAL_LOAD] Filtering results:', {
+            totalReceived: response.pendingBookings?.length || 0,
+            validAfterFilter: validPendingBookings.length,
+            filteredOut: (response.pendingBookings?.length || 0) - validPendingBookings.length,
+            finalBookings: validPendingBookings.map(b => ({
+              id: b.bookingId || b._id,
+              status: b.status,
+              callStatus: b.callStatus,
+              type: b.type
+            }))
+          });
+          
+          setPendingBookings(validPendingBookings);
         } else {
           console.error('❌ Failed to fetch user pending bookings:', response?.message);
           setPendingBookings([]);
@@ -192,50 +293,301 @@ const HomeScreen = ({ navigation }) => {
     }
   }, []);
 
-  // Handle user pending booking updates
+  // Handle user pending booking updates (when existing bookings are cancelled)
   const handleUserPendingBookingUpdates = useCallback((data) => {
-    console.log('📢 User pending booking update received:', data);
-    setPendingBookings(data.pendingBookings || []);
-  }, []);
+    console.log('📋 [BOOKING_UPDATE] User pending bookings updated event received:', data);
+    
+    if (data && data.pendingBookings) {
+      console.log('✅ [BOOKING_UPDATE] Raw bookings from server:', {
+        newCount: data.pendingBookings.length,
+        previousCount: pendingBookings.length,
+        rawBookings: data.pendingBookings.map(b => ({
+          id: b.bookingId || b._id,
+          status: b.status,
+          callStatus: b.callStatus,
+          type: b.type
+        }))
+      });
+      
+      // Get only the most recent booking with valid status (accepted, pending, in-progress)
+      let latestValidBooking = null;
+      
+      if (data.pendingBookings && data.pendingBookings.length > 0) {
+        // Sort bookings by creation date (most recent first)
+        const sortedBookings = [...data.pendingBookings].sort((a, b) => {
+          const dateA = new Date(a.createdAt || a.timestamp || 0);
+          const dateB = new Date(b.createdAt || b.timestamp || 0);
+          return dateB - dateA; // Most recent first
+        });
+        
+        console.log('📋 [UPDATE_LATEST] Sorted bookings by date:', sortedBookings.map(b => ({
+          id: b.bookingId || b._id,
+          status: b.status,
+          createdAt: b.createdAt,
+          type: b.type
+        })));
+        
+        // Find the most recent booking
+        const mostRecentBooking = sortedBookings[0];
+        
+        if (mostRecentBooking) {
+          const mainStatus = mostRecentBooking.status;
+          const callStatus = mostRecentBooking.callStatus;
+          const bookingStatus = mostRecentBooking.bookingStatus;
+          
+          console.log('🔍 [UPDATE_LATEST] Checking most recent booking:', {
+            id: mostRecentBooking.bookingId || mostRecentBooking._id,
+            mainStatus,
+            callStatus,
+            bookingStatus,
+            type: mostRecentBooking.type,
+            createdAt: mostRecentBooking.createdAt
+          });
+          
+          // Check if the most recent booking has a valid status
+          const validStatuses = ['accepted', 'pending', 'in-progress'];
+          const hasValidMainStatus = validStatuses.includes(mainStatus);
+          const hasValidCallStatus = validStatuses.includes(callStatus);
+          const hasValidBookingStatus = validStatuses.includes(bookingStatus);
+          
+          const hasValidStatus = hasValidMainStatus || hasValidCallStatus || hasValidBookingStatus;
+          
+          if (hasValidStatus) {
+            latestValidBooking = mostRecentBooking;
+            console.log('✅ [UPDATE_LATEST] Most recent booking has valid status - showing it:', {
+              bookingId: mostRecentBooking.bookingId || mostRecentBooking._id,
+              mainStatus,
+              callStatus,
+              bookingStatus,
+              type: mostRecentBooking.type,
+              validBy: {
+                mainStatus: hasValidMainStatus,
+                callStatus: hasValidCallStatus,
+                bookingStatus: hasValidBookingStatus
+              }
+            });
+          } else {
+            console.log('🗑️ [UPDATE_LATEST] Most recent booking does not have valid status - hiding it:', {
+              bookingId: mostRecentBooking.bookingId || mostRecentBooking._id,
+              mainStatus,
+              callStatus,
+              bookingStatus,
+              type: mostRecentBooking.type,
+              reason: 'Latest booking status not in [accepted, pending, in-progress]'
+            });
+          }
+        }
+      }
+      
+      const validPendingBookings = latestValidBooking ? [latestValidBooking] : [];
+      
+      console.log('📋 [UPDATE_FILTER] Filtering results:', {
+        totalReceived: data.pendingBookings.length,
+        validAfterFilter: validPendingBookings.length,
+        filteredOut: data.pendingBookings.length - validPendingBookings.length,
+        finalBookings: validPendingBookings.map(b => ({
+          id: b.bookingId || b._id,
+          status: b.status,
+          callStatus: b.callStatus,
+          type: b.type
+        }))
+      });
+      
+      // Check if bookings were cancelled (count decreased) - use filtered counts
+      const cancelledCount = pendingBookings.length - validPendingBookings.length;
+      
+      // Update the pending bookings state with the filtered data
+      setPendingBookings(validPendingBookings);
+      
+      // Show a toast notification if bookings were cancelled
+      if (cancelledCount > 0) {
+        Toast.show({
+          type: 'info',
+          text1: 'Bookings Updated',
+          text2: `${cancelledCount} previous booking${cancelledCount > 1 ? 's' : ''} cancelled due to new booking request`,
+          visibilityTime: 3000,
+          autoHide: true,
+          topOffset: 50,
+        });
+      }
+    } else {
+      console.warn('⚠️ Invalid pending bookings update data received:', data);
+      // Fallback to empty array if data is invalid
+      setPendingBookings([]);
+    }
+  }, [pendingBookings.length]);
 
   // Handle session end events to clean up pending bookings
   const handleSessionEnd = useCallback((data) => {
-    console.log('🔚 Session end event received:', data);
-    
-    // Remove the booking from pending bookings when session ends
-    if (data.bookingId || data.sessionId) {
+    console.log('📝 [HOME] Session ended:', data);
+    // Update local state to remove the ended session instead of calling fetchPendingBookings
+    if (data.bookingId) {
       setPendingBookings(prevBookings => {
-        const filteredBookings = prevBookings.filter(booking => {
-          const shouldRemove = booking.bookingId === data.bookingId || 
-                              booking._id === data.bookingId ||
-                              booking.sessionId === data.sessionId;
-          
-          if (shouldRemove) {
-            console.log('✅ Removing completed booking from pending list:', {
-              bookingId: booking.bookingId || booking._id,
-              sessionId: booking.sessionId
-            });
-          }
-          
-          return !shouldRemove;
-        });
-        
-        console.log('📊 Pending bookings after session end cleanup:', {
-          before: prevBookings.length,
-          after: filteredBookings.length,
-          removed: prevBookings.length - filteredBookings.length
-        });
-        
-        return filteredBookings;
+        return prevBookings.filter(booking => 
+          booking._id !== data.bookingId && booking.bookingId !== data.bookingId
+        );
       });
     }
   }, []);
 
-  // Handle cancel booking request
-  const handleCancelBooking = useCallback((booking) => {
-    console.log('🚫 Cancel booking requested:', booking);
-    setBookingToCancel(booking);
-    setShowCancelConfirmModal(true);
+  // Handle call status updates from Exotel
+  const handleCallStatusUpdate = useCallback((data) => {
+    console.log('🔥 [DEBUG] call_status_update event received in user-app HomeScreen!');
+    console.log('📞 [HOME] Received call_status_update:', JSON.stringify(data, null, 2));
+    console.log('📞 [HOME] Event timestamp:', new Date().toISOString());
+    
+    if (!data) {
+      console.error('📞 [HOME] Invalid call status update data');
+      return;
+    }
+    
+    // Prevent duplicate processing by checking if we already processed this exact event
+    const eventKey = `${data.bookingId}_${data.status}_${data.timestamp}`;
+    if (window.processedCallEvents && window.processedCallEvents.has(eventKey)) {
+      console.log('🔄 [HOME] Skipping duplicate call status event:', eventKey);
+      return;
+    }
+    
+    // Track processed events to prevent duplicates
+    if (!window.processedCallEvents) {
+      window.processedCallEvents = new Set();
+    }
+    window.processedCallEvents.add(eventKey);
+    
+    // Clean up old events (keep only last 50)
+    if (window.processedCallEvents.size > 50) {
+      const eventsArray = Array.from(window.processedCallEvents);
+      window.processedCallEvents = new Set(eventsArray.slice(-25));
+    }
+    
+    // Show toast notification with improved error handling
+    try {
+      // Handle message-based notifications (from backend)
+      if (data.message && data.title) {
+        // Determine toast type based on notification type
+        let toastType = 'info';
+        if (data.notificationType === 'success') {
+          toastType = 'success';
+        } else if (data.notificationType === 'error') {
+          toastType = 'error';
+        }
+        
+        console.log('🍞 [TOAST] Showing toast notification:', {
+          type: toastType,
+          title: data.title,
+          message: data.message
+        });
+        
+        // Show toast notification
+        Toast.show({
+          type: toastType,
+          text1: data.title || 'Call Update',
+          text2: data.message,
+          position: 'top',
+          visibilityTime: 5000,
+          autoHide: true,
+          topOffset: 60,
+        });
+      } else {
+        // Handle status-based notifications
+        const { status, failureReason } = data;
+        
+        let toastConfig = null;
+        
+        // Show appropriate notification based on call status
+        if (status === 'initiated') {
+          toastConfig = {
+            type: 'info',
+            text1: 'Call Initiated',
+            text2: 'Your call is being connected. Please wait for the incoming call.',
+          };
+        } else if (status === 'connected' || status === 'in-progress') {
+          toastConfig = {
+            type: 'success',
+            text1: 'Call Connected',
+            text2: 'Your call has been connected with the astrologer.',
+          };
+        } else if (status === 'completed') {
+          toastConfig = {
+            type: 'success',
+            text1: 'Call Completed',
+            text2: 'Your consultation has ended successfully.',
+          };
+        } else if (status === 'failed') {
+          // Show failure notification with reason if available
+          const failureMessage = failureReason 
+            ? `Call failed: ${failureReason.replace(/-/g, ' ')}` 
+            : 'Call failed to connect. Please try again later.';
+          
+          toastConfig = {
+            type: 'error',
+            text1: 'Call Failed',
+            text2: failureMessage,
+            visibilityTime: 6000,
+          };
+        }
+        
+        if (toastConfig) {
+          console.log('🍞 [TOAST] Showing status-based toast:', toastConfig);
+          Toast.show({
+            ...toastConfig,
+            position: 'top',
+            visibilityTime: toastConfig.visibilityTime || 4000,
+            autoHide: true,
+            topOffset: 60,
+          });
+        }
+      }
+    } catch (toastError) {
+      console.error('❌ [TOAST] Error showing toast notification:', toastError);
+    }
+    
+    // Update pending bookings if this relates to a booking
+    if (data.bookingId) {
+      console.log('📋 [BOOKING_UPDATE] Updating pending bookings for:', data.bookingId);
+      
+      // Update local state to immediately reflect changes
+      setPendingBookings(prevBookings => {
+        console.log('📋 [BOOKING_UPDATE] Current bookings count:', prevBookings.length);
+        
+        const updatedBookings = prevBookings
+          .map(booking => {
+            const bookingId = booking._id || booking.bookingId;
+            if (bookingId === data.bookingId || bookingId?.toString() === data.bookingId?.toString()) {
+              console.log('📋 [BOOKING_UPDATE] Found matching booking to update:', {
+                bookingId: bookingId,
+                oldStatus: booking.status,
+                newStatus: data.status
+              });
+              
+              return {
+                ...booking,
+                status: data.status === 'connected' ? 'in-progress' : data.status,
+                callStatus: data.status,
+                lastUpdated: new Date()
+              };
+            }
+            return booking;
+          })
+          .filter(booking => {
+            // Remove failed, completed, expired, cancelled, or rejected bookings
+            const shouldRemove = ['failed', 'completed', 'expired', 'cancelled', 'rejected'].includes(booking.status);
+            if (shouldRemove) {
+              console.log('🗑️ [CALL_STATUS] Removing booking from pending list:', {
+                bookingId: booking.bookingId || booking._id,
+                status: booking.status,
+                reason: 'Call status update'
+              });
+            }
+            return !shouldRemove;
+          });
+        
+        console.log('📋 [BOOKING_UPDATE] Updated bookings count:', updatedBookings.length);
+        console.log('📋 [BOOKING_UPDATE] Removed bookings:', prevBookings.length - updatedBookings.length);
+        
+        return updatedBookings;
+      });
+    }
   }, []);
 
   // Confirm cancel booking
@@ -347,6 +699,8 @@ const HomeScreen = ({ navigation }) => {
     }
   }, [navigation, user]);
 
+
+
   // Load initial data
   const loadInitialData = useCallback(async () => {
     await Promise.all([
@@ -436,8 +790,8 @@ const HomeScreen = ({ navigation }) => {
         }
         return booking;
       }).filter(booking => {
-        // Remove rejected, expired, or cancelled bookings from pending list
-        const shouldRemove = ['rejected', 'expired', 'cancelled'].includes(booking.status);
+        // Remove rejected, expired, cancelled, or failed bookings from pending list
+        const shouldRemove = ['rejected', 'expired', 'cancelled', 'failed'].includes(booking.status);
         if (shouldRemove) {
           console.log('🗑️ [DEBUG] Removing booking from pending list:', {
             bookingId: booking.bookingId || booking._id,
@@ -641,20 +995,37 @@ const HomeScreen = ({ navigation }) => {
     if (astrologerInfo.name === 'Professional Astrologer' && data.astrologerName) {
       console.log('🔄 [USER-APP] Using astrologerName from legacy event data:', data.astrologerName);
       astrologerInfo.name = data.astrologerName;
+    }
 
+  }, [bookingAcceptedData, navigation, user, astrologers]);
+
+  // Socket listener setup useEffect
+  React.useEffect(() => {
+    console.log('🔥 [DEBUG] Socket setup useEffect triggered in user-app HomeScreen');
+    console.log('🔥 [DEBUG] Socket state:', {
+      socketExists: !!socket,
+      socketConnected: socket?.connected,
+      socketId: socket?.id,
+      timestamp: new Date().toISOString()
+    });
+    
+    if (socket && socket.connected) {
+      console.log('🔥 [DEBUG] Socket is connected, setting up listeners...');
+      
       // Remove any existing listeners first to avoid duplicates
       socket.off('astrologer_status_updated', handleAstrologerStatusUpdate);
       socket.off('astrologer_availability_updated', handleAstrologerAvailabilityUpdate);
-      socket.off('booking_status_update', handleBookingStatusUpdate);
+      // Note: booking_status_update cleanup not needed (handled by global socketService)
       socket.off('user_pending_bookings_updated', handleUserPendingBookingUpdates);
       socket.off('session_end', handleSessionEnd);
       socket.off('session_ended', handleSessionEnd);
-      socket.off('call_status_update', handleCallStatusUpdate); // Add this line
+      socket.off('call_status_update', handleCallStatusUpdate);
+      console.log('🔥 [DEBUG] Cleaned up existing listeners');
 
       // Listen for astrologer status updates
       socket.on('astrologer_status_updated', handleAstrologerStatusUpdate);
       socket.on('astrologer_availability_updated', handleAstrologerAvailabilityUpdate);
-      socket.on('booking_status_update', handleBookingStatusUpdate);
+      // Note: booking_status_update is handled by global socketService listener
 
       // Listen for user pending booking updates
       socket.on('user_pending_bookings_updated', handleUserPendingBookingUpdates);
@@ -664,52 +1035,43 @@ const HomeScreen = ({ navigation }) => {
       socket.on('session_ended', handleSessionEnd);
 
       // Listen for call status updates from Exotel
-      socket.on('call_status_update', (data) => {
-        console.log('📞 Call status update received:', data);
-
-        // Show notification for call status updates
-        if (data.message) {
-          // Use different notification styles based on status
-          let notificationType = 'info';
-          if (data.status === 'completed') {
-            notificationType = 'success';
-          } else if (data.status === 'failed' || data.failureReason) {
-            notificationType = 'error';
-          } else if (data.status === 'in-progress') {
-            notificationType = 'info';
-          }
-
-          // Show toast notification
-          Toast.show({
-            type: notificationType,
-            text1: data.title || 'Call Update',
-            text2: data.message,
-            visibilityTime: 4000,
-            autoHide: true,
-            topOffset: 50,
-          });
-        }
-
-        // If call is completed or failed, refresh pending bookings
-        if (data.status === 'completed' || data.status === 'failed') {
-          console.log('📱 Refreshing pending bookings after call status update');
-          fetchUserPendingBookings();
-
-          // Also refresh wallet balance if call is completed (as it may have been charged)
-          if (data.status === 'completed') {
-            fetchWalletBalance();
-          }
-        }
+      console.log('🔥 [DEBUG] Registering call_status_update listener in user-app HomeScreen');
+      socket.on('call_status_update', handleCallStatusUpdate);
+      console.log('🔥 [DEBUG] call_status_update listener registered successfully');
+      
+      // Add debugging for socket connection events
+      socket.on('connect', () => {
+        console.log('🔥 [DEBUG] Socket connected in user-app HomeScreen, ID:', socket.id);
+      });
+      
+      socket.on('disconnect', (reason) => {
+        console.log('🔥 [DEBUG] Socket disconnected in user-app HomeScreen, reason:', reason);
+      });
+      
+      // Debug room membership
+      socket.on('room_joined', (data) => {
+        console.log('🔥 [DEBUG] Joined room in user-app:', data);
+      });
+      
+      socket.on('room_left', (data) => {
+        console.log('🔥 [DEBUG] Left room in user-app:', data);
       });
 
       } else {
         // Wait for connection and then set up listeners
-        console.log('🔌 Socket not connected yet, waiting for connection...');
-        socket.on('connect', setupListeners);
+        console.log('🔥 [DEBUG] Socket not connected yet, waiting for connection...');
+        console.log('🔥 [DEBUG] Socket details:', {
+          socketExists: !!socket,
+          socketConnected: socket?.connected,
+          socketConnecting: socket?.connecting,
+          socketDisconnected: socket?.disconnected,
+          readyState: socket?.readyState
+        });
+        // Removed setupListeners reference as it was undefined
       }
       
       // Also listen for reconnection events
-      socket.on('reconnect', setupListeners);
+      // Removed setupListeners reference as it was undefined
       
       // DISABLED: Legacy booking accepted event - now handled by modern BookingAcceptedPopup
       // socket.on('booking_accepted', handleBookingAccepted);
@@ -798,17 +1160,16 @@ const HomeScreen = ({ navigation }) => {
         console.log('🔌 Cleaning up socket listeners in HomeScreen');
         socket.off('astrologer_status_updated', handleAstrologerStatusUpdate);
         socket.off('astrologer_availability_updated', handleAstrologerAvailabilityUpdate);
-        socket.off('booking_status_update', handleBookingStatusUpdate);
+        // Note: booking_status_update cleanup not needed (handled by global socketService)
         socket.off('user_pending_bookings_updated', handleUserPendingBookingUpdates);
         socket.off('session_end', handleSessionEnd);
         socket.off('session_ended', handleSessionEnd);
-        socket.off('connect', setupListeners);
-        socket.off('reconnect', setupListeners);
+        // Removed setupListeners references as they were undefined
         socket.off('booking_rejected');
         socket.off('voice_call_initiated');
         socket.off('voice_call_failed');
       };
-    }
+    
   }, [socket, handleAstrologerStatusUpdate, handleAstrologerAvailabilityUpdate, handleBookingStatusUpdate, handleUserPendingBookingUpdates, handleSessionEnd]);
 
   // Render booking card
@@ -1020,9 +1381,9 @@ const HomeScreen = ({ navigation }) => {
   const renderPendingBookingCard = ({ item }) => {
     const booking = item.data;
     const isAccepted = booking.status === 'accepted';
-    const isExpired = booking.status === 'expired' || booking.status === 'cancelled';
+    const isExpired = booking.status === 'expired' || booking.status === 'cancelled' || booking.status === 'failed';
     
-    // Don't render expired or cancelled bookings
+    // Don't render expired, cancelled, or failed bookings
     if (isExpired) {
       return null;
     }
@@ -1082,6 +1443,35 @@ const HomeScreen = ({ navigation }) => {
           </View>
         </View>
         
+        {/* Booking Time and Status Section */}
+        <View style={styles.bookingTimeStatusSection}>
+          <View style={styles.bookingTimeContainer}>
+            <Ionicons name="time-outline" size={16} color="#6B7280" />
+            <Text style={styles.bookingTimeLabel}>Booking Time:</Text>
+            <Text style={styles.bookingTimeValue}>
+              {booking.createdAt ? 
+                new Date(booking.createdAt).toLocaleString('en-IN', {
+                  day: '2-digit',
+                  month: 'short',
+                  year: 'numeric',
+                  hour: '2-digit',
+                  minute: '2-digit',
+                  hour12: true
+                }) : 
+                'N/A'
+              }
+            </Text>
+          </View>
+          
+          <View style={styles.bookingStatusContainer}>
+            <Ionicons name="information-circle-outline" size={16} color={getStatusColor()} />
+            <Text style={styles.bookingStatusLabel}>Status:</Text>
+            <Text style={[styles.bookingStatusValue, { color: getStatusColor() }]}>
+              {booking.status?.charAt(0).toUpperCase() + booking.status?.slice(1) || 'Unknown'}
+            </Text>
+          </View>
+        </View>
+        
         <View style={styles.pendingBookingStatus}>
           <View style={[styles.statusIndicator, { backgroundColor: getStatusColor() }]} />
           <Text style={[styles.statusMessage, { color: getStatusColor() }]}>
@@ -1090,8 +1480,8 @@ const HomeScreen = ({ navigation }) => {
         </View>
 
         <View style={styles.pendingBookingActions}>
-          {/* Cancel Button - Show if booking is pending or accepted and session hasn't started */}
-          {(booking.status === 'pending' || (booking.status === 'accepted' && !booking.sessionStarted)) && (
+          {/* Cancel Button - Show if booking is pending or accepted and session hasn't started, but NOT for voice consultations */}
+          {booking.type !== 'voice' && (booking.status === 'pending' || (booking.status === 'accepted' && !booking.sessionStarted)) && (
             <TouchableOpacity
               style={styles.cancelButton}
               onPress={() => handleCancelBooking(booking)}
@@ -1101,8 +1491,8 @@ const HomeScreen = ({ navigation }) => {
             </TouchableOpacity>
           )}
           
-          {/* Join Session Button - Show if accepted and session hasn't started */}
-          {isAccepted && !booking.sessionStarted && (
+          {/* Join Session Button - Show if accepted and session hasn't started, but NOT for voice consultations */}
+          {booking.type !== 'voice' && isAccepted && !booking.sessionStarted && (
             <TouchableOpacity
               style={styles.joinSessionButton}
               onPress={() => handleJoinSession(booking)}
@@ -1112,8 +1502,8 @@ const HomeScreen = ({ navigation }) => {
             </TouchableOpacity>
           )}
           
-          {/* Rejoin Session Button - Show if session is active and user can rejoin */}
-          {booking.sessionStarted && booking.status === 'accepted' && (
+          {/* Rejoin Session Button - Show if session is active and user can rejoin, but NOT for voice consultations */}
+          {booking.type !== 'voice' && booking.sessionStarted && booking.status === 'accepted' && (
             <TouchableOpacity
               style={styles.rejoinSessionButton}
               onPress={() => handleJoinSession(booking)}
@@ -1121,6 +1511,16 @@ const HomeScreen = ({ navigation }) => {
               <Ionicons name="refresh-circle" size={20} color="#fff" />
               <Text style={styles.rejoinSessionText}>Rejoin Session</Text>
             </TouchableOpacity>
+          )}
+          
+          {/* Voice consultation info message */}
+          {booking.type === 'voice' && isAccepted && (
+            <View style={styles.voiceConsultationInfo}>
+              <Ionicons name="call" size={20} color="#10B981" />
+              <Text style={styles.voiceConsultationText}>
+                You will receive a phone call shortly. Please answer to connect with the astrologer.
+              </Text>
+            </View>
           )}
         </View>
       </View>
@@ -1687,6 +2087,49 @@ const styles = StyleSheet.create({
     color: '#6B7280',
     marginLeft: 6,
   },
+  // Booking Time and Status Styles
+  bookingTimeStatusSection: {
+    backgroundColor: '#F9FAFB',
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+  bookingTimeContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  bookingTimeLabel: {
+    fontSize: 13,
+    color: '#6B7280',
+    fontWeight: '500',
+    marginLeft: 6,
+    marginRight: 8,
+  },
+  bookingTimeValue: {
+    fontSize: 13,
+    color: '#374151',
+    fontWeight: '600',
+    flex: 1,
+  },
+  bookingStatusContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  bookingStatusLabel: {
+    fontSize: 13,
+    color: '#6B7280',
+    fontWeight: '500',
+    marginLeft: 6,
+    marginRight: 8,
+  },
+  bookingStatusValue: {
+    fontSize: 13,
+    fontWeight: '600',
+    flex: 1,
+  },
   pendingBookingStatus: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1759,6 +2202,23 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     marginLeft: 8,
+  },
+  voiceConsultationInfo: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    backgroundColor: '#F0FDF4',
+    borderRadius: 8,
+    padding: 12,
+    marginTop: 8,
+    borderLeftWidth: 3,
+    borderLeftColor: '#10B981',
+  },
+  voiceConsultationText: {
+    flex: 1,
+    fontSize: 14,
+    color: '#065F46',
+    marginLeft: 8,
+    lineHeight: 20,
   },
   // Modal Styles
   modalOverlay: {

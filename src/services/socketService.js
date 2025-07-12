@@ -25,6 +25,96 @@ export const setSharedSocket = (socketInstance) => {
   console.log('🔗 [socketService] Setting shared socket from SocketContext:', !!socketInstance);
   sharedSocket = socketInstance;
   socket = socketInstance; // Use shared socket as primary
+  
+  // CRITICAL: Set up global listeners when receiving shared socket
+  if (socketInstance && socketInstance.connected) {
+    console.log('🔗 [socketService] Setting up global listeners on shared socket');
+    setupGlobalListeners(socketInstance);
+  }
+};
+
+/**
+ * Set up global socket event listeners
+ * @param {Object} socketInstance - Socket instance to set up listeners on
+ */
+const setupGlobalListeners = (socketInstance) => {
+  console.log('🔧 [socketService] Setting up global socket listeners');
+  
+  // Remove any existing booking_status_update listeners to avoid duplicates
+  socketInstance.removeAllListeners('booking_status_update');
+  
+  // Add global listener for booking_status_update events
+  socketInstance.on('booking_status_update', (data) => {
+    console.log('🔔 [socketService] Global booking status update received:', {
+      status: data.status,
+      bookingId: data.bookingId,
+      sessionId: data.sessionId,
+      socketId: socketInstance.id
+    });
+    console.log('🔔 [socketService] Full booking status data:', JSON.stringify(data, null, 2));
+    
+    // Handle booking acceptance with popup (global handler for all screens)
+    if (data.status === 'accepted') {
+      console.log('🎯 [socketService] Booking accepted - triggering global popup');
+      console.log('🎯 [socketService] Global eventEmitter available:', !!global.eventEmitter);
+      
+      // Emit event to show booking accepted popup globally
+      if (global.eventEmitter) {
+        const popupData = {
+          bookingId: data.bookingId,
+          sessionId: data.sessionId,
+          roomId: data.roomId,
+          astrologerId: data.astrologerId,
+          astrologerName: data.astrologerDisplayName || data.astrologerName,
+          astrologerImageUrl: data.astrologerImageUrl,
+          bookingType: data.consultationType || 'chat',
+          rate: data.rate,
+          message: data.message
+        };
+        
+        console.log('📡 [socketService] Emitting showBookingAcceptedPopup with data:', JSON.stringify(popupData, null, 2));
+        global.eventEmitter.emit('showBookingAcceptedPopup', popupData);
+      } else {
+        console.warn('⚠️ [socketService] Global eventEmitter not available for booking acceptance!');
+        
+        // Fallback: Show alert if eventEmitter not available
+        Alert.alert(
+          'Booking Accepted!',
+          `Your consultation with ${data.astrologerName || 'the astrologer'} has been accepted.`,
+          [
+            {
+              text: 'Join Session',
+              onPress: () => {
+                console.log('🎯 [socketService] User wants to join session:', data.bookingId);
+                // Note: Navigation would need to be handled by the calling screen
+              }
+            },
+            {
+              text: 'Later',
+              style: 'cancel'
+            }
+          ]
+        );
+      }
+    } else if (data.status === 'rejected') {
+      console.log('🔴 [socketService] Booking rejected - showing notification');
+      
+      try {
+        // Use the message from backend if available, otherwise use fallback
+        const rejectionMessage = data.message || 'Your booking request was declined.';
+        
+        Alert.alert(
+          'Booking Declined',
+          rejectionMessage,
+          [{ text: 'OK' }]
+        );
+      } catch (err) {
+        console.error('Error showing rejection alert:', err);
+      }
+    }
+  });
+  
+  console.log('✅ [socketService] Global booking_status_update listener set up successfully');
 };
 
 /**
@@ -88,60 +178,8 @@ export const initSocket = async () => {
       socket = socketInstance;
       console.log(' [socketService] Global socket variable updated');
       
-      // Remove any existing booking_status_update listeners to avoid duplicates
-      socketInstance.removeAllListeners('booking_status_update');
-      
-      // Add global listener for booking_status_update events
-      socketInstance.on('booking_status_update', (data) => {
-        console.log('🔔 [socketService] Global booking status update received:', {
-          status: data.status,
-          bookingId: data.bookingId,
-          sessionId: data.sessionId,
-          socketId: socketInstance.id
-        });
-        console.log('🔔 [socketService] Full booking status data:', JSON.stringify(data, null, 2));
-        
-        // Handle booking acceptance with popup (global handler for all screens)
-        if (data.status === 'accepted') {
-          console.log('🎯 [socketService] Booking accepted - triggering global popup');
-          console.log('🎯 [socketService] Global eventEmitter available:', !!global.eventEmitter);
-          
-          // Emit event to show booking accepted popup globally
-          if (global.eventEmitter) {
-            const popupData = {
-              bookingId: data.bookingId,
-              sessionId: data.sessionId,
-              roomId: data.roomId,
-              astrologerId: data.astrologerId,
-              astrologerName: data.astrologerDisplayName || data.astrologerName,
-              astrologerImageUrl: data.astrologerImageUrl,
-              bookingType: data.consultationType || 'chat',
-              rate: data.rate,
-              message: data.message
-            };
-            
-            console.log('📡 [socketService] Emitting showBookingAcceptedPopup with data:', JSON.stringify(popupData, null, 2));
-            global.eventEmitter.emit('showBookingAcceptedPopup', popupData);
-          } else {
-            console.warn('⚠️ [socketService] Global eventEmitter not available for booking acceptance!');
-          }
-        } else if (data.status === 'rejected') {
-          console.log('🔴 [socketService] Booking rejected - showing notification');
-          
-          try {
-            // Use the message from backend if available, otherwise use fallback
-            const rejectionMessage = data.message || 'Your booking request was declined.';
-            
-            Alert.alert(
-              'Booking Declined',
-              rejectionMessage,
-              [{ text: 'OK' }]
-            );
-          } catch (err) {
-            console.error('Error showing rejection alert:', err);
-          }
-        }
-      });
+      // Set up global listeners (booking_status_update, etc.)
+      setupGlobalListeners(socketInstance);
     });
 
     socketInstance.on('connect_error', (error) => {

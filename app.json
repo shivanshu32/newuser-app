@@ -3,7 +3,7 @@
     "jsEngine": "hermes",
     "name": "Jyotish Call - User",
     "slug": "jyotishcall-user-app",
-    "version": "1.0.0",
+    "version": "2.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon-square.png",
     "userInterfaceStyle": "light",
