@@ -118,7 +118,7 @@ class ChatConnectionManager {
       console.log('🔴 [USER-APP] Received message event at:', receiveTime, message);
       
       // Fast path: Pre-compute expected roomId to avoid repeated string concatenation
-      const expectedRoomId = `room:${this.currentBookingId}`;
+      const expectedRoomId = `consultation:${this.currentBookingId}`;
       
       // Quick roomId validation
       if (message.roomId !== expectedRoomId && message.roomId !== this.currentBookingId) {
@@ -216,8 +216,48 @@ class ChatConnectionManager {
     // Note: listenerCount not available in React Native socket.io client
     console.log('🔴 [USER-APP] Event listeners setup completed');
 
+    // New session timer events from backend
+    this.socket.on('session_timer_started', (data) => {
+      console.log('🔴 [USER-APP] Session timer started event received:', data);
+      console.log('🔴 [USER-APP] Current booking ID:', this.currentBookingId);
+      console.log('🔴 [USER-APP] Event booking ID:', data.bookingId);
+      
+      if (data.bookingId === this.currentBookingId || data.bookingId == this.currentBookingId) {
+        console.log('🔴 [USER-APP] ✅ Timer started for current booking - activating session');
+        this.notifyConnectionStatus('session_active', 'Session timer started');
+        this.notifyStatusUpdate({ 
+          type: 'session_started', 
+          data,
+          sessionId: data.sessionId,
+          duration: data.duration || 0
+        });
+      } else {
+        console.log('🔴 [USER-APP] ❌ Timer started for different booking - ignoring');
+      }
+    });
+
+    this.socket.on('session_timer_update', (data) => {
+      console.log('🔴 [USER-APP] Session timer update received:', data);
+      console.log('🔴 [USER-APP] Current booking ID:', this.currentBookingId);
+      console.log('🔴 [USER-APP] Event booking ID:', data.bookingId);
+      
+      if (data.bookingId === this.currentBookingId || data.bookingId == this.currentBookingId) {
+        console.log('🔴 [USER-APP] ✅ Timer update for current booking:', data.formattedTime);
+        this.notifyStatusUpdate({ 
+          type: 'timer', 
+          durationSeconds: data.duration,
+          seconds: data.duration,
+          formattedTime: data.formattedTime,
+          sessionId: data.sessionId
+        });
+      } else {
+        console.log('🔴 [USER-APP] ❌ Timer update for different booking - ignoring');
+      }
+    });
+
+    // Legacy session timer event (keeping for backward compatibility)
     this.socket.on('session_timer', (data) => {
-      console.log('🔴 [USER-APP] Session timer event received:', data);
+      console.log('🔴 [USER-APP] Legacy session timer event received:', data);
       // Backend sends durationSeconds, not seconds
       const timerValue = data.durationSeconds || data.seconds || 0;
       console.log('🔴 [USER-APP] Timer value extracted:', timerValue);
@@ -429,7 +469,7 @@ class ChatConnectionManager {
         console.log('[ChatConnectionManager] Joining consultation room:', this.currentBookingId);
         
         // Construct roomId in the format expected by backend
-        const roomId = `room:${this.currentBookingId}`;
+        const roomId = `consultation:${this.currentBookingId}`;
         console.log('[ChatConnectionManager] DEBUG: Constructed roomId:', roomId);
         
         // Use the same join_consultation_room event as video/voice consultations

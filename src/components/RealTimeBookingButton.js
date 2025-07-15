@@ -17,10 +17,61 @@ const RealTimeBookingButton = ({ astrologer, type, onBookingInitiated, onBooking
   const [currentBookingId, setCurrentBookingId] = useState(null);
   const { socket } = useSocket();
 
-  // Setup socket listeners for booking responses
+  // Setup socket listeners for session join responses
   useEffect(() => {
-    if (!socket?.connected || !currentBookingId) return;
+    if (!socket?.connected) return;
 
+    const handleAstrologerReadyForSession = (data) => {
+      console.log('🟢 Astrologer ready for session:', data);
+      if (data.astrologerId === astrologer._id) {
+        setStatus('accepted');
+        setLoading(false);
+        if (onBookingResponse) {
+          onBookingResponse('accepted', data);
+        }
+        Alert.alert(
+          'Session Starting!',
+          `${astrologer.name} is ready for your consultation.`,
+          [{ text: 'OK' }]
+        );
+      }
+    };
+
+    const handleAstrologerDeclinedSession = (data) => {
+      console.log('🔴 Astrologer declined session:', data);
+      if (data.astrologerId === astrologer._id) {
+        setStatus('rejected');
+        setLoading(false);
+        setCurrentBookingId(null);
+        if (onBookingResponse) {
+          onBookingResponse('rejected', data);
+        }
+        Alert.alert(
+          'Session Declined',
+          `${astrologer.name} is not available for consultation right now.`,
+          [{ text: 'OK', onPress: () => setStatus('idle') }]
+        );
+      }
+    };
+
+    const handleUserSessionJoinConfirmed = (data) => {
+      console.log('✅ User session join confirmed:', data);
+      if (data.astrologerId === astrologer._id) {
+        setStatus('accepted');
+        setLoading(false);
+        setCurrentBookingId(data.bookingId);
+        if (onBookingResponse) {
+          onBookingResponse('confirmed', data);
+        }
+      }
+    };
+
+    // Listen for session join response events
+    socket.on('astrologer_ready_for_session', handleAstrologerReadyForSession);
+    socket.on('astrologer_declined_session', handleAstrologerDeclinedSession);
+    socket.on('user_session_join_confirmed', handleUserSessionJoinConfirmed);
+
+    // Keep old booking events for backward compatibility
     const handleBookingAccepted = (data) => {
       if (data.bookingId === currentBookingId) {
         setStatus('accepted');
@@ -28,11 +79,6 @@ const RealTimeBookingButton = ({ astrologer, type, onBookingInitiated, onBooking
         if (onBookingResponse) {
           onBookingResponse('accepted', data);
         }
-        Alert.alert(
-          'Booking Accepted!',
-          `${astrologer.name} has accepted your consultation request.`,
-          [{ text: 'OK' }]
-        );
       }
     };
 
@@ -44,59 +90,20 @@ const RealTimeBookingButton = ({ astrologer, type, onBookingInitiated, onBooking
         if (onBookingResponse) {
           onBookingResponse('rejected', data);
         }
-        Alert.alert(
-          'Booking Declined',
-          `${astrologer.name} is not available for consultation right now.`,
-          [{ text: 'OK', onPress: () => setStatus('idle') }]
-        );
       }
     };
 
-    const handleBookingExpired = (data) => {
-      if (data.bookingId === currentBookingId) {
-        setStatus('expired');
-        setLoading(false);
-        setCurrentBookingId(null);
-        if (onBookingResponse) {
-          onBookingResponse('expired', data);
-        }
-        Alert.alert(
-          'Booking Expired',
-          'The astrologer did not respond within the time limit.',
-          [{ text: 'OK', onPress: () => setStatus('idle') }]
-        );
-      }
-    };
-
-    const handleBookingCancelled = (data) => {
-      if (data.bookingId === currentBookingId) {
-        setStatus('cancelled');
-        setLoading(false);
-        setCurrentBookingId(null);
-        if (onBookingResponse) {
-          onBookingResponse('cancelled', data);
-        }
-        Alert.alert(
-          'Booking Cancelled',
-          'The booking has been cancelled.',
-          [{ text: 'OK', onPress: () => setStatus('idle') }]
-        );
-      }
-    };
-
-    // Listen for booking lifecycle events
     socket.on('booking_accepted', handleBookingAccepted);
     socket.on('booking_rejected', handleBookingRejected);
-    socket.on('booking_expired', handleBookingExpired);
-    socket.on('booking_cancelled', handleBookingCancelled);
 
     return () => {
+      socket.off('astrologer_ready_for_session', handleAstrologerReadyForSession);
+      socket.off('astrologer_declined_session', handleAstrologerDeclinedSession);
+      socket.off('user_session_join_confirmed', handleUserSessionJoinConfirmed);
       socket.off('booking_accepted', handleBookingAccepted);
       socket.off('booking_rejected', handleBookingRejected);
-      socket.off('booking_expired', handleBookingExpired);
-      socket.off('booking_cancelled', handleBookingCancelled);
     };
-  }, [socket, currentBookingId, astrologer.name, onBookingResponse]);
+  }, [socket, currentBookingId, astrologer._id, astrologer.name, onBookingResponse]);
 
   // Determine button text based on status
   const getButtonText = () => {
@@ -136,7 +143,7 @@ const RealTimeBookingButton = ({ astrologer, type, onBookingInitiated, onBooking
     }
   };
 
-  // Handle booking request
+  // Handle session join request
   const handleBookingRequest = async () => {
     if (status !== 'idle') return;
 
@@ -147,17 +154,68 @@ const RealTimeBookingButton = ({ astrologer, type, onBookingInitiated, onBooking
       if (onBookingInitiated) {
         onBookingInitiated();
       }
+
+      // Check if socket is connected
+      if (!socket?.connected) {
+        console.log('⚠️ Socket not connected, falling back to booking API');
+        // Fallback to old booking flow if socket is not connected
+        await fallbackToBookingAPI();
+        return;
+      }
       
-      // Prepare booking data
+      // Emit socket event for real-time session join
+      const sessionJoinData = {
+        astrologerId: astrologer._id,
+        consultationType: type,
+        userMessage: `Instant ${type} consultation request`,
+        timestamp: new Date().toISOString()
+      };
+      
+      console.log('🚀 Emitting user_attempting_to_join_session:', sessionJoinData);
+      socket.emit('user_attempting_to_join_session', sessionJoinData);
+      
+      Alert.alert(
+        'Session Request Sent',
+        `Your ${type} consultation request has been sent to ${astrologer.name}. Please wait for their response.`,
+        [{ text: 'OK' }]
+      );
+      
+      // Set timeout for astrologer response
+      setTimeout(() => {
+        if (status === 'pending') {
+          setStatus('expired');
+          setLoading(false);
+          Alert.alert(
+            'Request Timeout',
+            'The astrologer did not respond within the time limit. Please try again.',
+            [{ text: 'OK', onPress: () => setStatus('idle') }]
+          );
+        }
+      }, 30000); // 30 second timeout
+      
+    } catch (error) {
+      console.error('Session join request failed:', error);
+      setLoading(false);
+      setStatus('idle');
+      
+      Alert.alert(
+        'Request Failed',
+        error.message || 'Failed to send session request. Please try again.',
+        [{ text: 'OK' }]
+      );
+    }
+  };
+
+  // Fallback function for when socket is not available
+  const fallbackToBookingAPI = async () => {
+    try {
       const bookingData = {
         astrologerId: astrologer._id,
         type,
         userMessage: `Instant ${type} consultation request`,
-        // Schedule for immediate consultation (current time)
         scheduledTime: new Date().toISOString()
       };
       
-      // Create booking via API
       const response = await bookingsAPI.create(bookingData);
       
       if (response.data && response.data.success) {
@@ -172,9 +230,8 @@ const RealTimeBookingButton = ({ astrologer, type, onBookingInitiated, onBooking
       } else {
         throw new Error(response.data?.message || 'Failed to create booking');
       }
-      
     } catch (error) {
-      console.error('Booking request failed:', error);
+      console.error('Fallback booking failed:', error);
       setLoading(false);
       setStatus('idle');
       

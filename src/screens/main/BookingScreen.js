@@ -113,6 +113,7 @@ const BookingScreen = ({ route, navigation }) => {
     socket.on('booking_rejected', handleBookingUpdate);
     socket.on('booking_expired', handleBookingUpdate);
     socket.on('booking_cancelled', handleBookingUpdate);
+    socket.on('booking_auto_cancelled', handleBookingUpdate);
     socket.on('session_started', handleBookingUpdate);
     socket.on('session_completed', handleBookingUpdate);
     socket.on('astrologer_joined_session', handleBookingUpdate);
@@ -130,6 +131,7 @@ const BookingScreen = ({ route, navigation }) => {
       socket.off('booking_rejected', handleBookingUpdate);
       socket.off('booking_expired', handleBookingUpdate);
       socket.off('booking_cancelled', handleBookingUpdate);
+      socket.off('booking_auto_cancelled', handleBookingUpdate);
       socket.off('session_started', handleBookingUpdate);
       socket.off('session_completed', handleBookingUpdate);
       socket.off('astrologer_joined_session', handleBookingUpdate);

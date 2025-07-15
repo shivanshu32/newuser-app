@@ -121,8 +121,8 @@ const HomeScreen = ({ navigation }) => {
       // Emit socket event to get user pending bookings
       socket.emit('get_user_pending_bookings', {}, (response) => {
         if (response && response.success) {
-          console.log('✅ [FETCH_BOOKINGS] Raw response from backend:', JSON.stringify(response, null, 2));
-          console.log('✅ [FETCH_BOOKINGS] User pending bookings fetched:', response.pendingBookings);
+         // console.log('✅ [FETCH_BOOKINGS] Raw response from backend:', JSON.stringify(response, null, 2));
+         // console.log('✅ [FETCH_BOOKINGS] User pending bookings fetched:', response.pendingBookings);
           
           // Debug each booking's structure and status
           (response.pendingBookings || []).forEach((booking, index) => {
@@ -666,38 +666,127 @@ const HomeScreen = ({ navigation }) => {
     }
   }, [bookingToCancel, socket]);
 
+  // Handle astrologer ready for session notification
+  const handleAstrologerReadyForSession = useCallback((data) => {
+    console.log('🔔 [SESSION_JOIN] Astrologer ready for session:', data);
+    
+    const { bookingId, sessionId, consultationType, astrologerName } = data;
+    
+    Alert.alert(
+      'Astrologer Ready! ✨',
+      `${astrologerName || 'The astrologer'} is ready to start your ${consultationType} consultation. Connecting you now...`,
+      [{ text: 'OK' }]
+    );
+    
+    // Navigate to appropriate session screen
+    setTimeout(() => {
+      if (consultationType === 'video') {
+        navigation.navigate('VideoConsultation', {
+          sessionId,
+          bookingId,
+          astrologerId: data.astrologerId,
+          userId: user._id || user.id
+        });
+      } else if (consultationType === 'chat') {
+        navigation.navigate('EnhancedChat', {
+          sessionId,
+          bookingId,
+          astrologerId: data.astrologerId,
+          userId: user._id || user.id
+        });
+      }
+      // Voice calls are handled by Exotel, no navigation needed
+    }, 1000);
+  }, [navigation, user]);
+  
+  // Handle astrologer declined session notification
+  const handleAstrologerDeclinedSession = useCallback((data) => {
+    console.log('🔔 [SESSION_JOIN] Astrologer declined session:', data);
+    
+    const { reason, astrologerName } = data;
+    
+    Alert.alert(
+      'Session Unavailable 😔',
+      `${astrologerName || 'The astrologer'} is currently unavailable to join the session. ${reason || 'Please try again later.'}`
+    );
+  }, []);
+  
+  // Handle user session join confirmation
+  const handleUserSessionJoinConfirmed = useCallback((data) => {
+    console.log('🔔 [SESSION_JOIN] User session join confirmed:', data);
+    
+    // This confirms that the astrologer has been notified
+    // The actual session start will be handled by astrologer_ready_for_session event
+  }, []);
+
   // Handle join session from pending booking
   const handleJoinSession = useCallback(async (booking) => {
     try {
-      console.log('HomeScreen: Joining session from pending booking:', booking);
+      console.log('🔔 [SESSION_JOIN] User attempting to join session:', booking);
       
-      // Navigate based on consultation type
-      if (booking.type === 'video') {
-        navigation.navigate('VideoConsultation', {
-          sessionId: booking.sessionId,
+      // First, notify the astrologer that user wants to join
+      if (socket && socket.connected) {
+        console.log('🔔 [SESSION_JOIN] Sending notification to astrologer...');
+        
+        // Emit notification to astrologer
+        socket.emit('user_attempting_to_join_session', {
           bookingId: booking.bookingId,
-          astrologerId: booking.astrologer._id,
-          userId: user._id || user.id
+          sessionId: booking.sessionId,
+          consultationType: booking.type
         });
-      } else if (booking.type === 'voice') {
+        
+        // Show loading state to user
         Alert.alert(
-          'Voice Call Ready! 📞',
-          'Your voice consultation is ready. You should receive a phone call shortly from our system. Please answer the call to connect with the astrologer.',
+          'Connecting... 🔄',
+          'Notifying the astrologer that you\'re ready to join. Please wait a moment.',
           [{ text: 'OK' }]
         );
-      } else if (booking.type === 'chat') {
-        navigation.navigate('EnhancedChat', {
-          sessionId: booking.sessionId,
-          bookingId: booking.bookingId,
-          astrologerId: booking.astrologer._id,
-          userId: user._id || user.id
-        });
+        
+        // For voice calls, show specific message
+        if (booking.type === 'voice') {
+          setTimeout(() => {
+            Alert.alert(
+              'Voice Call Ready! 📞',
+              'The astrologer has been notified. You should receive a phone call shortly from our system. Please answer the call to connect with the astrologer.',
+              [{ text: 'OK' }]
+            );
+          }, 2000);
+        } else {
+          // For video and chat, wait for astrologer response before navigating
+          console.log('🔔 [SESSION_JOIN] Waiting for astrologer response for', booking.type, 'consultation');
+        }
+        
+      } else {
+        console.error('🔔 [SESSION_JOIN] Socket not connected, falling back to direct navigation');
+        
+        // Fallback to direct navigation if socket is not available
+        if (booking.type === 'video') {
+          navigation.navigate('VideoConsultation', {
+            sessionId: booking.sessionId,
+            bookingId: booking.bookingId,
+            astrologerId: booking.astrologer._id,
+            userId: user._id || user.id
+          });
+        } else if (booking.type === 'voice') {
+          Alert.alert(
+            'Voice Call Ready! 📞',
+            'Your voice consultation is ready. You should receive a phone call shortly from our system. Please answer the call to connect with the astrologer.',
+            [{ text: 'OK' }]
+          );
+        } else if (booking.type === 'chat') {
+          navigation.navigate('EnhancedChat', {
+            sessionId: booking.sessionId,
+            bookingId: booking.bookingId,
+            astrologerId: booking.astrologer._id,
+            userId: user._id || user.id
+          });
+        }
       }
     } catch (error) {
       console.error('HomeScreen: Error joining session:', error);
       Alert.alert('Error', 'Failed to join session. Please try again.');
     }
-  }, [navigation, user]);
+  }, [navigation, user, socket]);
 
 
 
@@ -1020,6 +1109,9 @@ const HomeScreen = ({ navigation }) => {
       socket.off('session_end', handleSessionEnd);
       socket.off('session_ended', handleSessionEnd);
       socket.off('call_status_update', handleCallStatusUpdate);
+      socket.off('astrologer_ready_for_session', handleAstrologerReadyForSession);
+      socket.off('astrologer_declined_session', handleAstrologerDeclinedSession);
+      socket.off('user_session_join_confirmed', handleUserSessionJoinConfirmed);
       console.log('🔥 [DEBUG] Cleaned up existing listeners');
 
       // Listen for astrologer status updates
@@ -1038,6 +1130,12 @@ const HomeScreen = ({ navigation }) => {
       console.log('🔥 [DEBUG] Registering call_status_update listener in user-app HomeScreen');
       socket.on('call_status_update', handleCallStatusUpdate);
       console.log('🔥 [DEBUG] call_status_update listener registered successfully');
+      
+      // Listen for astrologer session join responses
+      socket.on('astrologer_ready_for_session', handleAstrologerReadyForSession);
+      socket.on('astrologer_declined_session', handleAstrologerDeclinedSession);
+      socket.on('user_session_join_confirmed', handleUserSessionJoinConfirmed);
+      console.log('🔔 [SESSION_JOIN] Session join notification listeners registered');
       
       // Add debugging for socket connection events
       socket.on('connect', () => {
@@ -1136,6 +1234,53 @@ const HomeScreen = ({ navigation }) => {
         );
       });
       
+      // Listen for auto-cancelled booking events
+      socket.on('booking_auto_cancelled', (data) => {
+        console.log('🕐 [DEBUG] Booking auto-cancelled event received:', JSON.stringify(data, null, 2));
+        console.log('🕐 [DEBUG] Event data bookingId:', data.bookingId);
+        
+        // Remove the auto-cancelled booking from pending bookings list for real-time UI update
+        setPendingBookings(prevBookings => {
+          console.log('🕐 [DEBUG] Current pending bookings before auto-cancel filtering:', prevBookings.length);
+          
+          const filteredBookings = prevBookings.filter(booking => {
+            const bookingId = booking.bookingId || booking._id;
+            const shouldRemove = bookingId === data.bookingId || bookingId?.toString() === data.bookingId?.toString();
+            
+            console.log('🕐 [DEBUG] Comparing booking for auto-cancel:', {
+              bookingInList: bookingId,
+              eventBookingId: data.bookingId,
+              shouldRemove: shouldRemove
+            });
+            
+            if (shouldRemove) {
+              console.log('✅ [DEBUG] FOUND MATCH - Removing auto-cancelled booking from pending list:', {
+                bookingId: bookingId,
+                astrologerId: booking.astrologerId,
+                bookingType: booking.type
+              });
+            }
+            
+            return !shouldRemove;
+          });
+          
+          console.log('📊 [DEBUG] Pending bookings after auto-cancel removal:', {
+            before: prevBookings.length,
+            after: filteredBookings.length,
+            removed: prevBookings.length - filteredBookings.length
+          });
+          
+          return filteredBookings;
+        });
+        
+        // Show auto-cancellation alert
+        Alert.alert(
+          'Booking Auto-Cancelled ⏰',
+          data.message || 'Your booking request was automatically cancelled due to timeout (15+ minutes without response).',
+          [{ text: 'OK' }]
+        );
+      });
+      
       // Listen for Exotel voice call events
       socket.on('voice_call_initiated', (data) => {
         console.log('📞 Voice call initiated:', data);
@@ -1166,6 +1311,7 @@ const HomeScreen = ({ navigation }) => {
         socket.off('session_ended', handleSessionEnd);
         // Removed setupListeners references as they were undefined
         socket.off('booking_rejected');
+        socket.off('booking_auto_cancelled');
         socket.off('voice_call_initiated');
         socket.off('voice_call_failed');
       };
