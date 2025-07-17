@@ -306,23 +306,13 @@ const BookingScreen = ({ route, navigation }) => {
       
       // Navigate to appropriate session screen with proper parameters
       if (booking.type === 'video') {
-        navigation.navigate('VideoCall', { 
-          bookingId: booking._id,
-          sessionId: booking.sessionId,
-          roomId: booking.roomId || `consultation:${booking._id}`,
-          astrologerId: booking.astrologer?._id || booking.astrologer,
-          consultationType: 'video'
-        });
-        Alert.alert('DEBUG', 'Navigation.navigate called for VideoCall');
+        // Video calls are no longer supported
+        console.log('Video call booking - feature removed');
+        Alert.alert('DEBUG', 'Video call feature removed');
       } else if (booking.type === 'voice') {
-        navigation.navigate('VoiceCall', { 
-          bookingId: booking._id,
-          sessionId: booking.sessionId,
-          roomId: booking.roomId || `consultation:${booking._id}`,
-          astrologerId: booking.astrologer?._id || booking.astrologer,
-          consultationType: 'voice'
-        });
-        Alert.alert('DEBUG', 'Navigation.navigate called for VoiceCall');
+        // Voice calls are now handled by Exotel - no navigation needed
+        console.log('Voice call booking - handled by Exotel');
+        Alert.alert('DEBUG', 'Voice call handled by Exotel');
       } else if (booking.type === 'chat') {
         navigation.navigate('Chat', { 
           bookingId: booking._id,
@@ -342,15 +332,11 @@ const BookingScreen = ({ route, navigation }) => {
 
   const navigateToSession = (booking) => {
     if (booking.type === 'video') {
-      navigation.navigate('VideoCall', { 
-        bookingId: booking._id,
-        astrologer: booking.astrologer 
-      });
+      // Video calls are no longer supported
+      console.log('Video call booking - feature removed');
     } else if (booking.type === 'voice') {
-      navigation.navigate('VoiceCall', { 
-        bookingId: booking._id,
-        astrologer: booking.astrologer 
-      });
+      // Voice calls are now handled by Exotel - no navigation needed
+      console.log('Voice call booking - handled by Exotel');
     } else if (booking.type === 'chat') {
       navigation.navigate('Chat', { 
         bookingId: booking._id,

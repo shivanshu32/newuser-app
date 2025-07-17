@@ -248,6 +248,19 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
+  // Check if user profile is complete
+  const isProfileComplete = () => {
+    if (!user) return false;
+    
+    // Check if all required profile fields are present and not empty
+    const requiredFields = ['name', 'birthDate', 'birthTime', 'birthLocation'];
+    
+    return requiredFields.every(field => {
+      const value = user[field];
+      return value !== null && value !== undefined && value !== '';
+    });
+  };
+
   // Logout
   const logout = async () => {
     try {
@@ -290,6 +303,8 @@ export const AuthProvider = ({ children }) => {
         updateUser,
         updateWalletBalance,
         logout,
+        isProfileComplete,
+        setUser,
       }}
     >
       {children}

@@ -11,14 +11,17 @@ import WalletScreen from '../screens/main/WalletScreen';
 import WalletTopUpSummaryScreen from '../screens/main/WalletTopUpSummaryScreen';
 import RazorpayPaymentScreen from '../screens/main/RazorpayPaymentScreen';
 import ProfileScreen from '../screens/main/ProfileScreen';
+import AddUserProfile from '../screens/main/AddUserProfile';
+import UpdateScreen from '../screens/UpdateScreen';
+import ProfileCompletionCheck from '../components/ProfileCompletionCheck';
 import AstrologerProfileScreen from '../screens/main/AstrologerProfileScreen';
 import BookingWaitingScreen from '../screens/main/BookingWaitingScreen';
 import PendingConsultationsScreen from '../screens/main/PendingConsultationsScreen';
 import ChatScreen from '../screens/session/ChatScreen';
 import EnhancedChatScreen from '../screens/session/EnhancedChatScreen';
 import PreChatForm from '../screens/session/PreChatForm';
-import VideoConsultationScreen from '../screens/VideoConsultationScreen';
-import VoiceCallScreen from '../screens/VoiceCallScreen';
+
+
 import RatingScreen from '../screens/session/RatingScreen';
 
 // Import components
@@ -177,13 +180,11 @@ const BookingPopupWrapper = () => {
       console.log(' [BookingPopupWrapper] Using consultation type:', consultationType);
       
       if (consultationType === 'video') {
-        console.log(' [BookingPopupWrapper] Navigating to VideoCall screen');
-        navigation.navigate('VideoCall', navigationParams);
-        console.log(' [BookingPopupWrapper] VideoCall navigation completed');
+        console.log(' [BookingPopupWrapper] Video calls are no longer supported');
+        // Video calls are no longer supported
       } else if (consultationType === 'voice') {
-        console.log(' [BookingPopupWrapper] Navigating to VoiceCall screen');
-        navigation.navigate('VoiceCall', navigationParams);
-        console.log(' [BookingPopupWrapper] VoiceCall navigation completed');
+        console.log(' [BookingPopupWrapper] Voice call handled by Exotel - no navigation needed');
+        // Voice calls are now handled by Exotel - no navigation needed
       } else if (consultationType === 'chat') {
         console.log(' [BookingPopupWrapper] Navigating to EnhancedConsultationRoom screen');
         navigation.navigate('EnhancedConsultationRoom', {
@@ -251,7 +252,13 @@ const MainNavigator = () => {
           headerShown: false,
         }}
       >
-        <Stack.Screen name="Main" component={TabNavigator} />
+        <Stack.Screen name="Main">
+          {() => (
+            <ProfileCompletionCheck>
+              <TabNavigator />
+            </ProfileCompletionCheck>
+          )}
+        </Stack.Screen>
         <Stack.Screen 
           name="AstrologerProfile" 
           component={AstrologerProfileScreen} 
@@ -273,11 +280,6 @@ const MainNavigator = () => {
           options={{ headerShown: false }}
         />
         <Stack.Screen 
-          name="VideoCall" 
-          component={VideoConsultationScreen} 
-          options={{ headerShown: true, title: 'Video Consultation' }}
-        />
-        <Stack.Screen 
           name="Rating" 
           component={RatingScreen} 
           options={{ headerShown: true, title: 'Rate Your Consultation' }}
@@ -291,11 +293,6 @@ const MainNavigator = () => {
           name="EnhancedConsultationRoom" 
           component={EnhancedChatScreen} 
           options={{ headerShown: false }}
-        />
-        <Stack.Screen 
-          name="VoiceCall" 
-          component={VoiceCallScreen} 
-          options={{ headerShown: true, title: 'Voice Consultation' }}
         />
         <Stack.Screen 
           name="BookingWaiting" 
@@ -316,6 +313,16 @@ const MainNavigator = () => {
           name="RazorpayPayment" 
           component={RazorpayPaymentScreen} 
           options={{ headerShown: true, title: 'Payment' }}
+        />
+        <Stack.Screen 
+          name="AddUserProfile" 
+          component={AddUserProfile} 
+          options={{ headerShown: false }}
+        />
+        <Stack.Screen 
+          name="UpdateScreen" 
+          component={UpdateScreen} 
+          options={{ headerShown: false }}
         />
       </Stack.Navigator>
       <BookingPopupWrapper />

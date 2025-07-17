@@ -1,4 +1,4 @@
-package com.jyotishcall.user
+package com.jyotishtalk
 
 import android.app.Application
 import android.content.res.Configuration

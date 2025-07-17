@@ -20,9 +20,11 @@ import { Ionicons, MaterialIcons, FontAwesome } from '@expo/vector-icons';
 import Toast from 'react-native-toast-message';
 import { useAuth } from '../../context/AuthContext';
 import { useSocket } from '../../context/SocketContext';
-import { astrologersAPI, walletAPI } from '../../services/api';
+import { astrologersAPI, walletAPI, versionAPI } from '../../services/api';
 import BookingAcceptedModal from '../../components/BookingAcceptedModal';
 
+// Hardcoded app version - update this when releasing new versions
+const APP_VERSION = '2.0.0';
 
 const HomeScreen = ({ navigation }) => {
   const { user } = useAuth();
@@ -108,6 +110,45 @@ const HomeScreen = ({ navigation }) => {
       setLoadingWallet(false);
     }
   }, []);
+
+  // Check app version and redirect to update screen if needed
+  const checkAppVersion = useCallback(async () => {
+    try {
+      console.log('🔄 Checking app version...', APP_VERSION);
+      const response = await versionAPI.checkVersion(APP_VERSION);
+      console.log('📱 Version check response:', response);
+      
+      if (response.success) {
+        const { latestVersion, updateRequired } = response;
+        
+        if (updateRequired) {
+          console.log('🚨 Update required! Current:', APP_VERSION, 'Latest:', latestVersion);
+          // Navigate to update screen and prevent going back
+          navigation.reset({
+            index: 0,
+            routes: [{
+              name: 'UpdateScreen',
+              params: {
+                currentVersion: APP_VERSION,
+                latestVersion: latestVersion
+              }
+            }]
+          });
+          return false; // Indicate update is required
+        } else {
+          console.log('✅ App version is up to date');
+          return true; // Indicate app is up to date
+        }
+      } else {
+        console.warn('⚠️ Version check failed, allowing app to continue');
+        return true; // Allow app to continue if version check fails
+      }
+    } catch (error) {
+      console.error('❌ Error checking app version:', error);
+      // Don't block app if version check fails
+      return true;
+    }
+  }, [navigation]);
 
   // Fetch user pending bookings
   const fetchUserPendingBookings = useCallback(async () => {
@@ -236,6 +277,20 @@ const HomeScreen = ({ navigation }) => {
       setLoadingPendingBookings(false);
     }
   }, [socket]);
+
+  // Check app version on component mount
+  useEffect(() => {
+    const performVersionCheck = async () => {
+      const isUpToDate = await checkAppVersion();
+      if (isUpToDate) {
+        // Only load data if app version is up to date
+        console.log('✅ Version check passed, loading app data...');
+        // The existing data loading will happen through other useEffects
+      }
+    };
+    
+    performVersionCheck();
+  }, [checkAppVersion]);
 
   // Socket event listeners for real-time booking updates
   useEffect(() => {
@@ -1328,7 +1383,8 @@ const HomeScreen = ({ navigation }) => {
       // socket.on('booking_accepted', handleBookingAccepted);
       
       // Listen for booking rejected event
-      socket.on('booking_rejected', (data) => {
+      if (socket) {
+        socket.on('booking_rejected', (data) => {
         console.log('📢 [DEBUG] Booking rejected event received:', JSON.stringify(data, null, 2));
         console.log('📢 [DEBUG] Event data bookingId:', data.bookingId);
         console.log('📢 [DEBUG] Event data type:', typeof data.bookingId);
@@ -1387,8 +1443,8 @@ const HomeScreen = ({ navigation }) => {
         );
       });
       
-      // Listen for auto-cancelled booking events
-      socket.on('booking_auto_cancelled', (data) => {
+        // Listen for auto-cancelled booking events
+        socket.on('booking_auto_cancelled', (data) => {
         console.log('🕐 [DEBUG] Booking auto-cancelled event received:', JSON.stringify(data, null, 2));
         console.log('🕐 [DEBUG] Event data bookingId:', data.bookingId);
         
@@ -1434,8 +1490,8 @@ const HomeScreen = ({ navigation }) => {
         );
       });
       
-      // Listen for Exotel voice call events
-      socket.on('voice_call_initiated', (data) => {
+        // Listen for Exotel voice call events
+        socket.on('voice_call_initiated', (data) => {
         console.log('📞 Voice call initiated:', data);
         Alert.alert(
           'Voice Call Connecting! 📞',
@@ -1444,29 +1500,32 @@ const HomeScreen = ({ navigation }) => {
         );
       });
       
-      socket.on('voice_call_failed', (data) => {
+        socket.on('voice_call_failed', (data) => {
         console.log('❌ Voice call failed:', data);
         Alert.alert(
           'Voice Call Failed',
           data.message || 'Unable to initiate voice call. Please try again or contact support.',
           [{ text: 'OK' }]
         );
-      });
+        });
+      }
       
       // Cleanup listeners on unmount
       return () => {
         console.log('🔌 Cleaning up socket listeners in HomeScreen');
-        socket.off('astrologer_status_updated', handleAstrologerStatusUpdate);
-        socket.off('astrologer_availability_updated', handleAstrologerAvailabilityUpdate);
-        // Note: booking_status_update cleanup not needed (handled by global socketService)
-        socket.off('user_pending_bookings_updated', handleUserPendingBookingUpdates);
-        socket.off('session_end', handleSessionEnd);
-        socket.off('session_ended', handleSessionEnd);
-        // Removed setupListeners references as they were undefined
-        socket.off('booking_rejected');
-        socket.off('booking_auto_cancelled');
-        socket.off('voice_call_initiated');
-        socket.off('voice_call_failed');
+        if (socket) {
+          socket.off('astrologer_status_updated', handleAstrologerStatusUpdate);
+          socket.off('astrologer_availability_updated', handleAstrologerAvailabilityUpdate);
+          // Note: booking_status_update cleanup not needed (handled by global socketService)
+          socket.off('user_pending_bookings_updated', handleUserPendingBookingUpdates);
+          socket.off('session_end', handleSessionEnd);
+          socket.off('session_ended', handleSessionEnd);
+          // Removed setupListeners references as they were undefined
+          socket.off('booking_rejected');
+          socket.off('booking_auto_cancelled');
+          socket.off('voice_call_initiated');
+          socket.off('voice_call_failed');
+        }
       };
     
   }, [socket, handleAstrologerStatusUpdate, handleAstrologerAvailabilityUpdate, handleBookingStatusUpdate, handleUserPendingBookingUpdates, handleSessionEnd]);
@@ -1509,7 +1568,7 @@ const HomeScreen = ({ navigation }) => {
           </TouchableOpacity>
           <TouchableOpacity
             style={styles.profileButton}
-            onPress={() => navigation.navigate('Profile')}
+            onPress={() => navigation.navigate('AddUserProfile')}
           >
             <Ionicons name="person-circle-outline" size={32} color="#F97316" />
           </TouchableOpacity>

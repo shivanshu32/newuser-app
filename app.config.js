@@ -31,8 +31,6 @@ export default ({ config }) => ({
     },
     minSdkVersion: 25,
     permissions: [
-      "CAMERA",
-      "RECORD_AUDIO",
       "MODIFY_AUDIO_SETTINGS",
       "INTERNET",
       "ACCESS_NETWORK_STATE",

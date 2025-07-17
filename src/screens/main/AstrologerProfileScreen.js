@@ -815,7 +815,8 @@ const AstrologerProfileScreen = ({ route, navigation }) => {
   };
 
   const handleBookVideoCall = () => {
-    handleBookNow('video');
+    // Video calls are no longer supported
+    console.log('Video call booking - feature removed');
   };
 
   // Booking request pending modal

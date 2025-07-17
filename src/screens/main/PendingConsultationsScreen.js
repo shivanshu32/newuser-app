@@ -80,21 +80,11 @@ const PendingConsultationsScreen = () => {
           bookingId: consultation.booking._id
         });
       } else if (consultation.booking.type === 'video') {
-        navigation.navigate('VideoCall', {
-          sessionId: consultation.sessionId,
-          roomId: consultation.roomId,
-          astrologer: consultation.booking.astrologer,
-          bookingId: consultation.booking._id,
-          astrologerId: astrologerId
-        });
+        // Video calls are no longer supported
+        console.log('Video call consultation - feature removed');
       } else if (consultation.booking.type === 'voice') {
-        navigation.navigate('VoiceCall', {
-          sessionId: consultation.sessionId,
-          roomId: consultation.roomId,
-          astrologer: consultation.booking.astrologer,
-          bookingId: consultation.booking._id,
-          astrologerId: astrologerId
-        });
+        // Voice calls are now handled by Exotel - no navigation needed
+        console.log('Voice call consultation - handled by Exotel');
       }
 
       // Remove from pending consultations after joining
