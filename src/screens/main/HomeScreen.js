@@ -39,6 +39,8 @@ const HomeScreen = ({ navigation }) => {
   const [pendingBookings, setPendingBookings] = useState([]);
   const [loadingPendingBookings, setLoadingPendingBookings] = useState(false);
 
+
+
   // Fetch all astrologers data with pagination
   const fetchAstrologers = useCallback(async () => {
     try {
@@ -234,6 +236,87 @@ const HomeScreen = ({ navigation }) => {
       setLoadingPendingBookings(false);
     }
   }, [socket]);
+
+  // Socket event listeners for real-time booking updates
+  useEffect(() => {
+    if (!socket) {
+      console.log('🔌 [HOME] Socket not available for event listeners');
+      return;
+    }
+
+    console.log('🔗 [HOME] Setting up socket event listeners for booking updates');
+
+    // Handle booking status updates (accepted, rejected, completed)
+    const handleBookingStatusUpdate = (data) => {
+      console.log('📨 [HOME] Received booking status update:', data);
+      
+      // Refresh pending bookings to get latest status
+      fetchUserPendingBookings();
+      
+      // Show notification for chat consultation acceptance
+      if (data.status === 'accepted' && (data.consultationType === 'chat' || data.bookingType === 'chat')) {
+        console.log('💬 [HOME] Chat consultation accepted, showing join notification');
+        
+        Alert.alert(
+          'Chat Session Ready! 💬',
+          `${data.astrologerName || 'The astrologer'} has accepted your chat consultation request. You can now join the session.`,
+          [
+            {
+              text: 'Join Session',
+              onPress: () => {
+                console.log('🚀 [HOME] User tapped Join Session for chat');
+                
+                // Navigate to chat screen
+                navigation.navigate('EnhancedChat', {
+                  bookingId: data.bookingId,
+                  sessionId: data.sessionId || data.bookingId,
+                  astrologer: data.astrologer || { 
+                    _id: data.astrologerId,
+                    displayName: data.astrologerName 
+                  },
+                  userInfo: data.userInfo
+                });
+              }
+            },
+            {
+              text: 'Later',
+              style: 'cancel'
+            }
+          ]
+        );
+      }
+    };
+
+    // Handle booking auto-cancellation
+    const handleBookingAutoCancelled = (data) => {
+      console.log('⏰ [HOME] Received booking auto-cancelled event:', data);
+      
+      // Remove the cancelled booking from pending bookings
+      setPendingBookings(prevBookings => 
+        prevBookings.filter(booking => 
+          (booking._id || booking.bookingId) !== data.bookingId
+        )
+      );
+      
+      // Show user-friendly notification
+      Alert.alert(
+        'Booking Auto-Cancelled ⏰',
+        data.message || 'Your booking has been automatically cancelled due to timeout (15 minutes). Please try booking again.',
+        [{ text: 'OK' }]
+      );
+    };
+
+    // Set up event listeners
+    socket.on('booking_status_update', handleBookingStatusUpdate);
+    socket.on('booking_auto_cancelled', handleBookingAutoCancelled);
+
+    // Cleanup function
+    return () => {
+      console.log('🧹 [HOME] Cleaning up socket event listeners');
+      socket.off('booking_status_update', handleBookingStatusUpdate);
+      socket.off('booking_auto_cancelled', handleBookingAutoCancelled);
+    };
+  }, [socket, navigation, fetchUserPendingBookings]);
 
   // Handle join consultation
   const handleJoinConsultation = useCallback(async (booking) => {
@@ -732,7 +815,8 @@ const HomeScreen = ({ navigation }) => {
         socket.emit('user_attempting_to_join_session', {
           bookingId: booking.bookingId,
           sessionId: booking.sessionId,
-          consultationType: booking.type
+          consultationType: booking.type,
+          astrologerId: booking.astrologer?._id || booking.astrologerId
         });
         
         // Show loading state to user
@@ -788,7 +872,74 @@ const HomeScreen = ({ navigation }) => {
     }
   }, [navigation, user, socket]);
 
-
+  // Handle cancel booking from pending booking
+  const handleCancelBooking = useCallback(async (booking) => {
+    try {
+      console.log('🗑️ [CANCEL_BOOKING] User attempting to cancel booking:', booking);
+      
+      Alert.alert(
+        'Cancel Booking',
+        'Are you sure you want to cancel this booking? This action cannot be undone.',
+        [
+          {
+            text: 'No',
+            style: 'cancel'
+          },
+          {
+            text: 'Yes, Cancel',
+            style: 'destructive',
+            onPress: async () => {
+              try {
+                // Show loading state
+                Alert.alert(
+                  'Cancelling... 🔄',
+                  'Please wait while we cancel your booking.',
+                  [{ text: 'OK' }]
+                );
+                
+                // Make API call to cancel booking
+                const response = await fetch(`${process.env.EXPO_PUBLIC_API_URL}/api/bookings/${booking.bookingId}/cancel`, {
+                  method: 'POST',
+                  headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${user.token}`
+                  }
+                });
+                
+                if (response.ok) {
+                  // Remove booking from local state immediately
+                  setPendingBookings(prevBookings => 
+                    prevBookings.filter(b => 
+                      (b.bookingId || b._id) !== (booking.bookingId || booking._id)
+                    )
+                  );
+                  
+                  Alert.alert(
+                    'Booking Cancelled ✅',
+                    'Your booking has been successfully cancelled.',
+                    [{ text: 'OK' }]
+                  );
+                } else {
+                  const errorData = await response.json();
+                  throw new Error(errorData.message || 'Failed to cancel booking');
+                }
+              } catch (error) {
+                console.error('🗑️ [CANCEL_BOOKING] Error cancelling booking:', error);
+                Alert.alert(
+                  'Cancellation Failed',
+                  error.message || 'Failed to cancel booking. Please try again or contact support.',
+                  [{ text: 'OK' }]
+                );
+              }
+            }
+          }
+        ]
+      );
+    } catch (error) {
+      console.error('🗑️ [CANCEL_BOOKING] Error in handleCancelBooking:', error);
+      Alert.alert('Error', 'Failed to process cancellation. Please try again.');
+    }
+  }, [user, setPendingBookings]);
 
   // Load initial data
   const loadInitialData = useCallback(async () => {
@@ -1088,8 +1239,10 @@ const HomeScreen = ({ navigation }) => {
 
   }, [bookingAcceptedData, navigation, user, astrologers]);
 
+
+
   // Socket listener setup useEffect
-  React.useEffect(() => {
+  useEffect(() => {
     console.log('🔥 [DEBUG] Socket setup useEffect triggered in user-app HomeScreen');
     console.log('🔥 [DEBUG] Socket state:', {
       socketExists: !!socket,
