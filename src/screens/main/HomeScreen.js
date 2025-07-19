@@ -24,7 +24,7 @@ import { astrologersAPI, walletAPI, versionAPI } from '../../services/api';
 import BookingAcceptedModal from '../../components/BookingAcceptedModal';
 
 // Hardcoded app version - update this when releasing new versions
-const APP_VERSION = '4.0.0';
+const APP_VERSION = '4.0.1';
 
 const HomeScreen = ({ navigation }) => {
   const { user } = useAuth();
@@ -361,15 +361,46 @@ const HomeScreen = ({ navigation }) => {
       );
     };
 
+    // Handle consultation ended event
+    const handleConsultationEnded = (data) => {
+      console.log('🏁 [HOME] Consultation ended event received:', data);
+      
+      // Immediately refresh pending bookings to remove completed consultation
+      console.log('🔄 [HOME] Refreshing pending bookings after consultation ended...');
+      fetchUserPendingBookings().catch(error => {
+        console.error('❌ [HOME] Error refreshing pending bookings after consultation ended:', error);
+      });
+      
+      // Remove the completed booking from local state immediately for instant UI update
+      if (data.bookingId) {
+        setPendingBookings(prevBookings => {
+          const filteredBookings = prevBookings.filter(booking => {
+            const bookingId = booking._id || booking.bookingId;
+            return bookingId !== data.bookingId;
+          });
+          
+          console.log('🗑️ [HOME] Removed completed consultation from pending list:', {
+            bookingId: data.bookingId,
+            before: prevBookings.length,
+            after: filteredBookings.length
+          });
+          
+          return filteredBookings;
+        });
+      }
+    };
+
     // Set up event listeners
     socket.on('booking_status_update', handleBookingStatusUpdate);
     socket.on('booking_auto_cancelled', handleBookingAutoCancelled);
+    socket.on('consultation_ended', handleConsultationEnded);
 
     // Cleanup function
     return () => {
       console.log('🧹 [HOME] Cleaning up socket event listeners');
       socket.off('booking_status_update', handleBookingStatusUpdate);
       socket.off('booking_auto_cancelled', handleBookingAutoCancelled);
+      socket.off('consultation_ended', handleConsultationEnded);
     };
   }, [socket, navigation, fetchUserPendingBookings]);
 
@@ -1047,15 +1078,39 @@ const HomeScreen = ({ navigation }) => {
           // Refresh pending bookings first (most important for this fix)
           if (socket && socket.connected) {
             console.log('🔄 [FOCUS_EFFECT] Refreshing pending bookings via socket...');
-            await fetchUserPendingBookings();
+            
+            // Add timeout to handle socket response delays
+            const refreshPromise = new Promise((resolve, reject) => {
+              const timeout = setTimeout(() => {
+                console.log('⏰ [FOCUS_EFFECT] Socket response timeout, continuing with other data...');
+                resolve();
+              }, 3000); // 3 second timeout
+              
+              fetchUserPendingBookings()
+                .then(() => {
+                  clearTimeout(timeout);
+                  resolve();
+                })
+                .catch((error) => {
+                  clearTimeout(timeout);
+                  console.error('❌ [FOCUS_EFFECT] Error fetching pending bookings:', error);
+                  resolve(); // Don't reject, just continue
+                });
+            });
+            
+            await refreshPromise;
           } else {
             console.log('⚠️ [FOCUS_EFFECT] Socket not available, skipping pending bookings refresh');
           }
           
-          // Then refresh other data
+          // Then refresh other data (don't wait for pending bookings to complete)
           await Promise.all([
-            fetchAstrologers(),
-            fetchWalletBalance()
+            fetchAstrologers().catch(error => {
+              console.error('❌ [FOCUS_EFFECT] Error fetching astrologers:', error);
+            }),
+            fetchWalletBalance().catch(error => {
+              console.error('❌ [FOCUS_EFFECT] Error fetching wallet balance:', error);
+            })
           ]);
           
           console.log('✅ [FOCUS_EFFECT] Data refresh completed successfully');
@@ -1065,7 +1120,7 @@ const HomeScreen = ({ navigation }) => {
       };
       
       refreshData();
-    }, [loadInitialData, fetchUserPendingBookings, fetchAstrologers, fetchWalletBalance, socket, pendingBookings.length])
+    }, [fetchUserPendingBookings, fetchAstrologers, fetchWalletBalance, socket])
   );
   
   // Additional navigation listener to ensure pending bookings are refreshed
@@ -1073,18 +1128,26 @@ const HomeScreen = ({ navigation }) => {
   useEffect(() => {
     const unsubscribe = navigation.addListener('focus', () => {
       console.log('🏠 [NAV_FOCUS] Home screen focused via navigation listener');
+      console.log('🏠 [NAV_FOCUS] Socket connected:', socket?.connected);
+      console.log('🏠 [NAV_FOCUS] Current pending bookings before refresh:', pendingBookings.length);
       
       // Force refresh pending bookings when navigating to Home screen
       if (socket && socket.connected) {
         console.log('🏠 [NAV_FOCUS] Force refreshing pending bookings...');
-        fetchUserPendingBookings().catch(error => {
-          console.error('❌ [NAV_FOCUS] Error refreshing pending bookings:', error);
-        });
+        
+        // Add a small delay to ensure any ongoing socket operations complete
+        setTimeout(() => {
+          fetchUserPendingBookings().catch(error => {
+            console.error('❌ [NAV_FOCUS] Error refreshing pending bookings:', error);
+          });
+        }, 100);
+      } else {
+        console.log('⚠️ [NAV_FOCUS] Socket not connected, cannot refresh pending bookings');
       }
     });
     
     return unsubscribe;
-  }, [navigation, socket, fetchUserPendingBookings]);
+  }, [navigation, socket, fetchUserPendingBookings, pendingBookings.length]);
 
   // Handle astrologer status updates
   const handleAstrologerStatusUpdate = useCallback((data) => {
@@ -1510,6 +1573,29 @@ const HomeScreen = ({ navigation }) => {
         );
       });
       
+        // Listen for automatic voice consultation initiated events
+        socket.on('voice_consultation_initiated', (data) => {
+          console.log('📞 [VOICE_AUTO] Voice consultation initiated event received:', JSON.stringify(data, null, 2));
+          
+          const { bookingId, astrologer, type, rate, message, autoInitiated } = data;
+          
+          // Show notification alert for automatic voice consultation initiation
+          Alert.alert(
+            '📞 Voice Consultation Initiated',
+            `${message}\n\nAstrologer: ${astrologer.name}\nRate: ₹${rate}/min\n\nYou will receive a phone call shortly. Please answer to connect with the astrologer.`,
+            [
+              {
+                text: 'OK',
+                onPress: () => {
+                  console.log('📞 [VOICE_AUTO] User acknowledged automatic voice consultation initiation');
+                  // Refresh pending bookings to show the new consultation
+                  fetchUserPendingBookings();
+                }
+              }
+            ]
+          );
+        });
+        
         // Listen for auto-cancelled booking events
         socket.on('booking_auto_cancelled', (data) => {
         console.log('🕐 [DEBUG] Booking auto-cancelled event received:', JSON.stringify(data, null, 2));
@@ -1590,6 +1676,7 @@ const HomeScreen = ({ navigation }) => {
           // Removed setupListeners references as they were undefined
           socket.off('booking_rejected');
           socket.off('booking_auto_cancelled');
+          socket.off('voice_consultation_initiated');
           socket.off('voice_call_initiated');
           socket.off('voice_call_failed');
         }

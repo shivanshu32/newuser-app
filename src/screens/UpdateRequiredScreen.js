@@ -93,10 +93,7 @@ const UpdateRequiredScreen = ({ route }) => {
             <Ionicons name="checkmark-circle" size={20} color="#4CAF50" />
             <Text style={styles.featureText}>Bug fixes and improvements</Text>
           </View>
-          <View style={styles.featureItem}>
-            <Ionicons name="checkmark-circle" size={20} color="#4CAF50" />
-            <Text style={styles.featureText}>Better performance</Text>
-          </View>
+          
         </View>
 
         {/* Update Button */}

@@ -7,7 +7,8 @@ import {
   FlatList,
   Alert,
   RefreshControl,
-  Image
+  Image,
+  SafeAreaView
 } from 'react-native';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
@@ -155,7 +156,7 @@ const PendingConsultationsScreen = () => {
   );
 
   return (
-    <View style={styles.container}>
+    <SafeAreaView style={styles.container}>
       <View style={styles.header}>
         <TouchableOpacity 
           style={styles.backButton}
@@ -183,7 +184,7 @@ const PendingConsultationsScreen = () => {
         ListEmptyComponent={renderEmptyState}
         showsVerticalScrollIndicator={false}
       />
-    </View>
+    </SafeAreaView>
   );
 };
 

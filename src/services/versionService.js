@@ -110,35 +110,35 @@ class VersionService {
     try {
       console.log('Checking for app updates...');
       
-      // Step 1: Try to get latest version from Play Store
-      const playStoreVersion = await this.getPlayStoreVersion();
+      // // Step 1: Try to get latest version from Play Store
+      // const playStoreVersion = await this.getPlayStoreVersion();
       
-      if (playStoreVersion) {
-        // Compare current version with Play Store version
-        const isUpdateRequired = this.compareVersions(this.currentVersion, playStoreVersion) < 0;
+      // if (playStoreVersion) {
+      //   // Compare current version with Play Store version
+      //   const isUpdateRequired = this.compareVersions(this.currentVersion, playStoreVersion) < 0;
         
-        if (isUpdateRequired) {
-          console.log(`Update required: Current ${this.currentVersion} < Play Store ${playStoreVersion}`);
-          return {
-            updateRequired: true,
-            latestVersion: playStoreVersion,
-            minimumVersion: playStoreVersion,
-            updateMessage: `A new version (${playStoreVersion}) is available on Play Store. Please update to continue using the app.`,
-            forceUpdate: true,
-            playStoreUrl: this.playStoreUrl,
-          };
-        } else {
-          console.log(`No update required: Current ${this.currentVersion} >= Play Store ${playStoreVersion}`);
-          return {
-            updateRequired: false,
-            latestVersion: playStoreVersion,
-            minimumVersion: this.currentVersion,
-            updateMessage: '',
-            forceUpdate: false,
-            playStoreUrl: this.playStoreUrl,
-          };
-        }
-      }
+      //   if (isUpdateRequired) {
+      //     console.log(`Update required: Current ${this.currentVersion} < Play Store ${playStoreVersion}`);
+      //     return {
+      //       updateRequired: true,
+      //       latestVersion: playStoreVersion,
+      //       minimumVersion: playStoreVersion,
+      //       updateMessage: `A new version (${playStoreVersion}) is available on Play Store. Please update to continue using the app.`,
+      //       forceUpdate: true,
+      //       playStoreUrl: this.playStoreUrl,
+      //     };
+      //   } else {
+      //     console.log(`No update required: Current ${this.currentVersion} >= Play Store ${playStoreVersion}`);
+      //     return {
+      //       updateRequired: false,
+      //       latestVersion: playStoreVersion,
+      //       minimumVersion: this.currentVersion,
+      //       updateMessage: '',
+      //       forceUpdate: false,
+      //       playStoreUrl: this.playStoreUrl,
+      //     };
+      //   }
+      // }
       
       // Step 2: Fallback to backend API if Play Store check fails
       console.log('Play Store check failed, falling back to backend API...');

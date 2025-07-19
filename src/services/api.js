@@ -163,6 +163,8 @@ export const walletAPI = {
   verifyPayment: (paymentData) => API.post('/wallet/verify-payment', paymentData),
   getTransactions: (params) => API.get('/wallet/transactions', { params }),
   getRazorpayConfig: () => API.get('/wallet/razorpay-config'),
+  checkTransactionStatus: (transactionId) => API.get(`/wallet/transaction/${transactionId}/status`),
+  cancelTransaction: (transactionId, reason) => API.post(`/wallet/transaction/${transactionId}/cancel`, { reason }),
 };
 
 // Offers API
@@ -187,6 +189,14 @@ export const ratingsAPI = {
 // Version API
 export const versionAPI = {
   checkVersion: (currentVersion) => API.post(`/version/check`, { currentVersion }),
+};
+
+// Ledger API
+export const ledgerAPI = {
+  getMyTransactions: (params) => API.get('/ledger/my-transactions', { params }),
+  getBalanceSummary: () => API.get('/ledger/balance-summary'),
+  getLedgerEntry: (entryId) => API.get(`/ledger/entry/${entryId}`),
+  getUserTransactions: (userId, params) => API.get(`/ledger/user/${userId}/transactions`, { params }),
 };
 
 export default API;

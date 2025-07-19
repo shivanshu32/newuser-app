@@ -6,16 +6,36 @@ import {
   BackHandler,
   SafeAreaView,
   ActivityIndicator,
-  Text
+  Text,
+  TouchableOpacity
 } from 'react-native';
 import { WebView } from 'react-native-webview';
 import { useAuth } from '../../context/AuthContext';
 import { walletAPI } from '../../services/api';
+import usePaymentTimeout from '../../hooks/usePaymentTimeout';
 
 const RazorpayPaymentScreen = ({ route, navigation }) => {
   const { order, config, finalAmount, user, selectedPackage } = route.params;
-  const { updateWalletBalance } = useAuth();
+  const { updateWalletBalance, updateUser } = useAuth();
   const [loading, setLoading] = useState(true);
+  const [transactionId, setTransactionId] = useState(order?.transactionId || null);
+  
+  // Payment timeout hook
+  const {
+    isActive: isTimeoutActive,
+    remainingTime,
+    formatRemainingTime,
+    startTimeout,
+    cancelPayment,
+    markCompleted,
+    isExpired,
+    isCancelled
+  } = usePaymentTimeout({
+    timeoutMinutes: 15,
+    onTimeout: handlePaymentTimeout,
+    onCancel: handlePaymentCancel,
+    onStatusChange: handleStatusChange
+  });
   
   // Debug logging for received parameters
   console.log('🎯 RazorpayPaymentScreen received params:', {
@@ -26,10 +46,61 @@ const RazorpayPaymentScreen = ({ route, navigation }) => {
     selectedPackage: selectedPackage ? { name: selectedPackage.name, minRechargeAmount: selectedPackage.minRechargeAmount } : null
   });
 
+  // Timeout callback functions
+  const handlePaymentTimeout = (txnId) => {
+    console.log('🕐 Payment timed out:', txnId);
+    Alert.alert(
+      'Payment Expired',
+      'Your payment session has expired due to inactivity. Please try again.',
+      [
+        {
+          text: 'OK',
+          onPress: () => navigation.goBack()
+        }
+      ]
+    );
+  };
+
+  const handlePaymentCancel = (txnId, reason) => {
+    console.log('🚫 Payment cancelled:', txnId, reason);
+    Alert.alert(
+      'Payment Cancelled',
+      'Your payment has been cancelled.',
+      [
+        {
+          text: 'OK',
+          onPress: () => navigation.goBack()
+        }
+      ]
+    );
+  };
+
+  const handleStatusChange = (status, txnId) => {
+    console.log('📊 Payment status changed:', status, txnId);
+    if (status === 'expired' || status === 'cancelled') {
+      // Navigate back after a short delay
+      setTimeout(() => {
+        navigation.goBack();
+      }, 2000);
+    }
+  };
+
   useEffect(() => {
     const backHandler = BackHandler.addEventListener('hardwareBackPress', handleBackPress);
     return () => backHandler.remove();
   }, []);
+
+  // Initialize timeout when component mounts
+  useEffect(() => {
+    if (transactionId && order) {
+      console.log('🕐 Starting payment timeout for transaction:', transactionId);
+      startTimeout(transactionId, {
+        orderId: order.id,
+        amount: finalAmount,
+        selectedPackage: selectedPackage
+      });
+    }
+  }, [transactionId, order]);
 
   const handleBackPress = () => {
     Alert.alert(
@@ -47,18 +118,47 @@ const RazorpayPaymentScreen = ({ route, navigation }) => {
     try {
       console.log('Payment successful, verifying with backend:', paymentData);
       
-      // Verify payment with backend
-      const verificationResponse = await walletAPI.verifyPayment({
+      // Verify payment with backend - include selected package information
+      const verificationData = {
         razorpay_payment_id: paymentData.payment_id,
         razorpay_order_id: paymentData.order_id,
         razorpay_signature: paymentData.signature
-      });
+      };
+      
+      // Include selected package information if available
+      if (selectedPackage) {
+        verificationData.selectedPackage = {
+          id: selectedPackage.id,
+          name: selectedPackage.name,
+          percentageBonus: selectedPackage.percentageBonus || 0,
+          flatBonus: selectedPackage.flatBonus || 0,
+          minRechargeAmount: selectedPackage.minRechargeAmount || 0,
+          firstRecharge: selectedPackage.firstRecharge || false
+        };
+        console.log('🎁 Including selected package in verification:', verificationData.selectedPackage);
+      }
+      
+      const verificationResponse = await walletAPI.verifyPayment(verificationData);
       
       console.log('Payment verification response:', verificationResponse);
       
       if (verificationResponse.success) {
-        // Update wallet balance after successful verification
-        await updateWalletBalance();
+        // Mark payment as completed to stop timeout
+        markCompleted();
+        
+        // Get the new balance from verification response
+        const newBalance = verificationResponse.data?.newBalance || verificationResponse.data?.balance;
+        console.log('💰 New wallet balance from verification:', newBalance);
+        
+        // Immediately update user context with new balance
+        if (newBalance !== undefined) {
+          await updateUser({ walletBalance: newBalance });
+          console.log('✅ Updated user context with new balance:', newBalance);
+        } else {
+          // Fallback: fetch balance from API
+          console.log('⚠️ No balance in verification response, fetching from API...');
+          await updateWalletBalance();
+        }
         
         // Show different success messages for package vs manual payments
         let successMessage;
@@ -86,7 +186,8 @@ const RazorpayPaymentScreen = ({ route, navigation }) => {
             {
               text: 'OK',
               onPress: () => {
-                navigation.navigate('Wallet');
+                console.log('🔙 Navigating back to Wallet screen...');
+                navigation.goBack();
               }
             }
           ]
@@ -99,7 +200,7 @@ const RazorpayPaymentScreen = ({ route, navigation }) => {
           [
             {
               text: 'OK',
-              onPress: () => navigation.navigate('Wallet')
+              onPress: () => navigation.goBack()
             }
           ]
         );
@@ -112,7 +213,7 @@ const RazorpayPaymentScreen = ({ route, navigation }) => {
         [
           {
             text: 'OK',
-            onPress: () => navigation.navigate('Wallet')
+            onPress: () => navigation.goBack()
           }
         ]
       );
@@ -130,7 +231,7 @@ const RazorpayPaymentScreen = ({ route, navigation }) => {
         },
         {
           text: 'Cancel',
-          onPress: () => navigation.navigate('Wallet')
+          onPress: () => navigation.goBack()
         }
       ]
     );
@@ -416,6 +517,35 @@ const RazorpayPaymentScreen = ({ route, navigation }) => {
 
   return (
     <SafeAreaView style={styles.container}>
+      {/* Payment Timeout Header */}
+      {isTimeoutActive && (
+        <View style={styles.timeoutHeader}>
+          <View style={styles.timeoutInfo}>
+            <Text style={styles.timeoutText}>Payment expires in: </Text>
+            <Text style={styles.timeoutTime}>{formatRemainingTime()}</Text>
+          </View>
+          <TouchableOpacity 
+            style={styles.cancelButton}
+            onPress={() => {
+              Alert.alert(
+                'Cancel Payment?',
+                'Are you sure you want to cancel this payment?',
+                [
+                  { text: 'Continue Payment', style: 'cancel' },
+                  { 
+                    text: 'Cancel Payment', 
+                    style: 'destructive',
+                    onPress: () => cancelPayment('User cancelled payment')
+                  }
+                ]
+              );
+            }}
+          >
+            <Text style={styles.cancelButtonText}>Cancel</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+      
       {loading && (
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color="#F97316" />
@@ -486,6 +616,43 @@ const styles = StyleSheet.create({
     marginTop: 10,
     fontSize: 16,
     color: '#666',
+  },
+  timeoutHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: '#FFF3CD',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#FFEAA7',
+  },
+  timeoutInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  timeoutText: {
+    fontSize: 14,
+    color: '#856404',
+    fontWeight: '500',
+  },
+  timeoutTime: {
+    fontSize: 16,
+    color: '#DC3545',
+    fontWeight: 'bold',
+    fontFamily: 'monospace',
+  },
+  cancelButton: {
+    backgroundColor: '#DC3545',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 6,
+  },
+  cancelButtonText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '600',
   },
 });
 

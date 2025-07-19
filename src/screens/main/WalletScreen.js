@@ -10,6 +10,7 @@ import {
   TextInput,
   ScrollView,
   Modal,
+  SafeAreaView,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
@@ -46,19 +47,14 @@ const WalletScreen = () => {
   // Fetch recharge packages on component mount and when screen comes into focus
   useEffect(() => {
     const unsubscribe = navigation.addListener('focus', () => {
+      console.log('🔄 WalletScreen focused - refreshing data...');
       fetchOffers();
-      if (!initialLoadDone.current) {
-        fetchTransactions();
-        initialLoadDone.current = true;
-      }
+      fetchTransactions(); // Always refresh transactions and balance on focus
     });
 
     // Initial load
     fetchOffers();
-    if (!initialLoadDone.current) {
-      fetchTransactions();
-      initialLoadDone.current = true;
-    }
+    fetchTransactions();
 
     return unsubscribe;
   }, [navigation]);
@@ -288,12 +284,25 @@ const WalletScreen = () => {
     try {
       console.log('Payment successful:', paymentData);
       
-      // Verify payment on backend
+      // Verify payment on backend - include selected package information
       const verificationData = {
         razorpay_order_id: paymentData.razorpay_order_id,
         razorpay_payment_id: paymentData.razorpay_payment_id,
         razorpay_signature: paymentData.razorpay_signature,
       };
+      
+      // Include selected package information if available
+      if (selectedOffer) {
+        verificationData.selectedPackage = {
+          id: selectedOffer.id,
+          name: selectedOffer.name,
+          percentageBonus: selectedOffer.percentageBonus || 0,
+          flatBonus: selectedOffer.flatBonus || 0,
+          minRechargeAmount: selectedOffer.minRechargeAmount || 0,
+          firstRecharge: selectedOffer.firstRecharge || false
+        };
+        console.log('🎁 Including selected package in verification:', verificationData.selectedPackage);
+      }
       
       const verifyResponse = await walletAPI.verifyPayment(verificationData);
       console.log('Payment verification response:', verifyResponse);
@@ -314,8 +323,13 @@ const WalletScreen = () => {
       console.log('Verification result:', verificationResult);
       const { transaction, newBalance, bonusAmount } = verificationResult;
         
+        // Update local wallet balance immediately for instant UI update
+        setWalletBalance(newBalance);
+        console.log('✅ Local wallet balance updated immediately:', newBalance);
+        
         // Update user balance in context
         await updateUser({ walletBalance: newBalance });
+        console.log('✅ User context wallet balance updated:', newBalance);
         
         // Show success message with bonus info
         let successMessage = `Payment successful! ₹${parseFloat(amount)} added to your wallet.`;
@@ -328,7 +342,7 @@ const WalletScreen = () => {
         // Reset form and refresh data
         setAmount('');
         setSelectedOffer(null);
-        fetchTransactions();
+        fetchTransactions(); // Refresh transactions list
 
       
     } catch (error) {
@@ -615,7 +629,7 @@ const WalletScreen = () => {
   };
 
   return (
-    <View style={styles.container}>
+    <SafeAreaView style={styles.container}>
       <FlatList
         data={transactions}
         renderItem={renderTransaction}
@@ -711,7 +725,16 @@ const WalletScreen = () => {
             </View>
             
             <View style={styles.transactionsContainer}>
-              <Text style={styles.transactionsTitle}>Transaction History</Text>
+              <View style={styles.transactionHeader}>
+                <Text style={styles.transactionsTitle}>Transaction History</Text>
+                <TouchableOpacity 
+                  style={styles.viewAllButton}
+                  onPress={() => navigation.navigate('TransactionHistory')}
+                >
+                  <Text style={styles.viewAllText}>View All</Text>
+                  <Ionicons name="chevron-forward" size={16} color="#F97316" />
+                </TouchableOpacity>
+              </View>
               {loading && (
                 <ActivityIndicator style={styles.loader} size="large" color="#F97316" />
               )}
@@ -854,7 +877,7 @@ const WalletScreen = () => {
           />
         )}
       </Modal>
-    </View>
+    </SafeAreaView>
   );
 };
 
@@ -1330,6 +1353,26 @@ const styles = StyleSheet.create({
   },
   disabledButton: {
     backgroundColor: '#ccc',
+  },
+  transactionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 15,
+  },
+  viewAllButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+    backgroundColor: '#FEF3E2',
+  },
+  viewAllText: {
+    color: '#F97316',
+    fontSize: 14,
+    fontWeight: '600',
+    marginRight: 4,
   },
 });
 

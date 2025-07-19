@@ -13,6 +13,7 @@ import {
   ActivityIndicator,
   Image,
   StatusBar,
+  SafeAreaView,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
@@ -611,12 +612,13 @@ const EnhancedChatScreen = ({ route, navigation }) => {
   }
 
   return (
-    <KeyboardAvoidingView 
-      style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
-    >
-      <StatusBar barStyle="light-content" backgroundColor="#6B46C1" />
+    <SafeAreaView style={styles.safeArea}>
+      <KeyboardAvoidingView 
+        style={styles.container}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
+      >
+        <StatusBar barStyle="light-content" backgroundColor="#6B46C1" />
       
       {/* Header */}
       <View style={styles.header}>
@@ -706,6 +708,7 @@ const EnhancedChatScreen = ({ route, navigation }) => {
         </TouchableOpacity>
       </View>
     </KeyboardAvoidingView>
+    </SafeAreaView>
   );
 };
 

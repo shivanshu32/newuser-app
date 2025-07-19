@@ -9,6 +9,7 @@ import {
   ActivityIndicator,
   Image,
   ScrollView,
+  SafeAreaView,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../context/AuthContext';
@@ -214,7 +215,8 @@ const RatingScreen = ({ route, navigation }) => {
   }
 
   return (
-    <ScrollView style={styles.container}>
+    <SafeAreaView style={styles.safeArea}>
+      <ScrollView style={styles.container}>
       <View style={styles.header}>
         <TouchableOpacity 
           style={styles.backButton} 
@@ -344,11 +346,16 @@ const RatingScreen = ({ route, navigation }) => {
       >
         <Text style={styles.skipButtonText}>Skip</Text>
       </TouchableOpacity>
-    </ScrollView>
+      </ScrollView>
+    </SafeAreaView>
   );
 };
 
 const styles = StyleSheet.create({
+  safeArea: {
+    flex: 1,
+    backgroundColor: '#f8f8f8',
+  },
   container: {
     flex: 1,
     backgroundColor: '#f8f8f8',

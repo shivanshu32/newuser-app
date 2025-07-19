@@ -20,7 +20,8 @@ import PendingConsultationsScreen from '../screens/main/PendingConsultationsScre
 import ChatScreen from '../screens/session/ChatScreen';
 import EnhancedChatScreen from '../screens/session/EnhancedChatScreen';
 import PreChatForm from '../screens/session/PreChatForm';
-
+import TransactionHistoryScreen from '../screens/main/TransactionHistoryScreen';
+import TransactionDetailScreen from '../screens/main/TransactionDetailScreen';
 
 import RatingScreen from '../screens/session/RatingScreen';
 
@@ -323,6 +324,16 @@ const MainNavigator = () => {
           name="UpdateScreen" 
           component={UpdateScreen} 
           options={{ headerShown: false }}
+        />
+        <Stack.Screen 
+          name="TransactionHistory" 
+          component={TransactionHistoryScreen} 
+          options={{ headerShown: true, title: 'Transaction History' }}
+        />
+        <Stack.Screen 
+          name="TransactionDetail" 
+          component={TransactionDetailScreen} 
+          options={{ headerShown: true, title: 'Transaction Details' }}
         />
       </Stack.Navigator>
       <BookingPopupWrapper />

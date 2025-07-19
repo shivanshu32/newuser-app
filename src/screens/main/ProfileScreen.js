@@ -9,6 +9,7 @@ import {
   Switch,
   Alert,
   ActivityIndicator,
+  SafeAreaView,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../context/AuthContext';
@@ -101,7 +102,8 @@ const ProfileScreen = ({ navigation }) => {
   ];
 
   return (
-    <ScrollView style={styles.container}>
+    <SafeAreaView style={styles.safeArea}>
+      <ScrollView style={styles.container}>
       <View style={styles.header}>
         <View style={styles.profileImageContainer}>
           <Image
@@ -177,14 +179,18 @@ const ProfileScreen = ({ navigation }) => {
           <ActivityIndicator size="large" color="#F97316" />
         </View>
       )}
-    </ScrollView>
+      </ScrollView>
+    </SafeAreaView>
   );
 };
 
 const styles = StyleSheet.create({
-  container: {
+  safeArea: {
     flex: 1,
     backgroundColor: '#f8f8f8',
+  },
+  container: {
+    flex: 1,
   },
   header: {
     backgroundColor: '#fff',

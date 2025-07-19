@@ -33,7 +33,7 @@ const UpdateScreen = ({ navigation, route }) => {
 
   const handleUpdatePress = () => {
     // You can customize these URLs based on your app store links
-    const playStoreUrl = 'https://play.google.com/store/apps/details?id=your.app.package';
+    const playStoreUrl = 'https://play.google.com/store/apps/details?id=com.jyotishtalk';
     const appStoreUrl = 'https://apps.apple.com/app/your-app/id123456789';
     
     Alert.alert(
