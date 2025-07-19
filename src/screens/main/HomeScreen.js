@@ -24,7 +24,7 @@ import { astrologersAPI, walletAPI, versionAPI } from '../../services/api';
 import BookingAcceptedModal from '../../components/BookingAcceptedModal';
 
 // Hardcoded app version - update this when releasing new versions
-const APP_VERSION = '2.0.0';
+const APP_VERSION = '4.0.0';
 
 const HomeScreen = ({ navigation }) => {
   const { user } = useAuth();
@@ -558,15 +558,35 @@ const HomeScreen = ({ navigation }) => {
   // Handle session end events to clean up pending bookings
   const handleSessionEnd = useCallback((data) => {
     console.log('📝 [HOME] Session ended:', data);
-    // Update local state to remove the ended session instead of calling fetchPendingBookings
+    
+    // Update local state to remove the ended session for immediate UI feedback
     if (data.bookingId) {
       setPendingBookings(prevBookings => {
-        return prevBookings.filter(booking => 
+        const filteredBookings = prevBookings.filter(booking => 
           booking._id !== data.bookingId && booking.bookingId !== data.bookingId
         );
+        
+        console.log('📝 [HOME] Removed ended session from local state:', {
+          bookingId: data.bookingId,
+          before: prevBookings.length,
+          after: filteredBookings.length
+        });
+        
+        return filteredBookings;
       });
     }
-  }, []);
+    
+    // Also refresh pending bookings via socket to ensure data consistency
+    // This provides a backup in case the local state update missed anything
+    if (socket && socket.connected) {
+      console.log('📝 [HOME] Refreshing pending bookings after session end...');
+      setTimeout(() => {
+        fetchUserPendingBookings().catch(error => {
+          console.error('❌ [HOME] Error refreshing pending bookings after session end:', error);
+        });
+      }, 1000); // Small delay to allow backend to process the session end
+    }
+  }, [socket, fetchUserPendingBookings]);
 
   // Handle call status updates from Exotel
   const handleCallStatusUpdate = useCallback((data) => {
@@ -1015,9 +1035,56 @@ const HomeScreen = ({ navigation }) => {
   // Use focus effect to refresh data when screen comes into focus
   useFocusEffect(
     useCallback(() => {
-      loadInitialData();
-    }, [loadInitialData])
+      console.log('🔄 [FOCUS_EFFECT] HomeScreen came into focus, refreshing data...');
+      console.log('🔄 [FOCUS_EFFECT] Current pending bookings count:', pendingBookings.length);
+      
+      // Always refresh pending bookings when screen comes into focus
+      // This ensures outdated consultations are removed after session ends
+      const refreshData = async () => {
+        try {
+          console.log('🔄 [FOCUS_EFFECT] Starting data refresh...');
+          
+          // Refresh pending bookings first (most important for this fix)
+          if (socket && socket.connected) {
+            console.log('🔄 [FOCUS_EFFECT] Refreshing pending bookings via socket...');
+            await fetchUserPendingBookings();
+          } else {
+            console.log('⚠️ [FOCUS_EFFECT] Socket not available, skipping pending bookings refresh');
+          }
+          
+          // Then refresh other data
+          await Promise.all([
+            fetchAstrologers(),
+            fetchWalletBalance()
+          ]);
+          
+          console.log('✅ [FOCUS_EFFECT] Data refresh completed successfully');
+        } catch (error) {
+          console.error('❌ [FOCUS_EFFECT] Error during data refresh:', error);
+        }
+      };
+      
+      refreshData();
+    }, [loadInitialData, fetchUserPendingBookings, fetchAstrologers, fetchWalletBalance, socket, pendingBookings.length])
   );
+  
+  // Additional navigation listener to ensure pending bookings are refreshed
+  // This provides a backup to useFocusEffect for more reliable data refresh
+  useEffect(() => {
+    const unsubscribe = navigation.addListener('focus', () => {
+      console.log('🏠 [NAV_FOCUS] Home screen focused via navigation listener');
+      
+      // Force refresh pending bookings when navigating to Home screen
+      if (socket && socket.connected) {
+        console.log('🏠 [NAV_FOCUS] Force refreshing pending bookings...');
+        fetchUserPendingBookings().catch(error => {
+          console.error('❌ [NAV_FOCUS] Error refreshing pending bookings:', error);
+        });
+      }
+    });
+    
+    return unsubscribe;
+  }, [navigation, socket, fetchUserPendingBookings]);
 
   // Handle astrologer status updates
   const handleAstrologerStatusUpdate = useCallback((data) => {

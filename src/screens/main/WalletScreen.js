@@ -199,6 +199,11 @@ const WalletScreen = () => {
       if (offersResponse && offersResponse.success) {
         const packages = offersResponse.data || [];
         console.log('✅ Found packages:', packages.length, packages);
+        
+        // Log first recharge packages for debugging
+        const firstRechargePackages = packages.filter(pkg => pkg.firstRecharge);
+        console.log('🎁 First recharge packages found:', firstRechargePackages.length, firstRechargePackages.map(p => p.name));
+        
         // Sort by priority (lower number = higher priority)
         const sortedPackages = packages.sort((a, b) => (a.priority || 0) - (b.priority || 0));
         console.log('📊 Sorted packages:', sortedPackages);
@@ -378,29 +383,69 @@ const WalletScreen = () => {
       setProcessingPayment(true);
       setShowPaymentSummary(false); // Close summary modal
       
+      console.log('🔄 Starting package payment process for amount:', totalPayableAmount);
+      console.log('📦 Selected package:', selectedPackage);
+      console.log('💰 Recharge amount:', rechargeAmount);
+      console.log('🏷️ GST amount:', gstAmount);
+      console.log('💳 Total payable amount:', totalPayableAmount);
+      
+      // Get Razorpay config
+      const configResponse = await walletAPI.getRazorpayConfig();
+      console.log('⚙️ Razorpay config response:', configResponse);
+      
+      // Handle the response structure - API interceptor returns response.data directly
+      let config;
+      if (configResponse.success && configResponse.data) {
+        config = configResponse.data;
+      } else if (configResponse.data && configResponse.data.success) {
+        config = configResponse.data.data;
+      } else {
+        const errorMsg = configResponse.message || configResponse.data?.message || 'Failed to get payment config';
+        throw new Error(errorMsg);
+      }
+      
+      console.log('⚙️ Razorpay config extracted:', config);
+      
       // Create payment order with total payable amount (including GST)
       const orderResponse = await walletAPI.createOrder(totalPayableAmount);
-      console.log('📦 Order created:', orderResponse);
+      console.log('📦 Order creation response:', orderResponse);
       
-      if (orderResponse && orderResponse.success) {
-        setPaymentOrder(orderResponse.data);
-        
-        // Get Razorpay config
-        const configResponse = await walletAPI.getRazorpayConfig();
-        console.log('⚙️ Razorpay config:', configResponse);
-        
-        if (configResponse && configResponse.success) {
-          setRazorpayConfig(configResponse.data);
-          setShowPaymentModal(true);
-        } else {
-          throw new Error('Failed to get payment configuration');
-        }
+      // Handle the response structure - API interceptor returns response.data directly
+      let order;
+      if (orderResponse.success && orderResponse.data) {
+        order = orderResponse.data;
+      } else if (orderResponse.data && orderResponse.data.success) {
+        order = orderResponse.data.data;
       } else {
-        throw new Error(orderResponse?.message || 'Failed to create payment order');
+        const errorMsg = orderResponse.message || orderResponse.data?.message || 'Failed to create order';
+        throw new Error(errorMsg);
       }
+      
+      console.log('📦 Order extracted:', order);
+      
+      // Navigate to RazorpayPayment screen instead of showing modal
+      // This fixes the white screen issue in production builds
+      navigation.navigate('RazorpayPayment', {
+        order: order,
+        config: config,
+        finalAmount: totalPayableAmount,
+        user: user,
+        selectedPackage: selectedPackage // Pass package info for verification success message
+      });
+      
+      console.log('✅ Navigating to RazorpayPayment screen for package payment');
+      
     } catch (error) {
-      console.error('❌ Error initiating payment:', error);
-      Alert.alert('Error', error.message || 'Failed to initiate payment. Please try again.');
+      console.error('❌ Error initiating package payment:', error);
+      
+      let errorMessage = 'Failed to process payment. Please try again.';
+      if (error.response?.data?.message) {
+        errorMessage = error.response.data.message;
+      } else if (error.message && !error.message.includes('payment_cancelled')) {
+        errorMessage = error.message;
+      }
+      
+      Alert.alert('Payment Error', errorMessage);
     } finally {
       setProcessingPayment(false);
     }
@@ -627,16 +672,41 @@ const WalletScreen = () => {
                 <Text style={styles.offersTitle}>Recharge Packages</Text>
                 {loadingOffers ? (
                   <ActivityIndicator style={styles.loader} size="large" color="#F97316" />
-                ) : offers.length === 0 ? (
-                  <View style={styles.emptyOffers}>
-                    <Ionicons name="gift-outline" size={60} color="#ccc" />
-                    <Text style={styles.emptyText}>No offers available</Text>
-                  </View>
-                ) : (
-                  <View>
-                    {offers.map((offer) => renderOffer({ item: offer }))}
-                  </View>
-                )}
+                ) : (() => {
+                  // Filter offers based on user's recharge history
+                  const filteredOffers = offers.filter((offer) => {
+                    // Hide first recharge packages if user has already completed their first recharge
+                    if (offer.firstRecharge && !isFirstTimeUser) {
+                      console.log('🚫 Hiding first recharge package for returning user:', offer.name);
+                      return false;
+                    }
+                    return true;
+                  });
+                  
+                  // Show appropriate message based on filtered results
+                  if (offers.length === 0) {
+                    return (
+                      <View style={styles.emptyOffers}>
+                        <Ionicons name="gift-outline" size={60} color="#ccc" />
+                        <Text style={styles.emptyText}>No offers available</Text>
+                      </View>
+                    );
+                  } else if (filteredOffers.length === 0) {
+                    return (
+                      <View style={styles.emptyOffers}>
+                        <Ionicons name="gift-outline" size={60} color="#ccc" />
+                        <Text style={styles.emptyText}>No packages available</Text>
+                        <Text style={[styles.emptyText, { fontSize: 12, marginTop: 5, opacity: 0.7 }]}>First recharge offers are no longer available</Text>
+                      </View>
+                    );
+                  } else {
+                    return (
+                      <View>
+                        {filteredOffers.map((offer) => renderOffer({ item: offer }))}
+                      </View>
+                    );
+                  }
+                })()}
               </View>
             </View>
             

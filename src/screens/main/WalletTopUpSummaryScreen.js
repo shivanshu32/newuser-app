@@ -51,6 +51,11 @@ const WalletTopUpSummaryScreen = () => {
     setProcessingPayment(true);
     try {
       console.log('🔄 Starting payment process for amount:', finalAmount);
+      console.log('📦 Selected package:', selectedPackage);
+      console.log('💰 Base amount:', baseAmount);
+      console.log('🎁 Bonus amount:', bonusAmount);
+      console.log('💳 Final amount (with GST):', finalAmount);
+      console.log('🏷️ Is first time user:', isFirstTimeUser);
       
       // Get Razorpay config
       const configResponse = await walletAPI.getRazorpayConfig();

@@ -13,9 +13,18 @@ import { useAuth } from '../../context/AuthContext';
 import { walletAPI } from '../../services/api';
 
 const RazorpayPaymentScreen = ({ route, navigation }) => {
-  const { order, config, finalAmount, user } = route.params;
+  const { order, config, finalAmount, user, selectedPackage } = route.params;
   const { updateWalletBalance } = useAuth();
   const [loading, setLoading] = useState(true);
+  
+  // Debug logging for received parameters
+  console.log('🎯 RazorpayPaymentScreen received params:', {
+    order,
+    config,
+    finalAmount,
+    user: user ? { name: user.name, email: user.email, mobileNumber: user.mobileNumber } : null,
+    selectedPackage: selectedPackage ? { name: selectedPackage.name, minRechargeAmount: selectedPackage.minRechargeAmount } : null
+  });
 
   useEffect(() => {
     const backHandler = BackHandler.addEventListener('hardwareBackPress', handleBackPress);
@@ -51,9 +60,28 @@ const RazorpayPaymentScreen = ({ route, navigation }) => {
         // Update wallet balance after successful verification
         await updateWalletBalance();
         
+        // Show different success messages for package vs manual payments
+        let successMessage;
+        if (selectedPackage) {
+          // Package payment success message
+          const rechargeAmount = selectedPackage.minRechargeAmount || 0;
+          const bonusAmount = selectedPackage.percentageBonus > 0 
+            ? Math.round(rechargeAmount * selectedPackage.percentageBonus / 100)
+            : (selectedPackage.flatBonus || 0);
+          const gstAmount = Math.round(rechargeAmount * 0.18);
+          const totalWalletCredit = rechargeAmount + bonusAmount;
+          
+          successMessage = `Package: ${selectedPackage.name}\n\nPayment Details:\n• You Paid: ₹${finalAmount} (including GST)\n• Base Credit: ₹${rechargeAmount}\n• Bonus Credit: +₹${bonusAmount}\n• Total Wallet Credit: ₹${totalWalletCredit}\n\nPayment ID: ${paymentData.payment_id}`;
+        } else {
+          // Manual payment success message
+          const baseAmount = finalAmount / 1.18; // Remove GST to get base amount
+          const gstAmount = finalAmount - baseAmount;
+          successMessage = `Payment completed successfully.\n\nTransaction Details:\n• Amount Added: ₹${baseAmount.toFixed(2)}\n• GST (18%): ₹${gstAmount.toFixed(2)}\n• Total Paid: ₹${finalAmount}\n\nPayment ID: ${paymentData.payment_id}`;
+        }
+        
         Alert.alert(
           'Payment Successful!',
-          `Payment completed successfully.\nPayment ID: ${paymentData.payment_id}\n\nYour wallet has been updated with ₹${finalAmount}.`,
+          successMessage,
           [
             {
               text: 'OK',
@@ -110,9 +138,12 @@ const RazorpayPaymentScreen = ({ route, navigation }) => {
 
   const handleWebViewMessage = (event) => {
     try {
+      console.log('WebView message received:', event.nativeEvent.data);
       const data = JSON.parse(event.nativeEvent.data);
+      console.log('Parsed WebView data:', data);
       
       if (data.type === 'payment_success') {
+        console.log('Payment success detected');
         // Pass complete payment data for verification
         handlePaymentSuccess({
           payment_id: data.payment_id,
@@ -120,26 +151,57 @@ const RazorpayPaymentScreen = ({ route, navigation }) => {
           signature: data.signature
         });
       } else if (data.type === 'payment_failed') {
+        console.log('Payment failed detected:', data.error);
         handlePaymentFailure(data.error || 'Unknown error');
       } else if (data.type === 'payment_cancelled') {
+        console.log('Payment cancelled detected');
         Alert.alert(
           'Payment Cancelled',
           'Payment was cancelled by user.',
           [{ text: 'OK', onPress: () => navigation.goBack() }]
         );
+      } else if (data.type === 'error') {
+        console.error('WebView error:', data.error);
+        Alert.alert(
+          'Payment Error',
+          `An error occurred: ${data.error}`,
+          [{ text: 'OK', onPress: () => navigation.goBack() }]
+        );
       }
     } catch (error) {
       console.error('Error parsing WebView message:', error);
+      Alert.alert(
+        'WebView Error',
+        'Failed to process payment response. Please try again.',
+        [{ text: 'OK', onPress: () => navigation.goBack() }]
+      );
     }
   };
 
+  // Validate required parameters
+  if (!order || !config || !finalAmount || !user) {
+    console.error('Missing required parameters:', { order, config, finalAmount, user });
+    Alert.alert(
+      'Payment Error',
+      'Missing payment information. Please try again.',
+      [{ text: 'OK', onPress: () => navigation.goBack() }]
+    );
+    return null;
+  }
+  
+  // Safely escape user data for HTML
+  const safeUserName = (user?.name || user?.displayName || 'User').replace(/["'<>&]/g, '');
+  const safeUserEmail = (user?.email || '').replace(/["'<>&]/g, '');
+  const safeUserContact = (user?.mobileNumber || '').replace(/["'<>&]/g, '');
+  
   const paymentHtml = `
 <!DOCTYPE html>
 <html>
 <head>
     <title>JyotishCall Payment</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self' 'unsafe-inline' 'unsafe-eval' https: data: blob:;">
+    <script src="https://checkout.razorpay.com/v1/checkout.js" onerror="console.error('Failed to load Razorpay SDK')"></script>
     <style>
         body { 
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
@@ -245,13 +307,33 @@ const RazorpayPaymentScreen = ({ route, navigation }) => {
         }
 
         function postMessage(data) {
+            console.log('Posting message to React Native:', data);
             if (window.ReactNativeWebView) {
                 window.ReactNativeWebView.postMessage(JSON.stringify(data));
+            } else {
+                console.error('ReactNativeWebView not available');
+                alert('ReactNativeWebView not available');
             }
+        }
+        
+        function logError(message, error) {
+            console.error(message, error);
+            postMessage({
+                type: 'error',
+                error: message + (error ? ': ' + error.message : '')
+            });
         }
 
         function startPayment() {
+            console.log('Starting payment process...');
             showLoading();
+            
+            // Check if Razorpay is loaded
+            if (typeof Razorpay === 'undefined') {
+                logError('Razorpay SDK not loaded');
+                hideLoading();
+                return;
+            }
             
             var options = {
                 key: '${config.keyId}',
@@ -262,11 +344,12 @@ const RazorpayPaymentScreen = ({ route, navigation }) => {
                 order_id: '${order.orderId}',
                 theme: { color: '#F97316' },
                 prefill: {
-                    name: '${user?.name || user?.displayName || 'User'}',
-                    email: '${user?.email || ''}',
-                    contact: '${user?.mobileNumber || ''}'
+                    name: '${safeUserName}',
+                    email: '${safeUserEmail}',
+                    contact: '${safeUserContact}'
                 },
                 handler: function(response) {
+                    console.log('Payment successful:', response);
                     postMessage({
                         type: 'payment_success',
                         payment_id: response.razorpay_payment_id,
@@ -276,6 +359,7 @@ const RazorpayPaymentScreen = ({ route, navigation }) => {
                 },
                 modal: {
                     ondismiss: function() {
+                        console.log('Payment modal dismissed');
                         hideLoading();
                         postMessage({
                             type: 'payment_cancelled'
@@ -284,27 +368,48 @@ const RazorpayPaymentScreen = ({ route, navigation }) => {
                 }
             };
             
+            console.log('Razorpay options:', options);
+            
             try {
                 var rzp = new Razorpay(options);
                 rzp.on('payment.failed', function(response) {
+                    console.log('Payment failed:', response);
                     hideLoading();
                     postMessage({
                         type: 'payment_failed',
                         error: response.error.description || 'Payment failed'
                     });
                 });
+                console.log('Opening Razorpay checkout...');
                 rzp.open();
             } catch (error) {
+                console.error('Error initializing Razorpay:', error);
                 hideLoading();
-                postMessage({
-                    type: 'payment_failed',
-                    error: 'Failed to initialize payment: ' + error.message
-                });
+                logError('Failed to initialize payment', error);
             }
         }
 
-        // Auto-start payment when page loads
-        setTimeout(startPayment, 1000);
+        // Check if Razorpay script loaded successfully
+        function checkRazorpayLoaded() {
+            if (typeof Razorpay !== 'undefined') {
+                console.log('Razorpay SDK loaded successfully');
+                startPayment();
+            } else {
+                console.error('Razorpay SDK failed to load');
+                logError('Razorpay SDK failed to load. Please check your internet connection.');
+            }
+        }
+        
+        // Auto-start payment when page loads with error handling
+        setTimeout(checkRazorpayLoaded, 1000);
+        
+        // Add error handling for script loading
+        window.addEventListener('error', function(e) {
+            console.error('Script loading error:', e);
+            if (e.target && e.target.src && e.target.src.includes('razorpay')) {
+                logError('Failed to load Razorpay SDK');
+            }
+        });
     </script>
 </body>
 </html>`;
@@ -321,13 +426,38 @@ const RazorpayPaymentScreen = ({ route, navigation }) => {
         source={{ html: paymentHtml }}
         style={styles.webview}
         onMessage={handleWebViewMessage}
-        onLoadEnd={() => setLoading(false)}
+        onLoadEnd={() => {
+          console.log('WebView loaded successfully');
+          setLoading(false);
+        }}
+        onError={(syntheticEvent) => {
+          const { nativeEvent } = syntheticEvent;
+          console.error('WebView error:', nativeEvent);
+          Alert.alert(
+            'WebView Error',
+            'Failed to load payment page. Please try again.',
+            [{ text: 'OK', onPress: () => navigation.goBack() }]
+          );
+        }}
+        onHttpError={(syntheticEvent) => {
+          const { nativeEvent } = syntheticEvent;
+          console.error('WebView HTTP error:', nativeEvent);
+        }}
         javaScriptEnabled={true}
         domStorageEnabled={true}
         startInLoadingState={false}
         mixedContentMode="compatibility"
         allowsInlineMediaPlayback={true}
         mediaPlaybackRequiresUserAction={false}
+        thirdPartyCookiesEnabled={true}
+        sharedCookiesEnabled={true}
+        allowsBackForwardNavigationGestures={false}
+        scalesPageToFit={false}
+        showsHorizontalScrollIndicator={false}
+        showsVerticalScrollIndicator={false}
+        originWhitelist={['*']}
+        allowUniversalAccessFromFileURLs={true}
+        allowFileAccessFromFileURLs={true}
       />
     </SafeAreaView>
   );

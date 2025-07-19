@@ -181,7 +181,7 @@ export const sessionsAPI = {
 
 // Ratings API
 export const ratingsAPI = {
-  submit: (bookingId, rating, comment) => API.post(`/ratings`, { bookingId, rating, comment }),
+  submit: (bookingId, rating, comment) => API.post(`/ratings/submit`, { bookingId, rating, comment }),
 };
 
 // Version API
