@@ -18,7 +18,7 @@ import {
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../context/AuthContext';
-import { bookingsAPI } from '../../services/api';
+import { bookingsAPI, freeChatAPI } from '../../services/api';
 import ChatConnectionManager from '../../utils/ChatConnectionManager';
 
 const EnhancedChatScreen = ({ route, navigation }) => {
@@ -27,6 +27,8 @@ const EnhancedChatScreen = ({ route, navigation }) => {
   const bookingId = routeParams.bookingId || (routeParams.booking && routeParams.booking._id);
   const astrologerFromRoute = routeParams.astrologer;
   const userInfoFromRoute = routeParams.userInfo;
+  const isFreeChat = routeParams.isFreeChat || false;
+  const freeChatId = routeParams.freeChatId || bookingId;
   
   // State variables
   const [messages, setMessages] = useState([]);
@@ -51,6 +53,7 @@ const EnhancedChatScreen = ({ route, navigation }) => {
   const connectionManagerRef = useRef(null);
   const typingTimerRef = useRef(null);
   const reconnectTimeoutRef = useRef(null);
+  const timerRef = useRef(null);
 
   // Format time as MM:SS
   const formatTime = (seconds) => {
@@ -91,13 +94,45 @@ const EnhancedChatScreen = ({ route, navigation }) => {
     try {
       setLoading(true);
       
-      console.log('🔍 EnhancedChatScreen: Fetching booking details for ID:', bookingId);
-      const response = await bookingsAPI.getById(bookingId);
-      console.log('📦 EnhancedChatScreen: API Response:', JSON.stringify(response, null, 2));
+      let response, bookingData;
       
-      // API interceptor returns response.data, so booking data is in response.data
-      const bookingData = response.data;
-      console.log('📋 EnhancedChatScreen: Booking data:', JSON.stringify(bookingData, null, 2));
+      if (isFreeChat) {
+        console.log('🆓 EnhancedChatScreen: Fetching free chat details for ID:', freeChatId);
+        response = await freeChatAPI.getFreeChatDetails(freeChatId);
+        console.log('📦 EnhancedChatScreen: Free Chat API Response:', JSON.stringify(response, null, 2));
+        bookingData = response.data;
+        
+        // For free chat, ensure we have astrologer data from route params or API response
+        if (astrologerFromRoute) {
+          console.log('🆓 EnhancedChatScreen: Using astrologer from route params:', astrologerFromRoute);
+          bookingData.astrologer = astrologerFromRoute;
+        } else if (bookingData && bookingData.astrologer) {
+          console.log('🆓 EnhancedChatScreen: Using astrologer from API response:', bookingData.astrologer);
+        } else {
+          console.warn('🆓 EnhancedChatScreen: No astrologer data found in route params or API response');
+        }
+        
+        // Set user data from route params or auth user
+        if (routeParams.userProfile) {
+          bookingData.user = routeParams.userProfile;
+        } else if (authUser) {
+          bookingData.user = authUser;
+        }
+        
+        // Ensure we have session data for free chat
+        if (routeParams.sessionId) {
+          bookingData.sessionId = routeParams.sessionId;
+        }
+        
+        console.log('🆓 EnhancedChatScreen: Final free chat booking data:', JSON.stringify(bookingData, null, 2));
+      } else {
+        console.log('💼 EnhancedChatScreen: Fetching regular booking details for ID:', bookingId);
+        response = await bookingsAPI.getById(bookingId);
+        console.log('📦 EnhancedChatScreen: Booking API Response:', JSON.stringify(response, null, 2));
+        bookingData = response.data;
+      }
+      
+      console.log('📋 EnhancedChatScreen: Final booking data:', JSON.stringify(bookingData, null, 2));
       
       if (!bookingData) {
         throw new Error('No booking data received from API');
@@ -128,8 +163,21 @@ const EnhancedChatScreen = ({ route, navigation }) => {
       setAstrologer(astrologerData);
       setUser(bookingData.user);
       
-      // Initialize connection manager with astrologer ID
-      await initializeConnectionManager(astrologerId);
+      // For free chat sessions, activate the session immediately since they're already accepted
+      if (isFreeChat) {
+        console.log('🆓 EnhancedChatScreen: Activating free chat session immediately');
+        setSessionActive(true);
+        setConnectionStatus('session_active');
+        if (routeParams.sessionId || bookingData.sessionId) {
+          setSessionId(routeParams.sessionId || bookingData.sessionId);
+        }
+      }
+      
+      // Initialize connection manager with astrologer ID and free chat options
+      await initializeConnectionManager(astrologerId, {
+        isFreeChat,
+        sessionId: routeParams.sessionId || bookingData.sessionId
+      });
       
       setLoading(false);
       console.log('✅ EnhancedChatScreen: Booking details loaded successfully');
@@ -147,11 +195,16 @@ const EnhancedChatScreen = ({ route, navigation }) => {
   };
 
   // Initialize connection manager
-  const initializeConnectionManager = (astrologerId) => {
+  const initializeConnectionManager = (astrologerId, options = {}) => {
     try {
       console.log('🔍 EnhancedChatScreen: Initializing connection manager with astrologer ID:', astrologerId);
+      console.log('🔍 EnhancedChatScreen: Connection options:', options);
       
       connectionManagerRef.current = new ChatConnectionManager();
+      
+      // Set booking details for connection manager
+      connectionManagerRef.current.currentBookingId = bookingId;
+      connectionManagerRef.current.currentUserId = authUser?.id;
       
       // Set up event listeners
       connectionManagerRef.current.onMessage(handleNewMessage);
@@ -159,10 +212,55 @@ const EnhancedChatScreen = ({ route, navigation }) => {
       connectionManagerRef.current.onStatusUpdate(handleStatusUpdate);
       connectionManagerRef.current.onTyping(handleTypingStatus);
       
-      // Initialize connection
-      connectionManagerRef.current.initialize(bookingId, authUser?.id, astrologerId);
+      // Set up additional event listeners for free chat
+      if (options.isFreeChat) {
+        console.log('🆓 EnhancedChatScreen: Setting up free chat event listeners');
+        
+        // Listen for free chat room joined event
+        connectionManagerRef.current.socket?.on('free_chat_room_joined', (data) => {
+          console.log('🆓 EnhancedChatScreen: Free chat room joined event received:', data);
+          if (data.freeChatId === bookingId || data.freeChatId === options.sessionId) {
+            console.log('🆓 EnhancedChatScreen: Successfully joined free chat room');
+            setConnectionStatus('room_joined');
+          }
+        });
+        
+        // Listen for free chat timer started event
+        connectionManagerRef.current.socket?.on('free_chat_timer_started', (data) => {
+          console.log('🆓 EnhancedChatScreen: Free chat timer started event received:', data);
+          if (data.freeChatId === bookingId || data.freeChatId === options.sessionId) {
+            console.log('🆓 EnhancedChatScreen: Free chat timer started');
+            setSessionActive(true);
+            setConnectionStatus('session_active');
+            setSessionTime(data.durationSeconds || 0);
+          }
+        });
+      }
+      
+      // Initialize connection with options
+      connectionManagerRef.current.initialize(astrologerId, options);
       
       setConnectionStatus('connecting');
+      
+      // For free chat, explicitly ensure we join the room
+      if (options.isFreeChat) {
+        console.log('🆓 EnhancedChatScreen: Explicitly joining free chat room after initialization');
+        
+        // Set a timeout to ensure the socket is connected before joining
+        setTimeout(() => {
+          if (connectionManagerRef.current && connectionManagerRef.current.socket?.connected) {
+            console.log('🆓 EnhancedChatScreen: Emitting join_free_chat_room event directly');
+            connectionManagerRef.current.socket.emit('join_free_chat_room', {
+              freeChatId: bookingId,
+              sessionId: options.sessionId || bookingId,
+              userId: authUser?.id,
+              userType: 'user'
+            });
+          } else {
+            console.log('🆓 EnhancedChatScreen: Socket not connected yet, will rely on ChatConnectionManager.joinRoom');
+          }
+        }, 1000);
+      }
     } catch (error) {
       console.error('🔍 EnhancedChatScreen: Failed to initialize connection manager:', error);
       setConnectionStatus('error');
@@ -266,10 +364,31 @@ const EnhancedChatScreen = ({ route, navigation }) => {
         // Ensure prevMessages is always an array
         const messages = prevMessages || [];
         
-        // Avoid duplicate messages
-        const exists = messages.some(msg => msg.id === message.id);
-        if (exists) {
-          console.log('🔴 [USER-APP] Duplicate message ignored:', message.id);
+        // Enhanced deduplication logic
+        // Check for exact ID match first
+        const exactIdExists = messages.some(msg => msg.id === message.id);
+        if (exactIdExists) {
+          console.log('🔴 [USER-APP] Duplicate message ignored (exact ID):', message.id);
+          return messages;
+        }
+        
+        // Check for content-based duplication (same sender, content, and similar timestamp)
+        // This handles cases where backend echo has different ID than optimistic UI
+        const contentDuplicate = messages.some(msg => {
+          const isSameSender = msg.senderId === message.senderId;
+          const isSameContent = msg.content === message.content;
+          const timeDiff = Math.abs(new Date(msg.timestamp).getTime() - new Date(message.timestamp).getTime());
+          const isSimilarTime = timeDiff < 5000; // Within 5 seconds
+          
+          return isSameSender && isSameContent && isSimilarTime;
+        });
+        
+        if (contentDuplicate) {
+          console.log('🔴 [USER-APP] Duplicate message ignored (content-based):', {
+            content: message.content,
+            senderId: message.senderId,
+            timestamp: message.timestamp
+          });
           return messages;
         }
         
@@ -307,21 +426,8 @@ const EnhancedChatScreen = ({ route, navigation }) => {
       });
     });
     
-    // Also try immediate state update for fastest possible response
-    setMessages(prevMessages => {
-      // Ensure prevMessages is always an array
-      const messages = prevMessages || [];
-      
-      const exists = messages.some(msg => msg.id === message.id);
-      if (exists) return messages;
-      
-      const lastMessage = messages.length > 0 ? messages[messages.length - 1] : null;
-      const newMessages = !lastMessage || new Date(message.timestamp) >= new Date(lastMessage.timestamp)
-        ? [...messages, message]
-        : [...messages, message].sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
-      
-      return newMessages;
-    });
+    // Note: Removed duplicate setMessages call to prevent message duplication
+    // The InteractionManager.runAfterInteractions call above handles the state update
   }, []);
 
   // Handle typing status
@@ -507,7 +613,7 @@ const EnhancedChatScreen = ({ route, navigation }) => {
   const getConnectionStatusText = () => {
     // If session is active, show session status instead of connection status
     if (sessionActive) {
-      return 'In Session';
+      return isFreeChat ? 'Free Chat Active' : 'In Session';
     }
     
     switch (connectionStatus) {
@@ -520,9 +626,9 @@ const EnhancedChatScreen = ({ route, navigation }) => {
       case 'flushed': return 'Messages Sent';
       case 'disconnected': return loading ? 'Connecting...' : 'Disconnected';
       case 'initializing': return 'Initializing...';
-      case 'session_active': return 'Session Active';
+      case 'session_active': return isFreeChat ? 'Free Chat Active' : 'Session Active';
       case 'astrologer_joined': return 'Astrologer Joined - Starting Session...';
-      case 'joining': return 'Joining Consultation...';
+      case 'joining': return isFreeChat ? 'Joining Free Chat...' : 'Joining Consultation...';
       case 'user_joined': return 'You Joined - Waiting for Astrologer';
       default: 
         console.log('EnhancedChatScreen: Unknown connection status:', connectionStatus);
@@ -602,7 +708,18 @@ const EnhancedChatScreen = ({ route, navigation }) => {
     );
   };
 
+  // Debug logging for UI rendering
+  console.log('🎨 [UI-DEBUG] EnhancedChatScreen render state:', {
+    loading,
+    astrologer: astrologer ? { id: astrologer.id, name: astrologer.name } : null,
+    sessionActive,
+    connectionStatus,
+    isFreeChat,
+    messagesCount: messages.length
+  });
+
   if (loading) {
+    console.log('🎨 [UI-DEBUG] Showing loading screen');
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color="#6B46C1" />
@@ -611,6 +728,7 @@ const EnhancedChatScreen = ({ route, navigation }) => {
     );
   }
 
+  console.log('🎨 [UI-DEBUG] Rendering main chat interface');
   return (
     <SafeAreaView style={styles.safeArea}>
       <KeyboardAvoidingView 
@@ -622,6 +740,7 @@ const EnhancedChatScreen = ({ route, navigation }) => {
       
       {/* Header */}
       <View style={styles.header}>
+        {console.log('🎨 [UI-DEBUG] Rendering header with astrologer:', astrologer)}
         <TouchableOpacity 
           style={styles.backButton} 
           onPress={() => navigation.goBack()}
@@ -713,6 +832,10 @@ const EnhancedChatScreen = ({ route, navigation }) => {
 };
 
 const styles = StyleSheet.create({
+  safeArea: {
+    flex: 1,
+    backgroundColor: '#6B46C1',
+  },
   container: {
     flex: 1,
     backgroundColor: '#f8f8f8',

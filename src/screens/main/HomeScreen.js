@@ -22,9 +22,10 @@ import { useAuth } from '../../context/AuthContext';
 import { useSocket } from '../../context/SocketContext';
 import { astrologersAPI, walletAPI, versionAPI } from '../../services/api';
 import BookingAcceptedModal from '../../components/BookingAcceptedModal';
+import FreeChatCard from '../../components/FreeChatCard';
 
 // Hardcoded app version - update this when releasing new versions
-const APP_VERSION = '4.0.1';
+const APP_VERSION = '5.0.3';
 
 const HomeScreen = ({ navigation }) => {
   const { user } = useAuth();
@@ -1699,11 +1700,11 @@ const HomeScreen = ({ navigation }) => {
       <View style={styles.headerContent}>
         <View style={styles.userInfo}>
           <Text style={styles.greeting}>
-            Welcome back, {user?.name || 'User'}!
+            Welcome, {user?.name || 'User'}!
           </Text>
-          <Text style={styles.subGreeting}>
+          {/* <Text style={styles.subGreeting}>
             Find your perfect astrologer
-          </Text>
+          </Text> */}
         </View>
         <View style={styles.headerActions}>
           <TouchableOpacity
@@ -2046,7 +2047,8 @@ const HomeScreen = ({ navigation }) => {
   // Prepare data for single FlatList
   const getFlatListData = () => {
     const data = [
-      { type: 'header', id: 'header' }
+      { type: 'header', id: 'header' },
+      { type: 'freeChat', id: 'freeChat' }
     ];
 
     // Add pending bookings section if there are any
@@ -2079,6 +2081,8 @@ const HomeScreen = ({ navigation }) => {
     switch (item.type) {
       case 'header':
         return renderHeader();
+      case 'freeChat':
+        return <FreeChatCard navigation={navigation} />;
       case 'pendingBookingsHeader':
         return (
           <View style={styles.section}>
@@ -2209,19 +2213,22 @@ const styles = StyleSheet.create({
   },
   header: {
     backgroundColor: '#fff',
-    paddingTop: Platform.OS === 'ios' ? 0 : 10,
-    paddingBottom: 20,
+    paddingTop: Platform.OS === 'ios' ? 15 : 15,
+    paddingBottom: 15,
     paddingHorizontal: 20,
     borderBottomWidth: 1,
     borderBottomColor: '#f0f0f0',
+    minHeight: 80,
   },
   headerContent: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    minHeight: 60,
   },
   userInfo: {
     flex: 1,
+    justifyContent: 'center',
   },
   greeting: {
     fontSize: 24,

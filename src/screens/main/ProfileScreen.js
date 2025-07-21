@@ -60,39 +60,39 @@ const ProfileScreen = ({ navigation }) => {
   };
 
   const menuItems = [
-    {
-      icon: 'person-outline',
-      title: 'Edit Profile',
-      onPress: () => Alert.alert('Edit Profile', 'This feature is coming soon!'),
-    },
-    {
-      icon: 'notifications-outline',
-      title: 'Notifications',
-      onPress: null,
-      toggle: true,
-      value: notificationsEnabled,
-      onToggle: toggleNotifications,
-    },
-    {
-      icon: 'help-circle-outline',
-      title: 'Help & Support',
-      onPress: () => Alert.alert('Help & Support', 'This feature is coming soon!'),
-    },
-    {
-      icon: 'document-text-outline',
-      title: 'Terms & Conditions',
-      onPress: () => Alert.alert('Terms & Conditions', 'This feature is coming soon!'),
-    },
-    {
-      icon: 'shield-outline',
-      title: 'Privacy Policy',
-      onPress: () => Alert.alert('Privacy Policy', 'This feature is coming soon!'),
-    },
-    {
-      icon: 'notifications-outline',
-      title: 'Test Notification',
-      onPress: handleTestNotification,
-    },
+    // {
+    //   icon: 'person-outline',
+    //   title: 'Edit Profile',
+    //   onPress: () => Alert.alert('Edit Profile', 'This feature is coming soon!'),
+    // },
+    // {
+    //   icon: 'notifications-outline',
+    //   title: 'Notifications',
+    //   onPress: null,
+    //   toggle: true,
+    //   value: notificationsEnabled,
+    //   onToggle: toggleNotifications,
+    // },
+    // {
+    //   icon: 'help-circle-outline',
+    //   title: 'Help & Support',
+    //   onPress: () => Alert.alert('Help & Support', 'This feature is coming soon!'),
+    // },
+    // {
+    //   icon: 'document-text-outline',
+    //   title: 'Terms & Conditions',
+    //   onPress: () => Alert.alert('Terms & Conditions', 'This feature is coming soon!'),
+    // },
+    // {
+    //   icon: 'shield-outline',
+    //   title: 'Privacy Policy',
+    //   onPress: () => Alert.alert('Privacy Policy', 'This feature is coming soon!'),
+    // },
+    // {
+    //   icon: 'notifications-outline',
+    //   title: 'Test Notification',
+    //   onPress: handleTestNotification,
+    // },
     {
       icon: 'log-out-outline',
       title: 'Logout',
@@ -103,6 +103,15 @@ const ProfileScreen = ({ navigation }) => {
 
   return (
     <SafeAreaView style={styles.safeArea}>
+      <View style={styles.headerBar}>
+        <TouchableOpacity 
+          style={styles.backButton} 
+          onPress={() => navigation.navigate('Home')}
+        >
+          <Ionicons name="arrow-back" size={24} color="#333" />
+        </TouchableOpacity>
+        <Text style={styles.title}>Profile</Text>
+      </View>
       <ScrollView style={styles.container}>
       <View style={styles.header}>
         <View style={styles.profileImageContainer}>
@@ -118,20 +127,7 @@ const ProfileScreen = ({ navigation }) => {
         <Text style={styles.userName}>{user?.name || 'User'}</Text>
         <Text style={styles.userPhone}>{user?.phoneNumber || ''}</Text>
         
-        <View style={styles.statsContainer}>
-          <View style={styles.statItem}>
-            <Text style={styles.statValue}>₹{user?.walletBalance || 0}</Text>
-            <Text style={styles.statLabel}>Wallet</Text>
-          </View>
-          <View style={[styles.statItem, styles.statDivider]}>
-            <Text style={styles.statValue}>0</Text>
-            <Text style={styles.statLabel}>Consultations</Text>
-          </View>
-          <View style={styles.statItem}>
-            <Text style={styles.statValue}>0</Text>
-            <Text style={styles.statLabel}>Reviews</Text>
-          </View>
-        </View>
+        
       </View>
       
       <View style={styles.menuContainer}>
@@ -188,6 +184,27 @@ const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
     backgroundColor: '#f8f8f8',
+  },
+  headerBar: {
+    padding: 16,
+    backgroundColor: '#fff',
+    borderBottomWidth: 1,
+    borderBottomColor: '#eee',
+    flexDirection: 'row',
+    justifyContent: 'flex-start',
+    alignItems: 'center',
+  },
+  backButton: {
+    marginRight: 16,
+    padding: 8,
+    borderRadius: 20,
+    backgroundColor: '#f0f0f0',
+  },
+  title: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#333',
+    flex: 1,
   },
   container: {
     flex: 1,

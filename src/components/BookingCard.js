@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useContext } from 'react';
 import {
   StyleSheet,
   View,
@@ -8,10 +8,16 @@ import {
   Alert,
 } from 'react-native';
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
+import { SocketContext } from '../context/SocketContext';
 
 const BookingCard = ({ consultation, onJoin, onDismiss, onCancel, onReschedule }) => {
   const [timeRemaining, setTimeRemaining] = useState(null);
   const [isExpired, setIsExpired] = useState(false);
+  const [voiceCallStatus, setVoiceCallStatus] = useState(null);
+  const [voiceCallMessage, setVoiceCallMessage] = useState('');
+  const [callTimer, setCallTimer] = useState(null);
+  const [callStartTime, setCallStartTime] = useState(null);
+  const { socket } = useContext(SocketContext);
 
   if (!consultation || !consultation.booking || !consultation.astrologer) {
     return null;
@@ -50,8 +56,84 @@ const BookingCard = ({ consultation, onJoin, onDismiss, onCancel, onReschedule }
     }
   }, [booking.status, booking.expiresAt]);
 
+  // Voice call status updates and call timer
+  useEffect(() => {
+    if (!socket || !isVoiceCall) return;
+
+    const handleCallStatusUpdate = (data) => {
+      if (data.bookingId === booking._id) {
+        setVoiceCallStatus(data.status);
+        setVoiceCallMessage(data.message);
+        
+        // Start call timer when call is connected
+        if (data.status === 'call_connected' || data.status === 'user_connected') {
+          setCallStartTime(new Date());
+        }
+        
+        // Stop call timer when call ends
+        if (data.status === 'call_ended' || data.status === 'failed') {
+          setCallStartTime(null);
+          setCallTimer(null);
+        }
+      }
+    };
+
+    const handleBookingStatusUpdate = (data) => {
+      if (data.bookingId === booking._id && data.callStatus) {
+        setVoiceCallStatus(data.callStatus);
+      }
+    };
+
+    socket.on('call_status_update', handleCallStatusUpdate);
+    socket.on('booking_status_update', handleBookingStatusUpdate);
+
+    return () => {
+      socket.off('call_status_update', handleCallStatusUpdate);
+      socket.off('booking_status_update', handleBookingStatusUpdate);
+    };
+  }, [socket, isVoiceCall, booking._id]);
+
+  // Call timer effect
+  useEffect(() => {
+    if (callStartTime && isVoiceCall) {
+      const updateCallTimer = () => {
+        const now = new Date();
+        const elapsed = Math.floor((now - callStartTime) / 1000);
+        const minutes = Math.floor(elapsed / 60);
+        const seconds = elapsed % 60;
+        setCallTimer(`${minutes}:${seconds.toString().padStart(2, '0')}`);
+      };
+
+      updateCallTimer();
+      const interval = setInterval(updateCallTimer, 1000);
+      return () => clearInterval(interval);
+    } else {
+      setCallTimer(null);
+    }
+  }, [callStartTime, isVoiceCall]);
+
   const getStatusColor = () => {
     if (isExpired) return '#F44336';
+    
+    // Voice call specific status colors
+    if (isVoiceCall && voiceCallStatus) {
+      switch (voiceCallStatus) {
+        case 'validating_balance':
+        case 'connecting_astrologer':
+          return '#FF9800'; // Orange for connecting states
+        case 'call_connected':
+        case 'user_connected':
+        case 'astrologer_connected':
+          return '#4CAF50'; // Green for connected
+        case 'call_ended':
+          return '#9C27B0'; // Purple for completed
+        case 'failed':
+        case 'no_answer':
+          return '#F44336'; // Red for failed
+        default:
+          return '#2196F3'; // Blue for in-progress
+      }
+    }
     
     switch (booking.status) {
       case 'pending':
@@ -78,6 +160,28 @@ const BookingCard = ({ consultation, onJoin, onDismiss, onCancel, onReschedule }
   const getStatusIcon = () => {
     if (isExpired) return 'time-outline';
     
+    // Voice call specific status icons
+    if (isVoiceCall && voiceCallStatus) {
+      switch (voiceCallStatus) {
+        case 'validating_balance':
+          return 'wallet-outline';
+        case 'connecting_astrologer':
+          return 'call-outline';
+        case 'call_connected':
+        case 'user_connected':
+        case 'astrologer_connected':
+          return 'call';
+        case 'call_ended':
+          return 'checkmark-done-outline';
+        case 'failed':
+          return 'close-circle-outline';
+        case 'no_answer':
+          return 'call-outline';
+        default:
+          return 'call-outline';
+      }
+    }
+    
     switch (booking.status) {
       case 'pending':
         return 'hourglass-outline';
@@ -103,6 +207,40 @@ const BookingCard = ({ consultation, onJoin, onDismiss, onCancel, onReschedule }
 
   const getStatusText = () => {
     if (isExpired) return 'Expired';
+    
+    // Voice call specific status text with call timer
+    if (isVoiceCall && voiceCallStatus) {
+      const baseText = (() => {
+        switch (voiceCallStatus) {
+          case 'validating_balance':
+            return 'Validating Balance';
+          case 'connecting_astrologer':
+            return 'Connecting to Astrologer';
+          case 'call_connected':
+            return 'Call Connected';
+          case 'user_connected':
+            return 'User Connected';
+          case 'astrologer_connected':
+            return 'Astrologer Connected';
+          case 'call_ended':
+            return 'Call Ended';
+          case 'failed':
+            return 'Call Failed';
+          case 'no_answer':
+            return 'No Answer';
+          default:
+            return voiceCallStatus.charAt(0).toUpperCase() + voiceCallStatus.slice(1).replace('_', ' ');
+        }
+      })();
+      
+      // Add call timer if call is connected
+      if (callTimer && ['call_connected', 'user_connected', 'astrologer_connected'].includes(voiceCallStatus)) {
+        return `${baseText} (${callTimer})`;
+      }
+      
+      return baseText;
+    }
+    
     return booking.status.charAt(0).toUpperCase() + booking.status.slice(1).replace('_', ' ');
   };
 

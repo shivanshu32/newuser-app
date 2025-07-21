@@ -67,7 +67,7 @@ const BookingScreen = ({ route, navigation }) => {
       
       // Call backend API to fetch user's bookings
       const response = await bookingsAPI.getAll();
-      console.log('📋 Full bookings response:', JSON.stringify(response, null, 2));
+    //  console.log('📋 Full bookings response:', JSON.stringify(response, null, 2));
       
       // The backend returns data in response.data format (not response.data.data)
       if (response.data && Array.isArray(response.data)) {
@@ -234,6 +234,22 @@ const BookingScreen = ({ route, navigation }) => {
         }
       ]
     );
+  };
+
+  const handleViewChatHistory = (booking) => {
+    console.log('📜 [BookingScreen] Viewing chat history for booking:', booking._id);
+    console.log('📜 [BookingScreen] Session ID:', booking.sessionId);
+    
+    if (!booking.sessionId) {
+      Alert.alert('Error', 'Chat history is not available for this consultation.');
+      return;
+    }
+    
+    navigation.navigate('ChatHistory', {
+      sessionId: booking.sessionId,
+      bookingId: booking._id,
+      astrologerName: booking.astrologer?.displayName || booking.astrologer?.name || 'Unknown Astrologer'
+    });
   };
 
   const handleBookingAction = async (booking) => {
@@ -549,6 +565,26 @@ const BookingScreen = ({ route, navigation }) => {
             <Text style={styles.joinButtonText}>Join Session</Text>
             <Ionicons name="arrow-forward" size={16} color="#fff" />
           </TouchableOpacity>
+        ) : item.status === 'completed' && item.type === 'chat' && item.sessionId ? (
+          // Show Chat History button for completed chat consultations
+          <View style={styles.completedChatActions}>
+            <TouchableOpacity 
+              style={styles.chatHistoryButton}
+              onPress={() => handleViewChatHistory(item)}
+            >
+              <Ionicons name="chatbubbles-outline" size={18} color="#4A90E2" />
+              <Text style={styles.chatHistoryButtonText}>View Chat History</Text>
+            </TouchableOpacity>
+            {!item.rated && (
+              <TouchableOpacity 
+                style={styles.rateButton}
+                onPress={() => navigation.navigate('Rating', { bookingId: item._id })}
+              >
+                <Ionicons name="star-outline" size={18} color="#FF9500" />
+                <Text style={styles.rateButtonText}>Rate</Text>
+              </TouchableOpacity>
+            )}
+          </View>
         ) : (
           <View style={styles.actionContainer}>
             <Text style={styles.actionText}>
@@ -586,6 +622,12 @@ const BookingScreen = ({ route, navigation }) => {
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
+        <TouchableOpacity 
+          style={styles.backButton} 
+          onPress={() => navigation.navigate('Home')}
+        >
+          <Ionicons name="arrow-back" size={24} color="#333" />
+        </TouchableOpacity>
         <Text style={styles.title}>My Bookings</Text>
       </View>
 
@@ -645,13 +687,20 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: '#eee',
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    justifyContent: 'flex-start',
     alignItems: 'center',
+  },
+  backButton: {
+    marginRight: 16,
+    padding: 8,
+    borderRadius: 20,
+    backgroundColor: '#f0f0f0',
   },
   title: {
     fontSize: 20,
     fontWeight: 'bold',
     color: '#333',
+    flex: 1,
   },
   tabContainer: {
     flexDirection: 'row',
@@ -803,6 +852,51 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#fff',
     fontWeight: 'bold',
+  },
+  completedChatActions: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: '#eee',
+    gap: 8,
+  },
+  chatHistoryButton: {
+    flex: 1,
+    backgroundColor: '#f0f8ff',
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#4A90E2',
+  },
+  chatHistoryButtonText: {
+    fontSize: 14,
+    color: '#4A90E2',
+    fontWeight: '600',
+    marginLeft: 6,
+  },
+  rateButton: {
+    flex: 1,
+    backgroundColor: '#fff8f0',
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#FF9500',
+  },
+  rateButtonText: {
+    fontSize: 14,
+    color: '#FF9500',
+    fontWeight: '600',
+    marginLeft: 6,
   },
   emptyContainer: {
     flex: 1,

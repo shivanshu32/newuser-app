@@ -181,9 +181,23 @@ export const sessionsAPI = {
   getActive: () => API.get('/sessions/active'),
 };
 
+// Free Chat API
+export const freeChatAPI = {
+  checkEligibility: () => API.get('/free-chat/eligibility'),
+  requestFreeChat: () => API.post('/free-chat/request'),
+  getFreeChatDetails: (freeChatId) => API.get(`/free-chat/${freeChatId}`),
+  cancelFreeChat: (freeChatId) => API.delete(`/free-chat/${freeChatId}/cancel`),
+  getHistory: () => API.get('/free-chat/history'),
+};
+
 // Ratings API
 export const ratingsAPI = {
   submit: (bookingId, rating, comment) => API.post(`/ratings/submit`, { bookingId, rating, comment }),
+};
+
+// Chat History API
+export const chatHistoryAPI = {
+  getChatHistory: (sessionId) => API.get(`/chat-history/${sessionId}`),
 };
 
 // Version API

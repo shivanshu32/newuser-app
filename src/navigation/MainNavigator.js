@@ -22,6 +22,7 @@ import EnhancedChatScreen from '../screens/session/EnhancedChatScreen';
 import PreChatForm from '../screens/session/PreChatForm';
 import TransactionHistoryScreen from '../screens/main/TransactionHistoryScreen';
 import TransactionDetailScreen from '../screens/main/TransactionDetailScreen';
+import ChatHistoryScreen from '../screens/ChatHistoryScreen';
 
 import RatingScreen from '../screens/session/RatingScreen';
 
@@ -76,22 +77,22 @@ const TabNavigator = () => {
       <Tab.Screen 
         name="Home" 
         component={HomeScreen} 
-        options={{ title: 'Home' }}
+        options={{ headerShown: false }}
       />
       <Tab.Screen 
         name="Bookings" 
         component={BookingScreen} 
-        options={{ title: 'Bookings' }}
+        options={{ headerShown: false }}
       />
       <Tab.Screen 
         name="Wallet" 
         component={WalletScreen} 
-        options={{ title: 'Wallet' }}
+        options={{ headerShown: false }}
       />
       <Tab.Screen 
         name="Profile" 
         component={ProfileScreen} 
-        options={{ title: 'Profile' }}
+        options={{ headerShown: false }}
       />
     </Tab.Navigator>
   );
@@ -334,6 +335,11 @@ const MainNavigator = () => {
           name="TransactionDetail" 
           component={TransactionDetailScreen} 
           options={{ headerShown: true, title: 'Transaction Details' }}
+        />
+        <Stack.Screen 
+          name="ChatHistory" 
+          component={ChatHistoryScreen} 
+          options={{ headerShown: false }}
         />
       </Stack.Navigator>
       <BookingPopupWrapper />

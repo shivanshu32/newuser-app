@@ -39,16 +39,126 @@ class ChatConnectionManager {
   }
 
   /**
-   * Initialize connection with booking details
+   * Handle app state changes to maintain timer continuity
    */
-  async initialize(bookingId, userId, astrologerId) {
-    console.log('[ChatConnectionManager] Initializing with:', { bookingId, userId, astrologerId });
+  handleAppStateChange(nextAppState) {
+    console.log('[ChatConnectionManager] App state changed:', this.appState, '->', nextAppState);
     
-    this.currentBookingId = bookingId;
-    this.currentUserId = userId;
-    this.currentAstrologerId = astrologerId;
+    const previousAppState = this.appState;
+    this.appState = nextAppState;
     
-    await this.connect();
+    if (previousAppState === 'background' && nextAppState === 'active') {
+      console.log('[ChatConnectionManager] App returned to foreground - checking session state');
+      this.handleAppForeground();
+    } else if (nextAppState === 'background') {
+      console.log('[ChatConnectionManager] App went to background - preserving session state');
+      this.handleAppBackground();
+    }
+  }
+
+  /**
+   * Handle app coming to foreground
+   */
+  async handleAppForeground() {
+    try {
+      console.log('[ChatConnectionManager] Handling app foreground transition');
+      
+      // Check if we have an active session
+      if (this.currentBookingId && this.isConnected) {
+        console.log('[ChatConnectionManager] Active session detected, requesting timer sync');
+        
+        // Request current session state from backend
+        if (this.socket && this.socket.connected) {
+          this.socket.emit('request_session_state', {
+            bookingId: this.currentBookingId,
+            sessionId: this.sessionId,
+            isFreeChat: this.isFreeChat,
+            freeChatId: this.isFreeChat ? this.currentBookingId : null
+          });
+        }
+        
+        // Rejoin room if needed
+        await this.rejoinRoomIfNeeded();
+      }
+    } catch (error) {
+      console.error('[ChatConnectionManager] Error handling app foreground:', error);
+    }
+  }
+
+  /**
+   * Handle app going to background
+   */
+  handleAppBackground() {
+    console.log('[ChatConnectionManager] Handling app background transition');
+    
+    // Store current session state
+    if (this.currentBookingId) {
+      this.preservedState = {
+        bookingId: this.currentBookingId,
+        sessionId: this.sessionId,
+        astrologerId: this.currentAstrologerId,
+        userId: this.currentUserId,
+        isFreeChat: this.isFreeChat,
+        timestamp: Date.now()
+      };
+      console.log('[ChatConnectionManager] Session state preserved for background');
+    }
+  }
+
+  /**
+   * Rejoin room if connection was lost
+   */
+  async rejoinRoomIfNeeded() {
+    try {
+      if (!this.socket || !this.socket.connected) {
+        console.log('[ChatConnectionManager] Socket not connected, cannot rejoin room');
+        return;
+      }
+      
+      console.log('[ChatConnectionManager] Checking if room rejoin is needed');
+      
+      if (this.isFreeChat) {
+        console.log('[ChatConnectionManager] Rejoining free chat room:', this.currentBookingId);
+        this.socket.emit('join_free_chat_room', {
+          freeChatId: this.currentBookingId,
+          sessionId: this.sessionId,
+          userId: this.currentUserId,
+          userType: 'user'
+        });
+      } else if (this.currentBookingId) {
+        console.log('[ChatConnectionManager] Rejoining consultation room:', this.currentBookingId);
+        this.socket.emit('join_consultation_room', {
+          bookingId: this.currentBookingId,
+          userId: this.currentUserId,
+          astrologerId: this.currentAstrologerId
+        });
+      }
+    } catch (error) {
+      console.error('[ChatConnectionManager] Error rejoining room:', error);
+    }
+  }
+
+  /**
+   * Initialize connection manager
+   */
+  async initialize(astrologerId, options = {}) {
+    try {
+      console.log('[ChatConnectionManager] Initializing with:', {
+        astrologerId,
+        bookingId: this.currentBookingId,
+        userId: this.currentUserId,
+        isFreeChat: options.isFreeChat
+      });
+      
+      // Store free chat flag for room joining logic
+      this.isFreeChat = options.isFreeChat || false;
+      this.sessionId = options.sessionId || this.currentBookingId;
+      this.currentAstrologerId = astrologerId;
+      
+      await this.connect();
+    } catch (error) {
+      console.error('[ChatConnectionManager] Initialization failed:', error);
+    }
   }
 
   /**
@@ -112,17 +222,30 @@ class ChatConnectionManager {
     this.socket.on('connect_error', this.handleConnectError);
     this.socket.on('reconnect', this.handleReconnect);
 
-    // Chat-specific events - Optimized for instant delivery
+    // Chat-specific events - Unified message handler for both regular and free chat
     this.socket.on('receive_message', (message) => {
       const receiveTime = Date.now();
       console.log('🔴 [USER-APP] Received message event at:', receiveTime, message);
       
-      // Fast path: Pre-compute expected roomId to avoid repeated string concatenation
-      const expectedRoomId = `consultation:${this.currentBookingId}`;
+      // Room validation for both regular chat and free chat
+      let messageAccepted = false;
       
-      // Quick roomId validation
-      if (message.roomId !== expectedRoomId && message.roomId !== this.currentBookingId) {
-        console.log('🔴 [USER-APP] Message rejected - roomId mismatch');
+      if (this.isFreeChat) {
+        // For free chat, check free chat room format
+        const expectedFreeChatRoom = `free_chat:${this.currentBookingId}`;
+        if (message.roomId === expectedFreeChatRoom || message.roomId === this.currentBookingId) {
+          messageAccepted = true;
+        }
+      } else {
+        // For regular booking, check consultation room format
+        const expectedBookingRoom = `consultation:${this.currentBookingId}`;
+        if (message.roomId === expectedBookingRoom || message.roomId === this.currentBookingId) {
+          messageAccepted = true;
+        }
+      }
+      
+      if (!messageAccepted) {
+        console.log('🔴 [USER-APP] Message rejected - roomId mismatch. Expected:', this.isFreeChat ? `free_chat:${this.currentBookingId}` : `consultation:${this.currentBookingId}`, 'Got:', message.roomId);
         return;
       }
       
@@ -130,13 +253,15 @@ class ChatConnectionManager {
       
       // Streamlined message normalization - avoid object spread for performance
       const normalizedMessage = {
-        id: message.id || message.messageId || `msg_${receiveTime}`,
+        id: message.messageId || message.id || `msg_${receiveTime}`,
         text: message.content || message.text || message.message,
         content: message.content || message.text || message.message,
-        senderId: message.senderId || message.sender,
-        senderName: message.senderName || 'Astrologer',
+        sender: message.senderRole === 'user' ? 'user' : 'astrologer',
+        senderId: message.sender || message.senderId,
+        senderName: message.senderName || (message.senderRole === 'user' ? 'You' : 'Astrologer'),
+        senderRole: message.senderRole,
         timestamp: message.timestamp || new Date().toISOString(),
-        status: 'received',
+        status: 'delivered',
         roomId: message.roomId,
         bookingId: message.bookingId
       };
@@ -190,6 +315,30 @@ class ChatConnectionManager {
         this.notifyStatusUpdate({ type: 'astrologer_joined', data });
       }
     });
+
+    // Free chat room joined confirmation
+    this.socket.on('free_chat_room_joined', (data) => {
+      console.log('🏠 [USER-APP] [FREE_CHAT] Room joined confirmation:', data);
+      console.log('🏠 [USER-APP] [FREE_CHAT] Current booking ID:', this.currentBookingId);
+      console.log('🏠 [USER-APP] [FREE_CHAT] Event freeChatId:', data.freeChatId);
+      
+      if (data.freeChatId === this.currentBookingId) {
+        console.log('🏠 [USER-APP] [FREE_CHAT] ✅ Successfully joined free chat room');
+        this.roomJoined = true;
+        this.notifyConnectionStatus('connected', 'Joined free chat room successfully');
+        this.notifyStatusUpdate({ type: 'room_joined', data });
+      } else {
+        console.log('🏠 [USER-APP] [FREE_CHAT] ❌ Room joined for different free chat - ignoring');
+      }
+    });
+    
+    // Free chat room join error
+    this.socket.on('room_join_error', (data) => {
+      console.log('❌ [USER-APP] [FREE_CHAT] Room join error:', data);
+      this.notifyConnectionStatus('error', data.message || 'Failed to join free chat room');
+    });
+
+    // NOTE: receive_message handler is now unified above in setupEventListeners
 
     this.socket.on('session_started', (data) => {
       console.log('🔴 [USER-APP] ===== SESSION_STARTED EVENT RECEIVED =====');
@@ -255,13 +404,75 @@ class ChatConnectionManager {
       }
     });
 
-    // Legacy session timer event (keeping for backward compatibility)
+    // Session timer event (main timer event from backend)
     this.socket.on('session_timer', (data) => {
-      console.log('🔴 [USER-APP] Legacy session timer event received:', data);
-      // Backend sends durationSeconds, not seconds
-      const timerValue = data.durationSeconds || data.seconds || 0;
-      console.log('🔴 [USER-APP] Timer value extracted:', timerValue);
-      this.notifyStatusUpdate({ type: 'timer', durationSeconds: timerValue, seconds: timerValue });
+      console.log('⏰ [USER-APP] Session timer event received:', data);
+      console.log('⏰ [USER-APP] Current booking ID:', this.currentBookingId);
+      console.log('⏰ [USER-APP] Event booking/freeChatId:', data.bookingId || data.freeChatId);
+      
+      // Check if this timer event is for the current session
+      const eventId = data.bookingId || data.freeChatId;
+      if (eventId === this.currentBookingId || eventId == this.currentBookingId) {
+        console.log('⏰ [USER-APP] ✅ Timer update for current session');
+        
+        // Extract timer values from backend data
+        const timerValue = data.durationSeconds || data.seconds || 0;
+        const timeRemaining = data.timeRemaining || 0;
+        const currentAmount = data.currentAmount || 0;
+        
+        console.log('⏰ [USER-APP] Timer values:', {
+          durationSeconds: timerValue,
+          timeRemaining,
+          currentAmount
+        });
+        
+        this.notifyStatusUpdate({ 
+          type: 'timer', 
+          durationSeconds: timerValue,
+          seconds: timerValue,
+          timeRemaining,
+          currentAmount,
+          sessionId: data.sessionId,
+          freeChatId: data.freeChatId,
+          isFreeChat: data.freeChatId ? true : false
+        });
+      } else {
+        console.log('⏰ [USER-APP] ❌ Timer update for different session - ignoring');
+      }
+    });
+
+    // Session state response handler for app state synchronization
+    this.socket.on('session_state_response', (data) => {
+      console.log('🔄 [USER-APP] Session state response received:', data);
+      
+      if (data.success && data.sessionState) {
+        const sessionState = data.sessionState;
+        console.log('🔄 [USER-APP] Synchronizing session state:', sessionState);
+        
+        // Update timer if session is active
+        if (sessionState.isActive && sessionState.timer) {
+          console.log('🔄 [USER-APP] Restoring timer state:', sessionState.timer);
+          this.notifyStatusUpdate({
+            type: 'timer',
+            durationSeconds: sessionState.timer.duration,
+            seconds: sessionState.timer.duration,
+            formattedTime: sessionState.timer.formattedTime,
+            currentAmount: sessionState.timer.currentAmount,
+            sessionId: sessionState.sessionId
+          });
+        }
+        
+        // Update session status
+        if (sessionState.isActive) {
+          this.notifyStatusUpdate({
+            type: 'session_started',
+            data: sessionState,
+            sessionId: sessionState.sessionId
+          });
+        }
+      } else {
+        console.log('🔄 [USER-APP] No active session state found');
+      }
     });
 
     this.socket.on('session_ended', (data) => {
@@ -354,6 +565,7 @@ class ChatConnectionManager {
   handleConnect() {
     console.log('🔴 [USER-APP] ChatConnectionManager: Socket connected');
     this.isConnected = true;
+    this.isConnecting = false; // Critical fix: Reset isConnecting flag
     this.reconnectAttempts = 0;
     this.lastHeartbeat = Date.now();
     this.roomJoined = false; // Reset room joined status
@@ -464,31 +676,50 @@ class ChatConnectionManager {
       console.log('[ChatConnectionManager] DEBUG: isConnected:', this.isConnected);
       console.log('[ChatConnectionManager] DEBUG: socket exists:', !!this.socket);
       console.log('[ChatConnectionManager] DEBUG: currentBookingId:', this.currentBookingId);
+      console.log('[ChatConnectionManager] DEBUG: isFreeChat:', this.isFreeChat);
+      console.log('[ChatConnectionManager] DEBUG: sessionId:', this.sessionId);
       
       if (this.isConnected && this.socket && this.currentBookingId) {
-        console.log('[ChatConnectionManager] Joining consultation room:', this.currentBookingId);
-        
-        // Construct roomId in the format expected by backend
-        const roomId = `consultation:${this.currentBookingId}`;
-        console.log('[ChatConnectionManager] DEBUG: Constructed roomId:', roomId);
-        
-        // Use the same join_consultation_room event as video/voice consultations
-        const joinData = {
-          bookingId: this.currentBookingId,
-          roomId: roomId,
-          sessionId: this.currentBookingId, // Use bookingId as sessionId for chat
-          userId: this.currentUserId,
-          userType: 'user',
-          consultationType: 'chat'
-        };
-        
-        console.log('[ChatConnectionManager] DEBUG: About to emit join_consultation_room with data:', joinData);
-        this.socket.emit('join_consultation_room', joinData);
-        console.log('[ChatConnectionManager] DEBUG: Successfully emitted join_consultation_room');
-        
-        console.log('[ChatConnectionManager] DEBUG: About to call notifyConnectionStatus');
-        this.notifyConnectionStatus('joining', 'Joining consultation room...');
-        console.log('[ChatConnectionManager] DEBUG: Successfully called notifyConnectionStatus');
+        if (this.isFreeChat) {
+          // For free chat, join using free chat specific room logic
+          console.log('[ChatConnectionManager] Joining free chat room:', this.currentBookingId);
+          
+          const joinData = {
+            freeChatId: this.currentBookingId,
+            sessionId: this.sessionId,
+            userId: this.currentUserId,
+            userType: 'user'
+          };
+          
+          console.log('[ChatConnectionManager] DEBUG: About to emit join_free_chat_room with data:', joinData);
+          this.socket.emit('join_free_chat_room', joinData);
+          console.log('[ChatConnectionManager] DEBUG: Successfully emitted join_free_chat_room');
+          
+          this.notifyConnectionStatus('joining', 'Joining free chat room...');
+        } else {
+          // For regular bookings, use consultation room logic
+          console.log('[ChatConnectionManager] Joining consultation room:', this.currentBookingId);
+          
+          // Construct roomId in the format expected by backend
+          const roomId = `consultation:${this.currentBookingId}`;
+          console.log('[ChatConnectionManager] DEBUG: Constructed roomId:', roomId);
+          
+          // Use the same join_consultation_room event as video/voice consultations
+          const joinData = {
+            bookingId: this.currentBookingId,
+            roomId: roomId,
+            sessionId: this.currentBookingId, // Use bookingId as sessionId for chat
+            userId: this.currentUserId,
+            userType: 'user',
+            consultationType: 'chat'
+          };
+          
+          console.log('[ChatConnectionManager] DEBUG: About to emit join_consultation_room with data:', joinData);
+          this.socket.emit('join_consultation_room', joinData);
+          console.log('[ChatConnectionManager] DEBUG: Successfully emitted join_consultation_room');
+          
+          this.notifyConnectionStatus('joining', 'Joining consultation room...');
+        }
       } else {
         console.warn('[ChatConnectionManager] Cannot join room - not connected or missing booking ID');
         console.warn('[ChatConnectionManager] DEBUG: isConnected:', this.isConnected, 'socket:', !!this.socket, 'bookingId:', this.currentBookingId);
@@ -768,19 +999,317 @@ class ChatConnectionManager {
   }
 
   /**
-   * End session
-   * @param {string} sessionId - Session ID
+   * End the current session
    */
   endSession(sessionId) {
     if (this.isConnected && this.socket) {
-      console.log('🔴 [USER-APP] Ending session for sessionId:', sessionId);
-      this.socket.emit('end_session', {
-        bookingId: this.currentBookingId,
-        sessionId
-      });
+      console.log(' [USER-APP] Ending session for sessionId:', sessionId);
+      console.log(' [USER-APP] Is free chat session:', this.isFreeChat);
+      
+      if (this.isFreeChat) {
+        // For free chat sessions, use end_free_chat event with sessionId
+        console.log(' [USER-APP] Ending free chat session with sessionId:', sessionId);
+        this.socket.emit('end_free_chat', {
+          sessionId: sessionId || this.sessionId
+        });
+      } else {
+        // For regular booking sessions, use end_session event with bookingId
+        console.log(' [USER-APP] Ending regular booking session with bookingId:', this.currentBookingId);
+        this.socket.emit('end_session', {
+          bookingId: this.currentBookingId,
+          sessionId
+        });
+      }
     } else {
-      console.warn('🔴 [USER-APP] Cannot end session - not connected');
+      console.warn(' [USER-APP] Cannot end session - not connected');
     }
+  }
+
+  /**
+   * Handle app state changes (background/foreground)
+   */
+  handleAppStateChange(nextAppState) {
+    console.log('[ChatConnectionManager] App state changed to:', nextAppState);
+    
+    if (nextAppState === 'active') {
+      // App came to foreground - check connection and reconnect if needed
+      console.log('[ChatConnectionManager] App became active - checking connection');
+      this.handleAppBecameActive();
+    } else if (nextAppState === 'background' || nextAppState === 'inactive') {
+      // App went to background - prepare for potential disconnection
+      console.log('[ChatConnectionManager] App went to background/inactive');
+      this.handleAppWentBackground();
+    }
+  }
+
+  /**
+   * Handle app becoming active (foreground)
+   */
+  async handleAppBecameActive() {
+    try {
+      console.log('[ChatConnectionManager] Handling app became active');
+      
+      // Check if socket is still connected
+      if (!this.socket || !this.socket.connected) {
+        console.log('[ChatConnectionManager] Socket disconnected - attempting reconnection');
+        await this.reconnectAndRestore();
+      } else {
+        console.log('[ChatConnectionManager] Socket still connected - verifying session state');
+        await this.verifySessionState();
+      }
+    } catch (error) {
+      console.error('[ChatConnectionManager] Error handling app became active:', error);
+    }
+  }
+
+  /**
+   * Handle app going to background
+   */
+  handleAppWentBackground() {
+    console.log('[ChatConnectionManager] App went to background - preserving session state');
+    // Store current session state for recovery
+    this.preserveSessionState();
+  }
+
+  /**
+   * Reconnect and restore session state
+   */
+  async reconnectAndRestore() {
+    try {
+      console.log('[ChatConnectionManager] Starting reconnection and restoration process');
+      
+      // Reset connection state
+      this.isConnected = false;
+      this.roomJoined = false;
+      
+      // Notify UI of reconnection attempt
+      this.notifyConnectionStatus('reconnecting', 'Reconnecting to chat...');
+      
+      // Reconnect socket
+      await this.connect();
+      
+      // Wait a moment for connection to stabilize
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      
+      // Restore session state
+      await this.restoreSessionState();
+      
+    } catch (error) {
+      console.error('[ChatConnectionManager] Reconnection failed:', error);
+      this.notifyConnectionStatus('error', 'Failed to reconnect to chat');
+    }
+  }
+
+  /**
+   * Verify current session state after reconnection
+   */
+  async verifySessionState() {
+    try {
+      console.log('[ChatConnectionManager] Verifying session state');
+      
+      if (!this.roomJoined && this.currentBookingId) {
+        console.log('[ChatConnectionManager] Room not joined - rejoining');
+        await this.rejoinChatRoom();
+      }
+      
+      // Request session status update from backend
+      if (this.socket && this.socket.connected) {
+        console.log('[ChatConnectionManager] Requesting session status update');
+        this.socket.emit('get_session_status', {
+          bookingId: this.currentBookingId,
+          sessionId: this.sessionId,
+          isFreeChat: this.isFreeChat
+        });
+      }
+      
+    } catch (error) {
+      console.error('[ChatConnectionManager] Error verifying session state:', error);
+    }
+  }
+
+  /**
+   * Preserve session state before app goes to background
+   */
+  preserveSessionState() {
+    const sessionState = {
+      currentBookingId: this.currentBookingId,
+      currentUserId: this.currentUserId,
+      currentAstrologerId: this.currentAstrologerId,
+      sessionId: this.sessionId,
+      isFreeChat: this.isFreeChat,
+      roomJoined: this.roomJoined,
+      isConnected: this.isConnected,
+      timestamp: Date.now()
+    };
+    
+    console.log('[ChatConnectionManager] Preserving session state:', sessionState);
+    // Store in memory for quick access
+    this.preservedSessionState = sessionState;
+  }
+
+  /**
+   * Restore session state after reconnection
+   */
+  async restoreSessionState() {
+    try {
+      console.log('[ChatConnectionManager] Restoring session state');
+      
+      if (!this.preservedSessionState) {
+        console.log('[ChatConnectionManager] No preserved session state found');
+        return;
+      }
+      
+      const state = this.preservedSessionState;
+      console.log('[ChatConnectionManager] Restoring from state:', state);
+      
+      // Restore basic properties
+      this.currentBookingId = state.currentBookingId;
+      this.currentUserId = state.currentUserId;
+      this.currentAstrologerId = state.currentAstrologerId;
+      this.sessionId = state.sessionId;
+      this.isFreeChat = state.isFreeChat;
+      
+      // Rejoin chat room
+      if (this.currentBookingId) {
+        await this.rejoinChatRoom();
+      }
+      
+      console.log('[ChatConnectionManager] Session state restored successfully');
+      
+    } catch (error) {
+      console.error('[ChatConnectionManager] Error restoring session state:', error);
+    }
+  }
+
+  /**
+   * Rejoin chat room after reconnection
+   */
+  async rejoinChatRoom() {
+    try {
+      console.log('[ChatConnectionManager] Rejoining chat room');
+      
+      if (!this.socket || !this.socket.connected) {
+        throw new Error('Socket not connected');
+      }
+      
+      if (this.isFreeChat) {
+        console.log('[ChatConnectionManager] Rejoining free chat room:', this.currentBookingId);
+        this.socket.emit('join_free_chat_room', {
+          freeChatId: this.currentBookingId,
+          userId: this.currentUserId
+        });
+      } else {
+        console.log('[ChatConnectionManager] Rejoining consultation room:', this.currentBookingId);
+        this.socket.emit('join_consultation_room', {
+          bookingId: this.currentBookingId,
+          userId: this.currentUserId,
+          astrologerId: this.currentAstrologerId
+        });
+      }
+      
+      // Wait for room join confirmation
+      await new Promise((resolve, reject) => {
+        const timeout = setTimeout(() => {
+          reject(new Error('Room join timeout'));
+        }, 10000); // 10 second timeout
+        
+        const handleRoomJoined = () => {
+          clearTimeout(timeout);
+          resolve();
+        };
+        
+        if (this.isFreeChat) {
+          this.socket.once('free_chat_room_joined', handleRoomJoined);
+        } else {
+          this.socket.once('consultation_room_joined', handleRoomJoined);
+        }
+      });
+      
+      console.log('[ChatConnectionManager] Successfully rejoined chat room');
+      
+    } catch (error) {
+      console.error('[ChatConnectionManager] Error rejoining chat room:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Handle socket connect event
+   */
+  handleConnect() {
+    console.log('[ChatConnectionManager] Socket connected');
+    this.isConnected = true;
+    this.isConnecting = false;
+    this.reconnectAttempts = 0;
+    this.notifyConnectionStatus('connected', 'Connected to chat server');
+    
+    // Attempt to join room after successful connection
+    if (this.currentBookingId) {
+      console.log('[ChatConnectionManager] Attempting to join room after connection');
+      setTimeout(() => {
+        this.joinRoom();
+      }, 500); // Small delay to ensure socket is fully established
+    }
+  }
+
+  /**
+   * Handle socket disconnect event
+   */
+  handleDisconnect(reason) {
+    console.log('[ChatConnectionManager] Socket disconnected:', reason);
+    this.isConnected = false;
+    this.roomJoined = false;
+    this.notifyConnectionStatus('disconnected', `Disconnected: ${reason}`);
+    
+    // Attempt reconnection if not a manual disconnect
+    if (reason !== 'io client disconnect') {
+      this.scheduleReconnect();
+    }
+  }
+
+  /**
+   * Handle socket connect error
+   */
+  handleConnectError(error) {
+    console.error('[ChatConnectionManager] Connection error:', error);
+    this.isConnecting = false;
+    this.notifyConnectionStatus('error', `Connection error: ${error.message}`);
+    this.scheduleReconnect();
+  }
+
+  /**
+   * Handle socket reconnect event
+   */
+  handleReconnect(attemptNumber) {
+    console.log('[ChatConnectionManager] Socket reconnected after', attemptNumber, 'attempts');
+    this.isConnected = true;
+    this.isConnecting = false;
+    this.reconnectAttempts = 0;
+    
+    // Restore session state after reconnection
+    this.restoreSessionState();
+  }
+
+  /**
+   * Schedule reconnection attempt
+   */
+  scheduleReconnect() {
+    if (this.reconnectAttempts >= this.maxReconnectAttempts) {
+      console.log('[ChatConnectionManager] Max reconnection attempts reached');
+      this.notifyConnectionStatus('failed', 'Connection failed after multiple attempts');
+      return;
+    }
+    
+    this.reconnectAttempts++;
+    const delay = Math.min(this.reconnectDelay * Math.pow(2, this.reconnectAttempts - 1), this.maxReconnectDelay);
+    
+    console.log(`[ChatConnectionManager] Scheduling reconnection attempt ${this.reconnectAttempts} in ${delay}ms`);
+    
+    setTimeout(() => {
+      if (!this.isConnected && !this.isConnecting) {
+        this.connect();
+      }
+    }, delay);
   }
 
   /**
@@ -794,6 +1323,53 @@ class ChatConnectionManager {
       queuedMessages: this.messageQueue.length,
       appState: this.appState
     };
+  }
+  
+  /**
+   * End the current session
+   * @param {string} sessionId - Session ID or booking ID to end
+   */
+  endSession(sessionId) {
+    console.log('[ChatConnectionManager] Ending session:', sessionId);
+    
+    if (!this.isConnected || !this.socket) {
+      console.warn('[ChatConnectionManager] Cannot end session - not connected');
+      return;
+    }
+    
+    try {
+      // For free chat sessions
+      if (this.isFreeChat) {
+        console.log('[ChatConnectionManager] Ending free chat session:', sessionId);
+        this.socket.emit('end_free_chat', {
+          freeChatId: sessionId || this.currentBookingId,
+          userId: this.currentUserId,
+          userType: 'user'
+        });
+      } 
+      // For regular consultation sessions
+      else {
+        console.log('[ChatConnectionManager] Ending consultation session:', sessionId);
+        this.socket.emit('end_consultation', {
+          bookingId: sessionId || this.currentBookingId,
+          sessionId: sessionId || this.currentBookingId,
+          userId: this.currentUserId,
+          userType: 'user'
+        });
+      }
+      
+      // Notify status update for session end
+      this.notifyStatusUpdate({
+        type: 'session_end',
+        sessionId: sessionId || this.currentBookingId,
+        timestamp: new Date().toISOString()
+      });
+      
+      // Clean up resources
+      this.roomJoined = false;
+    } catch (error) {
+      console.error('[ChatConnectionManager] Error ending session:', error);
+    }
   }
 }
 

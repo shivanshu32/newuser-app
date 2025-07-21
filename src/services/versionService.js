@@ -216,12 +216,12 @@ class VersionService {
   getDefaultPlayStoreUrl() {
     if (Platform.OS === 'android') {
       // Replace with your actual package name
-      return 'https://play.google.com/store/apps/details?id=com.jyotishcall';
+      return 'https://play.google.com/store/apps/details?id=com.jyotishtalk';
     } else if (Platform.OS === 'ios') {
       // Replace with your actual App Store ID
       return 'https://apps.apple.com/app/id1234567890';
     }
-    return 'https://play.google.com/store/apps/details?id=com.jyotishcall';
+    return 'https://play.google.com/store/apps/details?id=com.jyotishtalk';
   }
 
   /**
