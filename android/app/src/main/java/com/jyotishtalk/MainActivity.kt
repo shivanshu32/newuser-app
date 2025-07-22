@@ -3,6 +3,7 @@ package com.jyotishtalk
 import android.os.Build
 import android.os.Bundle
 import android.webkit.WebView
+import android.util.Log
 
 import com.facebook.react.ReactActivity
 import com.facebook.react.ReactActivityDelegate
@@ -35,16 +36,58 @@ class MainActivity : ReactActivity() {
   /**
    * Returns the instance of the [ReactActivityDelegate]. We use [DefaultReactActivityDelegate]
    * which allows you to enable New Architecture with a single boolean flags [fabricEnabled]
+   * Enhanced with null-safety measures to prevent crashes during lifecycle transitions
    */
   override fun createReactActivityDelegate(): ReactActivityDelegate {
-    return ReactActivityDelegateWrapper(
-          this,
-          BuildConfig.IS_NEW_ARCHITECTURE_ENABLED,
-          object : DefaultReactActivityDelegate(
-              this,
-              mainComponentName,
-              fabricEnabled
-          ){})
+    return try {
+      ReactActivityDelegateWrapper(
+            this,
+            BuildConfig.IS_NEW_ARCHITECTURE_ENABLED,
+            object : DefaultReactActivityDelegate(
+                this,
+                mainComponentName,
+                fabricEnabled
+            ){
+              // Override onWindowFocusChanged in delegate to add additional safety
+              override fun onWindowFocusChanged(hasFocus: Boolean) {
+                try {
+                  super.onWindowFocusChanged(hasFocus)
+                } catch (e: NullPointerException) {
+                  Log.w("ReactActivityDelegate", "ReactDelegate null in delegate onWindowFocusChanged, ignoring", e)
+                } catch (e: Exception) {
+                  Log.e("ReactActivityDelegate", "Error in delegate onWindowFocusChanged", e)
+                }
+              }
+            })
+    } catch (e: Exception) {
+      Log.e("MainActivity", "Error creating ReactActivityDelegate, falling back to default", e)
+      // Fallback to a basic delegate if wrapper creation fails
+      object : DefaultReactActivityDelegate(this, mainComponentName, fabricEnabled) {
+        override fun onWindowFocusChanged(hasFocus: Boolean) {
+          try {
+            super.onWindowFocusChanged(hasFocus)
+          } catch (e: Exception) {
+            Log.w("MainActivity", "Error in fallback delegate onWindowFocusChanged", e)
+          }
+        }
+      }
+    }
+  }
+
+  /**
+   * Override onWindowFocusChanged to prevent ReactDelegate NullPointerException crashes
+   * This is a known issue with React Native/Expo apps during activity lifecycle transitions
+   */
+  override fun onWindowFocusChanged(hasFocus: Boolean) {
+    try {
+      super.onWindowFocusChanged(hasFocus)
+    } catch (e: NullPointerException) {
+      // Log the error but don't crash the app
+      Log.w("MainActivity", "ReactDelegate null during onWindowFocusChanged, ignoring", e)
+    } catch (e: Exception) {
+      // Catch any other unexpected exceptions during window focus changes
+      Log.e("MainActivity", "Unexpected error in onWindowFocusChanged", e)
+    }
   }
 
   /**
