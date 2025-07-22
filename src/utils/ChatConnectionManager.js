@@ -1350,7 +1350,7 @@ class ChatConnectionManager {
       // For regular consultation sessions
       else {
         console.log('[ChatConnectionManager] Ending consultation session:', sessionId);
-        this.socket.emit('end_consultation', {
+        this.socket.emit('end_session', {
           bookingId: sessionId || this.currentBookingId,
           sessionId: sessionId || this.currentBookingId,
           userId: this.currentUserId,

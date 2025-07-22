@@ -485,10 +485,12 @@ const ChatScreen = ({ route, navigation }) => {
                 return;
               }
               
-              // Emit end_session event to socket
+              // Emit end_session event to socket (but don't disconnect immediately)
+              // The backend will emit consultation_ended event to notify both parties
               if (socketRef.current) {
                 socketRef.current.emit('end_session', { bookingId, sessionId });
-                socketRef.current.disconnect();
+                // Don't disconnect immediately - let the backend notify both parties first
+                // The socket will be cleaned up when the component unmounts
               }
               
               // Clear timer

@@ -586,8 +586,9 @@ const EnhancedChatScreen = ({ route, navigation }) => {
             if (connectionManagerRef.current && connectionManagerRef.current.endSession) {
               console.log('🔴 [USER-APP] Ending session with sessionId:', sessionId || bookingId);
               connectionManagerRef.current.endSession(sessionId || bookingId);
+              // Note: Navigation will be handled by the consultation_ended event handler
+              // which shows the session summary and then navigates back
             }
-            navigation.goBack();
           },
         },
       ]

@@ -2120,19 +2120,21 @@ const HomeScreen = ({ navigation }) => {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="dark-content" backgroundColor="#fff" />
+    <SafeAreaView style={styles.safeAreaContainer}>
+      <StatusBar barStyle="dark-content" backgroundColor="#fff" translucent={false} />
       
-      <FlatList
-        data={getFlatListData()}
-        keyExtractor={(item) => item.id}
-        renderItem={renderFlatListItem}
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-        }
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={styles.flatListContent}
-      />
+      <View style={styles.container}>
+        <FlatList
+          data={getFlatListData()}
+          keyExtractor={(item) => item.id}
+          renderItem={renderFlatListItem}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+          }
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={styles.flatListContent}
+        />
+      </View>
 
       {loading && (
         <View style={styles.loadingOverlay}>
@@ -2204,6 +2206,10 @@ const HomeScreen = ({ navigation }) => {
 };
 
 const styles = StyleSheet.create({
+  safeAreaContainer: {
+    flex: 1,
+    backgroundColor: '#fff', // Match header background
+  },
   container: {
     flex: 1,
     backgroundColor: '#f8f9fa',
@@ -2213,7 +2219,7 @@ const styles = StyleSheet.create({
   },
   header: {
     backgroundColor: '#fff',
-    paddingTop: Platform.OS === 'ios' ? 15 : 15,
+    paddingTop: Platform.OS === 'ios' ? 10 : 20, // Reduced since SafeAreaView handles safe area
     paddingBottom: 15,
     paddingHorizontal: 20,
     borderBottomWidth: 1,
