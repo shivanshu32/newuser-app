@@ -25,7 +25,7 @@ import BookingAcceptedModal from '../../components/BookingAcceptedModal';
 import FreeChatCard from '../../components/FreeChatCard';
 
 // Hardcoded app version - update this when releasing new versions
-const APP_VERSION = '5.0.3';
+const APP_VERSION = '5.0.4';
 
 const HomeScreen = ({ navigation }) => {
   const { user } = useAuth();
