@@ -484,14 +484,27 @@ export const joinConsultationRoom = async (consultationData) => {
       socketInstance.once('consultation_join_error', errorHandler);
       
       try {
-        // Emit user_joined_consultation event with proper data structure
-        console.log(' [socketService] Emitting user_joined_consultation event...');
-        socketInstance.emit('user_joined_consultation', eventData);
-        console.log(' [socketService] user_joined_consultation event emitted successfully');
+        // CRITICAL FIX: Emit join_consultation_room event (not user_joined_consultation)
+        console.log(' [socketService] Emitting join_consultation_room event...');
+        socketInstance.emit('join_consultation_room', eventData, (response) => {
+          clearTimeout(timeoutId);
+          socketInstance.off('consultation_join_error', errorHandler);
+          
+          console.log(' [socketService] join_consultation_room callback received:', response);
+          
+          if (response && response.success) {
+            console.log(' [socketService] Successfully joined consultation room');
+            resolve({ success: true, message: 'Successfully joined consultation room', response });
+          } else {
+            console.error(' [socketService] Failed to join consultation room:', response);
+            reject(new Error(response?.error || 'Failed to join consultation room'));
+          }
+        });
+        console.log(' [socketService] join_consultation_room event emitted successfully');
       } catch (emitError) {
         clearTimeout(timeoutId);
         socketInstance.off('consultation_join_error', errorHandler);
-        console.error(' [socketService] Error emitting user_joined_consultation event:', emitError);
+        console.error(' [socketService] Error emitting join_consultation_room event:', emitError);
         reject(new Error(`Failed to emit socket event: ${emitError.message}`));
       }
     });

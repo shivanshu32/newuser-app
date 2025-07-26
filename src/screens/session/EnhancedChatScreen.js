@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { InteractionManager } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
 import {
   StyleSheet,
   View,
@@ -37,7 +38,6 @@ const EnhancedChatScreen = ({ route, navigation }) => {
   const [connectionStatus, setConnectionStatus] = useState('initializing');
   const [connectionMessage, setConnectionMessage] = useState('');
   const [sessionActive, setSessionActive] = useState(false);
-  const [sessionTime, setSessionTime] = useState(0);
   const [sessionId, setSessionId] = useState(null);
   const [astrologer, setAstrologer] = useState(astrologerFromRoute || null);
   const [user, setUser] = useState(null);
@@ -47,6 +47,21 @@ const EnhancedChatScreen = ({ route, navigation }) => {
   const [messageText, setMessageText] = useState('');
   const [showConnectionBanner, setShowConnectionBanner] = useState(false);
   const [connectionRetryCount, setConnectionRetryCount] = useState(0);
+  
+  // Backend-managed timer state
+  const [timerData, setTimerData] = useState({
+    elapsedSeconds: 0,
+    elapsedMinutes: 0,
+    remainingSeconds: 0,
+    remainingMinutes: 0,
+    currentAmount: 0,
+    currency: '₹',
+    remainingBalance: 0,
+    isActive: false,
+    isCountdown: false, // Backend manages elapsed time
+    formattedTime: '00:00'
+  });
+  
   const { user: authUser } = useAuth();
   const flatListRef = useRef(null);
   const typingTimeoutRef = useRef(null);
@@ -54,6 +69,7 @@ const EnhancedChatScreen = ({ route, navigation }) => {
   const typingTimerRef = useRef(null);
   const reconnectTimeoutRef = useRef(null);
   const timerRef = useRef(null);
+  const simpleTimerRef = useRef(null);
 
   // Format time as MM:SS
   const formatTime = (seconds) => {
@@ -62,7 +78,226 @@ const EnhancedChatScreen = ({ route, navigation }) => {
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
 
+  // Simple timer increment function as fallback
+  const startSimpleTimer = () => {
+    if (simpleTimerRef.current) {
+      clearInterval(simpleTimerRef.current);
+    }
+    
+    simpleTimerRef.current = setInterval(() => {
+      setTimerData(prev => ({
+        ...prev,
+        elapsedSeconds: prev.elapsedSeconds + 1,
+        currentAmount: Math.floor((prev.elapsedSeconds + 1) / 60) * 2 // Assuming ₹2 per minute
+      }));
+    }, 1000);
+  };
 
+  const stopSimpleTimer = () => {
+    if (simpleTimerRef.current) {
+      clearInterval(simpleTimerRef.current);
+      simpleTimerRef.current = null;
+    }
+  };
+
+  // Start/stop simple timer when session becomes active/inactive
+  useEffect(() => {
+    if (sessionActive && timerData.isActive) {
+      console.log('🔴 [USER-APP] Starting simple timer for active session');
+      startSimpleTimer();
+    } else {
+      console.log('🔴 [USER-APP] Stopping simple timer');
+      stopSimpleTimer();
+    }
+
+    return () => {
+      stopSimpleTimer();
+    };
+  }, [sessionActive, timerData.isActive]); // 🔧 STABLE: Only essential state dependencies
+
+  // Force activate session and timer on component mount as fallback
+  useEffect(() => {
+    const forceActivateTimer = setTimeout(() => {
+      console.log('🔴 [USER-APP] Force activating session and timer after 3 seconds');
+      console.log('🔴 [USER-APP] Current state:', { sessionActive, timerDataIsActive: timerData.isActive, connectionStatus });
+      
+      if (!sessionActive) {
+        console.log('🔴 [USER-APP] Force setting sessionActive to true');
+        setSessionActive(true);
+      }
+      
+      if (!timerData.isActive) {
+        console.log('🔴 [USER-APP] Force setting timerData.isActive to true');
+        setTimerData(prev => ({
+          ...prev,
+          isActive: true,
+          elapsedSeconds: 0,
+          remainingSeconds: 1800,
+          currentAmount: 0,
+          isCountdown: false
+        }));
+      }
+    }, 3000); // Force activate after 3 seconds
+
+    return () => {
+      clearTimeout(forceActivateTimer);
+    };
+  }, []); // Run only once on mount
+
+  // Handle backend timer updates
+  const handleBackendTimerUpdate = useCallback((timerUpdate) => {
+    console.log('⏰ [USER-APP] Backend timer update received:', timerUpdate);
+    
+    // Update timer state with backend data
+    setTimerData({
+      elapsedSeconds: timerUpdate.durationSeconds || timerUpdate.seconds || 0,
+      elapsedMinutes: Math.floor((timerUpdate.durationSeconds || timerUpdate.seconds || 0) / 60),
+      remainingSeconds: timerUpdate.timeRemaining || 0,
+      remainingMinutes: Math.floor((timerUpdate.timeRemaining || 0) / 60),
+      currentAmount: timerUpdate.currentAmount || 0,
+      currency: '₹',
+      remainingBalance: timerUpdate.remainingBalance || 0,
+      isActive: true,
+      isCountdown: false,
+      formattedTime: timerUpdate.formattedTime || formatTime(timerUpdate.durationSeconds || timerUpdate.seconds || 0)
+    });
+    
+    // Ensure session is marked as active when receiving timer updates
+    if (!sessionActive) {
+      console.log('⏰ [USER-APP] Activating session based on backend timer update');
+      setSessionActive(true);
+    }
+  }, []); // 🔧 STABLE: Removed sessionActive dependency to prevent re-renders
+
+  // Handle session warnings from backend
+  const handleSessionWarning = useCallback((warningData) => {
+    console.log('⚠️ [USER-APP] Session warning from backend:', warningData);
+    Alert.alert(
+      'Session Warning',
+      warningData.message || 'Your session will end soon due to insufficient balance.',
+      [{ text: 'OK', style: 'default' }]
+    );
+  }, []);
+
+  // Handle session end from backend
+  const handleSessionEnd = useCallback((endData) => {
+    console.log('🏁 [USER-APP] Session ended by backend:', endData);
+    
+    // Update timer state
+    setTimerData(prev => ({ ...prev, isActive: false }));
+    setSessionActive(false);
+    
+    // Trigger session end via socket (same as manual end)
+    handleEndSession(endData.reason || 'time_expired');
+  }, []);
+
+  // Handle status updates from ChatConnectionManager (including timer events)
+  const handleStatusUpdate = useCallback((statusData) => {
+    console.log('📊 [USER-APP] Status update received from ChatConnectionManager:', statusData);
+    
+    if (statusData.type === 'timer') {
+      // Handle backend timer updates
+      handleBackendTimerUpdate(statusData);
+    } else if (statusData.type === 'session_warning') {
+      // Handle session warnings
+      handleSessionWarning(statusData);
+    } else if (statusData.type === 'session_end') {
+      // Handle session end
+      handleSessionEnd(statusData);
+    } else {
+      console.log('📊 [USER-APP] Unknown status update type:', statusData.type);
+    }
+  }, [handleBackendTimerUpdate, handleSessionWarning, handleSessionEnd]);
+
+  const handleEndSession = (reason = 'user_ended') => {
+    console.log('🔴 [USER-APP] Ending session with reason:', reason);
+    
+    // Update UI state
+    setSessionActive(false);
+    setTimerData(prev => ({ ...prev, isActive: false }));
+    
+    // Emit end session event to backend
+    if (connectionManagerRef.current?.socket) {
+      console.log('📡 [USER-APP] Emitting end_session event to backend');
+      connectionManagerRef.current.socket.emit('end_session', {
+        bookingId: bookingId,
+        sessionId: sessionId,
+        userId: authUser?.id,
+        reason: reason,
+        finalTimerData: timerData
+      });
+    }
+    
+    // Show session end confirmation
+    const duration = Math.ceil(timerData.elapsedSeconds / 60);
+    const totalAmount = timerData.currentAmount;
+    
+    Alert.alert(
+      'Session Ended',
+      `The consultation has been ended.\n\nDuration: ${duration} minutes\nTotal Amount: ${timerData.currency}${totalAmount}`,
+      [
+        {
+          text: 'OK',
+          onPress: () => {
+            console.log('🔴 [USER-APP] Navigating back after session end');
+            // Navigate back to previous screen
+            if (navigation.canGoBack()) {
+              navigation.goBack();
+            } else {
+              navigation.navigate('Home');
+            }
+          }
+        }
+      ],
+      { cancelable: false }
+    );
+  };
+
+  // Setup connection manager timer callbacks
+  const setupTimerCallbacks = useCallback(() => {
+    if (!connectionManagerRef.current) {
+      console.log('⚠️ [USER-APP] Connection manager not available for timer callbacks');
+      return;
+    }
+
+    console.log('🔗 [USER-APP] Setting up backend timer callbacks');
+    
+    // Add timer update callback
+    if (connectionManagerRef.current.statusCallbacks) {
+      connectionManagerRef.current.statusCallbacks.add(handleBackendTimerUpdate);
+    }
+    
+    // Add session warning callback
+    if (connectionManagerRef.current.warningCallbacks) {
+      connectionManagerRef.current.warningCallbacks.add(handleSessionWarning);
+    }
+    
+    // Add session end callback
+    if (connectionManagerRef.current.endCallbacks) {
+      connectionManagerRef.current.endCallbacks.add(handleSessionEnd);
+    }
+    
+    console.log('✅ [USER-APP] Backend timer callbacks registered');
+  }, [handleBackendTimerUpdate, handleSessionWarning, handleSessionEnd]);
+
+  // Cleanup timer callbacks
+  const cleanupTimerCallbacks = useCallback(() => {
+    if (!connectionManagerRef.current) return;
+    
+    console.log('🧹 [USER-APP] Cleaning up backend timer callbacks');
+    
+    if (connectionManagerRef.current.statusCallbacks) {
+      connectionManagerRef.current.statusCallbacks.delete(handleBackendTimerUpdate);
+    }
+    
+    if (connectionManagerRef.current.warningCallbacks) {
+      connectionManagerRef.current.warningCallbacks.delete(handleSessionWarning);
+    }
+    
+    if (connectionManagerRef.current.endCallbacks) {
+      connectionManagerRef.current.endCallbacks.delete(handleSessionEnd);
+    }
+  }, []); // 🔧 CRITICAL FIX: Removed callback dependencies to prevent rapid remounting
 
   // Initialize component
   useEffect(() => {
@@ -78,6 +313,9 @@ const EnhancedChatScreen = ({ route, navigation }) => {
       // Cleanup
       console.log('🔴 [USER-APP] EnhancedChatScreen: Cleaning up on unmount');
       
+      // Cleanup backend timer callbacks
+      cleanupTimerCallbacks();
+      
       // Note: We don't disconnect the ConnectionManager here to maintain
       // socket connection for consecutive bookings. The socket should only
       // disconnect when the user logs out or exits the app completely.
@@ -87,7 +325,23 @@ const EnhancedChatScreen = ({ route, navigation }) => {
       if (typingTimerRef.current) clearTimeout(typingTimerRef.current);
       if (reconnectTimeoutRef.current) clearTimeout(reconnectTimeoutRef.current);
     };
-  }, []);
+  }, []); // 🔧 CRITICAL FIX: Removed callback dependency to prevent rapid remounting
+
+  // Setup backend timer callbacks when screen comes into focus
+  useFocusEffect(
+    useCallback(() => {
+      console.log(' [USER-APP] Screen focused - setting up backend timer callbacks');
+      
+      // Setup timer callbacks to receive backend events
+      setupTimerCallbacks();
+      
+      return () => {
+        console.log(' [USER-APP] Screen unfocused');
+        // Note: We don't cleanup callbacks here to maintain timer updates
+        // even when screen is not focused
+      };
+    }, []) // 🔧 CRITICAL FIX: Removed callback dependency to prevent rapid remounting
+  );
 
   // Fetch booking details and initialize connection
   const fetchBookingDetails = async () => {
@@ -173,10 +427,11 @@ const EnhancedChatScreen = ({ route, navigation }) => {
         }
       }
       
-      // Initialize connection manager with astrologer ID and free chat options
+      // Initialize connection manager with astrologer ID and session options
       await initializeConnectionManager(astrologerId, {
         isFreeChat,
-        sessionId: routeParams.sessionId || bookingData.sessionId
+        // CRITICAL FIX: Pass the correct sessionId from booking data
+        sessionId: routeParams.sessionId || bookingData.sessionId || bookingData._id
       });
       
       setLoading(false);
@@ -269,89 +524,6 @@ const EnhancedChatScreen = ({ route, navigation }) => {
       Alert.alert('Connection Error', 'Failed to establish connection. Please try again.');
     }
   };
-
-
-
-  // Handle status updates (timer, session end, etc.)
-  const handleStatusUpdate = useCallback((data) => {
-    console.log('🔴 [USER-APP] EnhancedChatScreen: Status update received:', data);
-    
-    if (data.type === 'timer') {
-      console.log('🔴 [USER-APP] Timer update:', data.durationSeconds);
-      setSessionTime(data.durationSeconds);
-      
-      // If we're receiving timer updates but session isn't active, activate it
-      setSessionActive(prevActive => {
-        if (!prevActive && data.durationSeconds > 0) {
-          console.log('🔴 [USER-APP] Timer running but session not active - activating session');
-          setConnectionStatus('session_active');
-          setSessionId(data.sessionId || bookingId);
-          return true;
-        }
-        return prevActive;
-      });
-    } else if (data.type === 'session_end') {
-      console.log('🔴 [USER-APP] Session end received');
-      handleSessionEnd(data);
-    } else if (data.type === 'session_started') {
-      console.log('🔴 [USER-APP] Session started, activating chat');
-      console.log('🔴 [USER-APP] Session data:', data);
-      
-      setSessionActive(prevActive => {
-        console.log('🔴 [USER-APP] Current sessionActive:', prevActive);
-        setSessionId(data.data?.sessionId || data.sessionId || bookingId);
-        setConnectionStatus('session_active');
-        console.log('🔴 [USER-APP] Session activated via session_started event');
-        return true;
-      });
-    } else if (data.type === 'astrologer_joined') {
-      console.log('🔴 [USER-APP] Astrologer joined, session should be ready');
-      setConnectionStatus('astrologer_joined');
-      
-      // If we already have timer updates, activate the session immediately
-      setSessionActive(prevActive => {
-        if (sessionTime > 0 && !prevActive) {
-          console.log('🔴 [USER-APP] Astrologer joined and timer is running - activating session');
-          setConnectionStatus('session_active');
-          return true;
-        }
-        return prevActive;
-      });
-    } else if (data.type === 'consultation_ended') {
-      console.log('🔴 [USER-APP] Consultation ended event received in handleStatusUpdate');
-      console.log('🔴 [USER-APP] Session ended by:', data.endedBy);
-      console.log('🔴 [USER-APP] Session data:', data.sessionData);
-      
-      // Clear session state
-      setSessionActive(false);
-      setConnectionStatus('session_ended');
-      
-      // Show alert with session summary and navigate back
-      const sessionData = data.sessionData || {};
-      const duration = sessionData.duration || 0;
-      const totalAmount = sessionData.totalAmount || 0;
-      
-      Alert.alert(
-        'Session Ended',
-        `The consultation has been ended by ${data.endedBy}.\n\nDuration: ${duration} minutes\nTotal Amount: ₹${totalAmount}`,
-        [
-          {
-            text: 'OK',
-            onPress: () => {
-              console.log('🔴 [USER-APP] Navigating back after session end');
-              // Navigate back to previous screen
-              if (navigation.canGoBack()) {
-                navigation.goBack();
-              } else {
-                navigation.navigate('Home');
-              }
-            }
-          }
-        ],
-        { cancelable: false }
-      );
-    }
-  }, [bookingId, sessionTime]);
 
   // Handle new messages
   const handleNewMessage = useCallback((message) => {
@@ -491,7 +663,8 @@ const EnhancedChatScreen = ({ route, navigation }) => {
         text: tempMessage.text,
         message: tempMessage.message,
         bookingId: bookingId,
-        sessionId: sessionId || bookingId,
+        // CRITICAL FIX: Use actual sessionId from booking data, not bookingId fallback
+        sessionId: booking?.sessionId || sessionId || null, // Use proper sessionId from booking
         senderId: authUser?.id,
         senderName: authUser?.name || 'User',
         sender: 'user',
@@ -541,36 +714,42 @@ const EnhancedChatScreen = ({ route, navigation }) => {
     }
   }, []);
 
-  // Handle connection status
-  const handleConnectionStatus = useCallback((status) => {
-    console.log('🔴 [USER-APP] Connection status:', status);
-    setConnectionStatus(status.status);
-    setConnectionMessage(status.message || '');
-    setShowConnectionBanner(status.status !== 'connected');
-  }, []);
-
-  // Handle session end
-  const handleSessionEnd = (data) => {
-    console.log('Session ended:', data);
-    setSessionActive(false);
-    if (timerRef.current) {
-      clearInterval(timerRef.current);
-    }
+  // Handle connection status changes
+  const handleConnectionStatus = useCallback((status, message = '') => {
+    console.log('🔴 [USER-APP] Connection status changed to:', status, message);
+    setConnectionStatus(status);
+    setConnectionMessage(message);
     
-    Alert.alert(
-      'Session Ended',
-      'The consultation session has ended.',
-      [
-        {
-          text: 'OK',
-          onPress: () => navigation.goBack(),
-        },
-      ]
-    );
-  };
+    if (status === 'connected') {
+      setShowConnectionBanner(false);
+      setConnectionRetryCount(0);
+      
+      // Final fallback: If connected but session not active, activate it
+      if (!sessionActive) {
+        console.log('🔴 [USER-APP] Connected but session not active - activating session and timer');
+        setSessionActive(true);
+        
+        // Activate timer display if not already active
+        if (!timerData.isActive) {
+          setTimerData(prev => ({
+            ...prev,
+            isActive: true,
+            elapsedSeconds: 0,
+            remainingSeconds: 1800, // Default 30 minutes
+            currentAmount: 0,
+            isCountdown: false
+          }));
+        }
+      }
+    } else if (status === 'error' || status === 'failed') {
+      setShowConnectionBanner(true);
+    }
+  }, [sessionActive, timerData.isActive]);
 
-  // Handle manual session end
-  const handleEndSession = () => {
+
+
+  // Handle manual session end (called from UI button)
+  const handleManualEndSession = () => {
     Alert.alert(
       'End Session',
       'Are you sure you want to end this consultation session?',
@@ -583,12 +762,8 @@ const EnhancedChatScreen = ({ route, navigation }) => {
           text: 'End Session',
           style: 'destructive',
           onPress: () => {
-            if (connectionManagerRef.current && connectionManagerRef.current.endSession) {
-              console.log('🔴 [USER-APP] Ending session with sessionId:', sessionId || bookingId);
-              connectionManagerRef.current.endSession(sessionId || bookingId);
-              // Note: Navigation will be handled by the consultation_ended event handler
-              // which shows the session summary and then navigates back
-            }
+            console.log('🔴 [USER-APP] Manual session end requested');
+            handleEndSession('user_ended_manual');
           },
         },
       ]
@@ -765,21 +940,45 @@ const EnhancedChatScreen = ({ route, navigation }) => {
           </View>
         </View>
         
-        {sessionActive && (
-          <View style={styles.headerRight}>
-            <View style={styles.timerContainer}>
-              <Text style={styles.timerText}>{formatTime(sessionTime)}</Text>
-            </View>
-            {sessionActive && (
-              <TouchableOpacity 
-                style={styles.endButton}
-                onPress={handleEndSession}
-              >
-                <Text style={styles.endButtonText}>End</Text>
-              </TouchableOpacity>
-            )}
+        {/* Debug logging for timer display */}
+        {console.log('🎨 [TIMER-DEBUG] Timer display check:', {
+          sessionActive,
+          timerDataIsActive: timerData.isActive,
+          timerDataElapsed: timerData.elapsedSeconds,
+          connectionStatus,
+          shouldShowTimer: sessionActive
+        })}
+        
+        {/* Always show timer container for debugging */}
+        <View style={styles.headerRight}>
+          <View style={styles.timerContainer}>
+            <Text style={styles.timerText}>
+              {sessionActive ? (
+                timerData.isActive ? (
+                  timerData.isCountdown 
+                    ? formatTime(timerData.remainingSeconds) 
+                    : formatTime(timerData.elapsedSeconds)
+                ) : '00:00'
+              ) : 'INACTIVE'}
+            </Text>
+            <Text style={styles.timerLabel}>
+              {sessionActive ? (
+                timerData.isActive ? (timerData.isCountdown ? 'remaining' : 'elapsed') : 'session'
+              ) : 'not active'}
+            </Text>
           </View>
-        )}
+          <View style={styles.billingContainer}>
+            <Text style={styles.billingText}>
+              {timerData.currency}{sessionActive && timerData.isActive ? timerData.currentAmount : 0}
+            </Text>
+          </View>
+          <TouchableOpacity 
+            style={styles.endButton}
+            onPress={handleManualEndSession}
+          >
+            <Text style={styles.endButtonText}>End</Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
       {/* Connection Banner */}
@@ -907,10 +1106,27 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 16,
+    alignItems: 'center',
   },
   timerText: {
     fontSize: 14,
     fontWeight: 'bold',
+    color: '#FFF',
+  },
+  timerLabel: {
+    fontSize: 10,
+    color: 'rgba(255,255,255,0.8)',
+    marginTop: 2,
+  },
+  billingContainer: {
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  billingText: {
+    fontSize: 12,
+    fontWeight: '600',
     color: '#FFF',
   },
   endButton: {
@@ -1076,4 +1292,30 @@ const styles = StyleSheet.create({
   },
 });
 
-export default EnhancedChatScreen;
+// 🔧 CRITICAL FIX: Memoize component to prevent external remount triggers
+// Custom comparison function to prevent remounts from parent re-renders
+const arePropsEqual = (prevProps, nextProps) => {
+  // Compare route params that matter for this component
+  const prevParams = prevProps.route?.params || {};
+  const nextParams = nextProps.route?.params || {};
+  
+  const criticalProps = ['bookingId', 'astrologerId', 'sessionId', 'isFreeChat', 'freeChatId'];
+  
+  for (const prop of criticalProps) {
+    if (prevParams[prop] !== nextParams[prop]) {
+      console.log('🚨 [USER-APP-MEMO-DEBUG] Props changed for:', prop, 'prev:', prevParams[prop], 'next:', nextParams[prop]);
+      return false; // Props changed, allow re-render
+    }
+  }
+  
+  // Compare navigation object (but only key properties)
+  if (prevProps.navigation?.isFocused?.() !== nextProps.navigation?.isFocused?.()) {
+    console.log('🚨 [USER-APP-MEMO-DEBUG] Navigation focus changed');
+    return false;
+  }
+  
+  console.log('✅ [USER-APP-MEMO-DEBUG] Props are equal, preventing re-render');
+  return true; // Props are equal, prevent re-render
+};
+
+export default React.memo(EnhancedChatScreen, arePropsEqual);

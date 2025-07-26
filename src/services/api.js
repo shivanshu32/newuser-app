@@ -153,6 +153,9 @@ export const bookingsAPI = {
   },
   getStats() {
     return API.get('/bookings/stats');
+  },
+  sendMessage(messageData) {
+    return API.post('/bookings/send-message', messageData);
   }
 };
 
@@ -188,6 +191,8 @@ export const freeChatAPI = {
   getFreeChatDetails: (freeChatId) => API.get(`/free-chat/${freeChatId}`),
   cancelFreeChat: (freeChatId) => API.delete(`/free-chat/${freeChatId}/cancel`),
   getHistory: () => API.get('/free-chat/history'),
+  getGlobalSettings: () => API.get('/admin/free-chat/settings'),
+  sendMessage: (messageData) => API.post('/free-chat/send-message', messageData),
 };
 
 // Ratings API

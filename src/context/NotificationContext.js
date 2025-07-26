@@ -228,7 +228,7 @@ async function registerForPushNotificationsAsync() {
     
     try {
       token = (await Notifications.getExpoPushTokenAsync({
-        projectId: "your-project-id" // Replace with your actual Expo project ID
+        projectId: "19ce1c4d-7c68-407f-96a0-d41bedaa3d55" // JyotishCall User App project ID
       })).data;
       console.log('Expo push token:', token);
       

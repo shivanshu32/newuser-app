@@ -20,12 +20,12 @@ import { Ionicons, MaterialIcons, FontAwesome } from '@expo/vector-icons';
 import Toast from 'react-native-toast-message';
 import { useAuth } from '../../context/AuthContext';
 import { useSocket } from '../../context/SocketContext';
-import { astrologersAPI, walletAPI, versionAPI } from '../../services/api';
+import { astrologersAPI, walletAPI, versionAPI, freeChatAPI } from '../../services/api';
 import BookingAcceptedModal from '../../components/BookingAcceptedModal';
 import FreeChatCard from '../../components/FreeChatCard';
 
 // Hardcoded app version - update this when releasing new versions
-const APP_VERSION = '5.0.4';
+const APP_VERSION = '5.0.5';
 
 const HomeScreen = ({ navigation }) => {
   const { user } = useAuth();
@@ -41,6 +41,7 @@ const HomeScreen = ({ navigation }) => {
   const [bookingToCancel, setBookingToCancel] = useState(null);
   const [pendingBookings, setPendingBookings] = useState([]);
   const [loadingPendingBookings, setLoadingPendingBookings] = useState(false);
+  const [freeChatEnabled, setFreeChatEnabled] = useState(true); // Global free chat toggle
 
 
 
@@ -109,6 +110,28 @@ const HomeScreen = ({ navigation }) => {
       setWalletBalance(0);
     } finally {
       setLoadingWallet(false);
+    }
+  }, []);
+
+  // Check global free chat settings
+  const checkFreeChatGlobalSettings = useCallback(async () => {
+    try {
+      console.log('🔄 Checking global free chat settings...');
+      const response = await freeChatAPI.getGlobalSettings();
+      console.log('🆓 Free chat settings response:', response);
+      
+      if (response.success && response.data) {
+        const isEnabled = response.data.isEnabled !== false; // Default to true if not specified
+        setFreeChatEnabled(isEnabled);
+        console.log('✅ Free chat global setting updated:', isEnabled);
+      } else {
+        console.warn('⚠️ Free chat settings API returned success: false or no data, defaulting to enabled');
+        setFreeChatEnabled(true); // Default to enabled if API fails
+      }
+    } catch (error) {
+      console.error('❌ Error fetching free chat settings:', error);
+      // Default to enabled if API fails (graceful degradation)
+      setFreeChatEnabled(true);
     }
   }, []);
 
@@ -2047,9 +2070,13 @@ const HomeScreen = ({ navigation }) => {
   // Prepare data for single FlatList
   const getFlatListData = () => {
     const data = [
-      { type: 'header', id: 'header' },
-      { type: 'freeChat', id: 'freeChat' }
+      { type: 'header', id: 'header' }
     ];
+    
+    // Only add free chat section if globally enabled
+    if (freeChatEnabled) {
+      data.push({ type: 'freeChat', id: 'freeChat' });
+    }
 
     // Add pending bookings section if there are any
     const activePendingBookings = pendingBookings.filter(booking => 

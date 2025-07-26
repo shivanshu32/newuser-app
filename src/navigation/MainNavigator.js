@@ -18,7 +18,7 @@ import AstrologerProfileScreen from '../screens/main/AstrologerProfileScreen';
 import BookingWaitingScreen from '../screens/main/BookingWaitingScreen';
 import PendingConsultationsScreen from '../screens/main/PendingConsultationsScreen';
 import ChatScreen from '../screens/session/ChatScreen';
-import EnhancedChatScreen from '../screens/session/EnhancedChatScreen';
+import FixedChatScreen from '../screens/session/FixedChatScreen';
 import PreChatForm from '../screens/session/PreChatForm';
 import TransactionHistoryScreen from '../screens/main/TransactionHistoryScreen';
 import TransactionDetailScreen from '../screens/main/TransactionDetailScreen';
@@ -188,15 +188,15 @@ const BookingPopupWrapper = () => {
         console.log(' [BookingPopupWrapper] Voice call handled by Exotel - no navigation needed');
         // Voice calls are now handled by Exotel - no navigation needed
       } else if (consultationType === 'chat') {
-        console.log(' [BookingPopupWrapper] Navigating to EnhancedConsultationRoom screen');
-        navigation.navigate('EnhancedConsultationRoom', {
+        console.log(' [BookingPopupWrapper] Navigating to FixedChatScreen screen');
+        navigation.navigate('FixedChatScreen', {
           bookingId: bookingData.bookingId,
           sessionId: bookingData.sessionId,
           roomId: bookingData.roomId,
           astrologerId: bookingData.astrologerId,
           consultationType: consultationType
         });
-        console.log(' [BookingPopupWrapper] EnhancedConsultationRoom navigation completed');
+        console.log(' [BookingPopupWrapper] FixedChatScreen navigation completed');
       } else {
         console.error(' [BookingPopupWrapper] Unknown consultation type:', consultationType);
         console.error(' [BookingPopupWrapper] Available booking data:', JSON.stringify(bookingData, null, 2));
@@ -273,7 +273,7 @@ const MainNavigator = () => {
         />
         <Stack.Screen 
           name="EnhancedChat" 
-          component={EnhancedChatScreen} 
+          component={FixedChatScreen} 
           options={{ headerShown: false }}
         />
         <Stack.Screen 
@@ -292,8 +292,8 @@ const MainNavigator = () => {
           options={{ headerShown: true, title: 'Consultation Room' }}
         />
         <Stack.Screen 
-          name="EnhancedConsultationRoom" 
-          component={EnhancedChatScreen} 
+          name="FixedChatScreen" 
+          component={FixedChatScreen} 
           options={{ headerShown: false }}
         />
         <Stack.Screen 
