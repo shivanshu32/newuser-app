@@ -183,16 +183,22 @@ const FixedChatScreen = ({ route, navigation }) => {
   // ===== SESSION EVENT HANDLERS =====
   const handleSessionStarted = useCallback((data) => {
     console.log('🚀 [SESSION] Session started:', data);
+    console.log('🚀 [SESSION] Setting sessionActive to true');
     safeSetState(setSessionActive, true);
     safeSetState(setConnectionStatus, 'connected');
     
     if (data.duration) {
+      console.log('🚀 [SESSION] Starting local timer with duration:', data.duration);
       startLocalTimer(data.duration);
+    } else {
+      console.log('⚠️ [SESSION] No duration provided in session start data');
     }
   }, [safeSetState, startLocalTimer]);
   
   const handleTimerUpdate = useCallback((data) => {
     console.log('⏱️ [TIMER] Update received:', data);
+    console.log('⏱️ [TIMER] Current bookingId:', bookingId);
+    console.log('⏱️ [TIMER] Data bookingId:', data.bookingId);
     
     if (data.bookingId !== bookingId) {
       console.log('⚠️ [TIMER] Ignoring timer for different booking');
@@ -201,20 +207,26 @@ const FixedChatScreen = ({ route, navigation }) => {
     
     safeSetState(setConnectionStatus, 'connected');
     
-    if (data.elapsed !== undefined) {
-      const backendElapsed = parseInt(data.elapsed, 10);
-      const timeDiff = Math.abs(timerData.elapsed - backendElapsed);
+    // Always activate timer when receiving backend timer events
+    if (data.elapsed !== undefined || data.durationSeconds !== undefined || data.duration !== undefined) {
+      const backendElapsed = parseInt(data.elapsed || data.durationSeconds || data.duration, 10);
+      console.log('⏱️ [TIMER] Activating timer with backend elapsed:', backendElapsed);
+      console.log('⏱️ [TIMER] Setting timer data - isActive: true, elapsed:', backendElapsed);
       
-      if (timeDiff > 5) {
-        console.log('⏱️ [TIMER] Syncing with backend timer:', backendElapsed);
-        safeSetState(setTimerData, prev => ({
+      safeSetState(setTimerData, prev => {
+        const newTimerData = {
           ...prev,
           elapsed: backendElapsed,
-          isActive: true
-        }));
-      }
+          isActive: true,
+          duration: data.duration || prev.duration
+        };
+        console.log('⏱️ [TIMER] New timer data:', newTimerData);
+        return newTimerData;
+      });
+    } else {
+      console.log('⚠️ [TIMER] No elapsed, durationSeconds, or duration in data:', data);
     }
-  }, [bookingId, safeSetState, timerData.elapsed]);
+  }, [bookingId, safeSetState]);
   
 
   
@@ -252,6 +264,8 @@ const FixedChatScreen = ({ route, navigation }) => {
       userId: authUser?.id,
       userType: 'user',
       roomId
+    }, (ack) => {
+      console.log('🎯 [DEBUG] join_consultation_room acknowledgment:', JSON.stringify(ack, null, 2));
     });
     console.log('✅ [EMIT] join_consultation_room event emitted successfully');
     
@@ -260,6 +274,8 @@ const FixedChatScreen = ({ route, navigation }) => {
       bookingId,
       sessionId,
       userId: authUser?.id
+    }, (ack) => {
+      console.log('🎯 [DEBUG] user_joined_consultation acknowledgment:', JSON.stringify(ack, null, 2));
     });
     console.log('✅ [EMIT] user_joined_consultation event emitted successfully');
     
@@ -296,10 +312,52 @@ const FixedChatScreen = ({ route, navigation }) => {
     socket.on('message_delivered', handleMessageDelivered);
     socket.on('typing_indicator', handleTypingIndicator);
     socket.on('session_started', handleSessionStarted);
-    socket.on('session_timer', handleTimerUpdate);
+    socket.on('session_timer', (data) => {
+      console.log('🎯 [DEBUG] Raw session_timer event received:', JSON.stringify(data, null, 2));
+      handleTimerUpdate(data);
+    });
+    
+    // Also listen for session_timer_update events (backend sends both)
+    socket.on('session_timer_update', (data) => {
+      console.log('🎯 [DEBUG] Raw session_timer_update event received:', JSON.stringify(data, null, 2));
+      handleTimerUpdate(data);
+    });
     socket.on('session_ended', handleSessionEnded);
     
-  }, [safeSetState, joinConsultationRoom, handleIncomingMessage, handleMessageDelivered, handleTypingIndicator, handleSessionStarted, handleTimerUpdate, handleSessionEnded]);
+    // Add debug listeners for room join events
+    socket.on('room_joined', (data) => {
+      console.log('🏠 [DEBUG] Room joined confirmation:', JSON.stringify(data, null, 2));
+    });
+    
+    socket.on('user_joined_consultation_ack', (data) => {
+      console.log('🏠 [DEBUG] User joined consultation ack:', JSON.stringify(data, null, 2));
+    });
+    
+    // Debug: Listen for all timer-related events
+    socket.on('session_timer_started', (data) => {
+      console.log('🎯 [DEBUG] session_timer_started event:', JSON.stringify(data, null, 2));
+    });
+    
+    socket.on('session_timer_update', (data) => {
+      console.log('🎯 [DEBUG] session_timer_update event:', JSON.stringify(data, null, 2));
+    });
+    
+    // Debug: Track socket connection events
+    const originalOnevent = socket.onevent;
+    socket.onevent = function(packet) {
+      const args = packet.data || [];
+      const eventName = args[0];
+      const eventData = args[1];
+      
+      // Log all events for debugging
+      if (eventName && eventName.includes('timer') || eventName.includes('session')) {
+        console.log('🔍 [DEBUG] Socket event received:', eventName, JSON.stringify(eventData, null, 2));
+      }
+      
+      originalOnevent.call(this, packet);
+    };
+    
+  }, [bookingId]); // Only stable dependencies to prevent event listener loss
 
   const initializeSocket = useCallback(async () => {
     console.log('🔌 [SOCKET] Initializing socket connection');
@@ -537,11 +595,9 @@ const FixedChatScreen = ({ route, navigation }) => {
   useEffect(() => {
     console.log('🚀 [INIT] Starting component initialization');
     console.log('🚀 [INIT] BookingId:', bookingId, 'SessionId:', sessionId);
-    console.log('🚀 [INIT] AuthUser:', authUser);
-    
     // Prevent duplicate initialization
-    if (initializationCompleteRef.current) {
-      console.log('⚠️ [INIT] Already initialized, skipping duplicate initialization');
+    if (socketInitializedRef.current) {
+      console.log('⚠️ [INIT] Socket already initialized, skipping duplicate initialization');
       return;
     }
     
@@ -555,18 +611,19 @@ const FixedChatScreen = ({ route, navigation }) => {
       return;
     }
     
-    // Mark initialization as started
-    initializationCompleteRef.current = true;
+    // Mark socket as being initialized
+    socketInitializedRef.current = true;
     
     // Initialize socket connection
     const initTimer = setTimeout(() => {
       console.log('🚀 [INIT] Initializing socket after delay');
-      if (!socketInitializedRef.current) {
-        socketInitializedRef.current = true;
-        initializeSocket();
-      } else {
-        console.log('⚠️ [INIT] Socket already initialized, skipping');
-      }
+      initializeSocket();
+      
+      // Join room after socket initialization
+      setTimeout(() => {
+        console.log('🚀 [INIT] Joining consultation room');
+        joinConsultationRoom();
+      }, 1000);
     }, 500);
     
     return () => {
@@ -589,6 +646,10 @@ const FixedChatScreen = ({ route, navigation }) => {
         socketRef.current = null;
       }
       
+      // Reset initialization flags for proper remount handling
+      socketInitializedRef.current = false;
+      roomJoinedRef.current = false;
+      
       // Clear any active timers
       if (timerIntervalRef.current) {
         clearInterval(timerIntervalRef.current);
@@ -604,13 +665,10 @@ const FixedChatScreen = ({ route, navigation }) => {
         clearTimeout(typingTimeoutRef.current);
         typingTimeoutRef.current = null;
       }
-      
-      // Reset room joined status and initialization flags
-      roomJoinedRef.current = false;
       initializationCompleteRef.current = false;
       socketInitializedRef.current = false;
     };
-  }, [bookingId, sessionId, authUser?.id, initializeSocket]);
+  }, [bookingId, sessionId, authUser?.id]);
 
   // ===== RENDER =====
   const renderMessage = useCallback(({ item }) => {
@@ -690,13 +748,14 @@ const FixedChatScreen = ({ route, navigation }) => {
           </View>
           
           <View style={styles.headerRight}>
-            {sessionActive && timerData.isActive && (
+            {/* Always show timer for testing - remove conditions temporarily */}
+            {sessionActive && (
               <View style={styles.timerContainer}>
                 <Text style={styles.timerText}>
-                  {formatTime(timerData.elapsed)}
+                  {formatTime(timerData.elapsed || 0)}
                 </Text>
                 <Text style={styles.amountText}>
-                  ₹{Math.ceil((timerData.elapsed / 60) * (bookingDetails?.rate || 50))}/min
+                  ₹{Math.ceil(((timerData.elapsed || 0) / 60) * (bookingDetails?.rate || 50))}/min
                 </Text>
               </View>
             )}
