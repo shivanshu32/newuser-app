@@ -261,6 +261,74 @@ export const AuthProvider = ({ children }) => {
     });
   };
 
+  // Refresh token
+  const refreshToken = async () => {
+    try {
+      console.log('🔄 [AUTH] Attempting to refresh token...');
+      
+      if (!token) {
+        console.log('❌ [AUTH] No token available for refresh');
+        return { success: false, message: 'No token available' };
+      }
+      
+      // Call backend to refresh token
+      const response = await axios.post(`${API_URL}/auth/refresh-token`, {}, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      
+      if (response.data.success) {
+        const newToken = response.data.data.token;
+        const updatedUser = response.data.data.user || user;
+        
+        // Update stored token and user data
+        await AsyncStorage.setItem('userToken', newToken);
+        await AsyncStorage.setItem('userData', JSON.stringify(updatedUser));
+        
+        // Update state
+        setToken(newToken);
+        setUser(updatedUser);
+        
+        // Update axios default header
+        axios.defaults.headers.common['Authorization'] = `Bearer ${newToken}`;
+        
+        console.log('✅ [AUTH] Token refreshed successfully');
+        return { success: true, token: newToken, user: updatedUser };
+      } else {
+        console.log('❌ [AUTH] Token refresh failed:', response.data.message);
+        return { success: false, message: response.data.message || 'Failed to refresh token' };
+      }
+    } catch (error) {
+      console.log('❌ [AUTH] Token refresh error:', error.message);
+      
+      // If refresh fails due to invalid token, logout user
+      if (error.response?.status === 401 || error.response?.status === 403) {
+        console.log('🔑 [AUTH] Token refresh failed with auth error, logging out user');
+        await logout();
+        return { success: false, message: 'Session expired, please login again', shouldLogout: true };
+      }
+      
+      return { success: false, message: 'Failed to refresh token' };
+    }
+  };
+  
+  // Get valid token (refresh if needed)
+  const getValidToken = async () => {
+    try {
+      if (!token) {
+        return { success: false, message: 'No token available' };
+      }
+      
+      // First try to use current token
+      // If it fails with 401, we'll refresh it
+      return { success: true, token };
+    } catch (error) {
+      console.log('❌ [AUTH] Error getting valid token:', error.message);
+      return { success: false, message: 'Failed to get valid token' };
+    }
+  };
+
   // Logout
   const logout = async () => {
     try {
@@ -303,6 +371,8 @@ export const AuthProvider = ({ children }) => {
         updateUser,
         updateWalletBalance,
         logout,
+        refreshToken,
+        getValidToken,
         isProfileComplete,
         setUser,
       }}

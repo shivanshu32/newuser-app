@@ -73,13 +73,15 @@ API.interceptors.request.use(
   }
 );
 
-// Add response interceptor for better error handling
+// Add response interceptor for better error handling and token refresh
 API.interceptors.response.use(
   (response) => {
     console.log(' [API] Response success:', response.status, response.config.url);
     return response.data; // Return only the data part
   },
-  (error) => {
+  async (error) => {
+    const originalRequest = error.config;
+    
     // Enhanced error logging for network debugging
     console.error(' [API] Response error:', {
       url: error.config?.url,
@@ -92,6 +94,55 @@ API.interceptors.response.use(
       isNetworkError: error.message === 'Network Error',
       isTimeout: error.code === 'ECONNABORTED'
     });
+    
+    // Handle 401 Unauthorized - attempt token refresh
+    if (error.response?.status === 401 && !originalRequest._retry) {
+      originalRequest._retry = true;
+      
+      console.log('🔑 [API] 401 Unauthorized - attempting token refresh...');
+      
+      try {
+        // Get current token from AsyncStorage
+        const currentToken = await AsyncStorage.getItem('userToken');
+        
+        if (currentToken) {
+          // Attempt to refresh token
+          const refreshResponse = await axios.post(`${API_BASE}/auth/refresh-token`, {}, {
+            headers: {
+              'Authorization': `Bearer ${currentToken}`
+            }
+          });
+          
+          if (refreshResponse.data.success) {
+            const newToken = refreshResponse.data.data.token;
+            const updatedUser = refreshResponse.data.data.user;
+            
+            // Update stored token and user data
+            await AsyncStorage.setItem('userToken', newToken);
+            if (updatedUser) {
+              await AsyncStorage.setItem('userData', JSON.stringify(updatedUser));
+            }
+            
+            // Update the original request with new token
+            originalRequest.headers.Authorization = `Bearer ${newToken}`;
+            
+            console.log('✅ [API] Token refreshed successfully, retrying original request');
+            
+            // Retry the original request with new token
+            return API(originalRequest);
+          }
+        }
+      } catch (refreshError) {
+        console.error('❌ [API] Token refresh failed:', refreshError.message);
+        
+        // If refresh fails, clear stored auth data
+        await AsyncStorage.removeItem('userToken');
+        await AsyncStorage.removeItem('userData');
+        
+        // Note: We don't automatically navigate to login here as this is a service layer
+        // The UI components should handle this by checking auth state
+      }
+    }
     
     // Add specific handling for common network issues
     if (error.message === 'Network Error') {

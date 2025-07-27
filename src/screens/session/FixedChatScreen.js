@@ -16,7 +16,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../context/AuthContext';
-import { getSocket } from '../../services/socketService';
+import { useSocket } from '../../context/SocketContext';
 
 const API_BASE_URL = 'https://jyotishcallbackend-2uxrv.ondigitalocean.app/api/v1';
 
@@ -34,35 +34,50 @@ const FixedChatScreen = ({ route, navigation }) => {
     bookingDetails,
   } = route.params || {};
   
-  const { user: authUser } = useAuth();
+  const { user: authUser, refreshToken, getValidToken } = useAuth();
 
-  // ===== STATE MANAGEMENT =====
-  const [messages, setMessages] = useState([]);
-  const [inputText, setInputText] = useState('');
-  const [connectionStatus, setConnectionStatus] = useState('connecting');
-  const [sessionActive, setSessionActive] = useState(false);
-  const [astrologerTyping, setAstrologerTyping] = useState(false);
+  // ===== STATE =====
   const [loading, setLoading] = useState(true);
-  
+  const [connected, setConnected] = useState(false);
+  const [messages, setMessages] = useState([]);
+  const [messageText, setMessageText] = useState('');
+  const [isTyping, setIsTyping] = useState(false);
+  const [sessionActive, setSessionActive] = useState(false);
   const [timerData, setTimerData] = useState({
     elapsed: 0,
     duration: 0,
     isActive: false,
     startTime: null
   });
-
+  
+  // Component instance tracking for debugging
+  const instanceId = useRef(Math.random().toString(36).substr(2, 9));
+  console.log(`🚀 FixedChatScreen: Component mounting with params (Instance: ${instanceId.current})`, { bookingId, sessionId, astrologerId });
+  
   // ===== REFS =====
   const socketRef = useRef(null);
   const flatListRef = useRef(null);
-  const typingTimeoutRef = useRef(null);
+  const mountedRef = useRef(true);
+  const socketInitializedRef = useRef(false);
+  const mountingGuardRef = useRef(false);
+  const initializationCompleteRef = useRef(false);
+  const loadingStateSetRef = useRef(false);
+  const reconnectAttemptsRef = useRef(0);
   const reconnectTimeoutRef = useRef(null);
   const timerIntervalRef = useRef(null);
-  const mountedRef = useRef(true);
-  const lastMessageTimestampRef = useRef(0);
-  const roomJoinedRef = useRef(false);
+  const typingTimeoutRef = useRef(null);
+  const lastMessageTimestampRef = useRef(null);
   const appStateRef = useRef(AppState.currentState);
-  const initializationCompleteRef = useRef(false);
-  const socketInitializedRef = useRef(false);
+  const sessionStartTimeRef = useRef(null);
+  const sessionDurationRef = useRef(null);
+  const maxReconnectAttempts = 5;
+  const isReconnectingRef = useRef(false);
+  
+  // Callback function refs to prevent stale closures
+  const handleReconnectionRef = useRef(null);
+  const syncTimerFromSessionRef = useRef(null);
+  const requestMissedMessagesRef = useRef(null);
+  const safeSetStateRef = useRef(null);
 
   // ===== UTILITY FUNCTIONS =====
   const formatTime = useCallback((seconds) => {
@@ -84,31 +99,437 @@ const FixedChatScreen = ({ route, navigation }) => {
       setter(value);
     }
   }, []);
+  
+  // Update ref to current function
+  safeSetStateRef.current = safeSetState;
+
+  // ===== SESSION PERSISTENCE =====
+  const saveSessionState = useCallback((startTime, duration) => {
+    console.log('💾 [SESSION] Saving session state - startTime:', startTime, 'duration:', duration);
+    sessionStartTimeRef.current = startTime;
+    sessionDurationRef.current = duration;
+  }, []);
+
+  const calculateElapsedTime = useCallback(() => {
+    if (!sessionStartTimeRef.current) return 0;
+    const elapsed = Math.floor((Date.now() - sessionStartTimeRef.current) / 1000);
+    return Math.min(elapsed, sessionDurationRef.current);
+  }, []);
+
+  const syncTimerFromSession = useCallback(() => {
+    if (!sessionStartTimeRef.current) {
+      console.log('⚠️ [TIMER] No session start time available for sync');
+      return;
+    }
+    
+    const elapsed = calculateElapsedTime();
+    console.log('🔄 [TIMER] Syncing timer from session - elapsed:', elapsed, 'duration:', sessionDurationRef.current, 'startTime:', sessionStartTimeRef.current);
+    
+    safeSetState(setTimerData, {
+      elapsed,
+      duration: sessionDurationRef.current,
+      isActive: elapsed < sessionDurationRef.current,
+      startTime: sessionStartTimeRef.current
+    });
+    
+    // Restart local timer with existing startTime to maintain continuity
+    if (elapsed < sessionDurationRef.current) {
+      startLocalTimer(sessionDurationRef.current, sessionStartTimeRef.current);
+    }
+  }, [safeSetState, calculateElapsedTime, startLocalTimer]);
+  
+  // Update ref to current function
+  syncTimerFromSessionRef.current = syncTimerFromSession;
+
+  // Get socket from context
+  const { socket: contextSocket, isConnected: socketConnected } = useSocket();
+  
+  // ===== SOCKET INITIALIZATION =====
+  const initializeSocket = useCallback(async () => {
+    console.log('🔌 [SOCKET] Initializing socket connection...');
+    
+    if (!contextSocket) {
+      console.error('❌ [SOCKET] No socket available from context');
+      throw new Error('No socket available from context');
+    }
+    
+    // Clean up existing socket listeners if socket reference exists
+    if (socketRef.current) {
+      cleanupSocketListeners();
+    }
+    
+    socketRef.current = contextSocket;
+    console.log('🔗 [SOCKET] Using socket from context:', !!contextSocket, 'connected:', contextSocket.connected);
+    
+    // Set up socket event listeners
+    setupSocketListeners();
+    
+    console.log('✅ [SOCKET] Socket initialized successfully');
+  }, [contextSocket, setupSocketListeners, cleanupSocketListeners]);
+
+  // ===== AUTO-RECONNECTION =====
+  const handleReconnection = useCallback(async () => {
+    if (isReconnectingRef.current) {
+      console.log('🔄 [RECONNECT] Already reconnecting, skipping...');
+      return;
+    }
+
+    if (reconnectAttemptsRef.current >= maxReconnectAttempts) {
+      console.log('❌ [RECONNECT] Max attempts reached, stopping reconnection');
+      safeSetState(setConnected, false);
+      return;
+    }
+
+    // Check if session is already ended before attempting reconnection
+    try {
+      console.log('🔍 [RECONNECT] Checking session status before reconnection...');
+      
+      // Get a valid token (refresh if needed)
+      let tokenToUse = authUser?.token;
+      
+      // First attempt with current token
+      let response = await fetch(`https://jyotishcallbackend-2uxrv.ondigitalocean.app/api/v1/bookings/${bookingId}`, {
+        headers: {
+          'Authorization': `Bearer ${tokenToUse}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      
+      // If token expired, try to refresh and retry
+      if (response.status === 401 && refreshToken) {
+        console.log('🔑 [RECONNECT] Token expired, attempting refresh...');
+        const refreshResult = await refreshToken();
+        
+        if (refreshResult.success) {
+          console.log('✅ [RECONNECT] Token refreshed, retrying session status check');
+          tokenToUse = refreshResult.token;
+          
+          // Retry with refreshed token
+          response = await fetch(`https://jyotishcallbackend-2uxrv.ondigitalocean.app/api/v1/bookings/${bookingId}`, {
+            headers: {
+              'Authorization': `Bearer ${tokenToUse}`,
+              'Content-Type': 'application/json'
+            }
+          });
+        } else {
+          console.log('❌ [RECONNECT] Token refresh failed, proceeding with socket reconnection');
+          if (refreshResult.shouldLogout) {
+            Alert.alert(
+              'Session Expired',
+              'Your login session has expired. Please login again.',
+              [{ text: 'OK', onPress: () => navigation.navigate('Login') }]
+            );
+            return;
+          }
+        }
+      }
+      
+      if (response.ok) {
+        const bookingData = await response.json();
+        console.log('🔍 [RECONNECT] Session status check result:', bookingData.status);
+        
+        if (bookingData.status === 'completed' || bookingData.status === 'cancelled') {
+          console.log('❌ [RECONNECT] Session already ended, navigating back');
+          Alert.alert(
+            'Session Ended',
+            'Your consultation session has ended while the app was in background.',
+            [{ text: 'OK', onPress: () => navigation.goBack() }]
+          );
+          return;
+        }
+      } else if (response.status === 401) {
+        console.log('🔑 [RECONNECT] Token still expired after refresh attempt - proceeding with socket reconnection (socket auth may still work)');
+        // Don't block reconnection due to expired token - socket authentication might still work
+        // The socket connection uses a different authentication mechanism
+      } else {
+        console.log(`⚠️ [RECONNECT] Session status check failed with status ${response.status}, proceeding with reconnection`);
+      }
+    } catch (error) {
+      console.log('⚠️ [RECONNECT] Could not check session status, proceeding with reconnection:', error.message);
+      // Network errors or other issues - proceed with reconnection attempt
+    }
+
+    isReconnectingRef.current = true;
+    reconnectAttemptsRef.current += 1;
+    
+    console.log(`🔄 [RECONNECT] Attempt ${reconnectAttemptsRef.current}/${maxReconnectAttempts}`);
+    safeSetState(setConnected, false);
+    
+    // Set loading state during reconnection
+    if (loadingStateSetRef.current && mountedRef.current) {
+      console.log(`🎯 [LOADING] Setting loading during reconnection (Instance: ${instanceId.current})`);
+      loadingStateSetRef.current = false;
+      safeSetState(setLoading, true);
+    }
+
+    try {
+      // Reset socket state
+      socketInitializedRef.current = false;
+      initializationCompleteRef.current = false;
+
+      // Initialize socket with proper cleanup
+      await initializeSocket();
+      
+      // Wait for SocketContext to establish connection
+      await new Promise((resolve, reject) => {
+        const timeout = setTimeout(() => {
+          console.log('⚠️ [RECONNECT] Connection timeout - proceeding anyway');
+          resolve(); // Don't reject, just proceed
+        }, 5000); // Reduced timeout
+        
+        const checkConnection = () => {
+          // Check both socket reference and context connection state
+          const isConnected = socketConnected || socketRef.current?.connected || contextSocket?.connected;
+          console.log('🔍 [RECONNECT] Connection check - socketConnected:', socketConnected, 'socketRef.connected:', socketRef.current?.connected, 'contextSocket.connected:', contextSocket?.connected);
+          
+          if (isConnected) {
+            console.log('✅ [RECONNECT] Connection detected, proceeding');
+            clearTimeout(timeout);
+            resolve();
+          } else {
+            setTimeout(checkConnection, 200);
+          }
+        };
+        checkConnection();
+      });
+
+      // Rejoin room
+      joinConsultationRoom();
+      
+      // Sync timer from session state
+      syncTimerFromSession();
+      
+      // Request missed messages
+      await requestMissedMessages();
+      
+      console.log('✅ [RECONNECT] Successfully reconnected and synced');
+      safeSetState(setConnected, true);
+      reconnectAttemptsRef.current = 0;
+      
+      // Clear loading state after successful reconnection
+      if (!loadingStateSetRef.current && mountedRef.current) {
+        console.log(`🎯 [LOADING] Clearing loading after reconnection (Instance: ${instanceId.current})`);
+        loadingStateSetRef.current = true;
+        safeSetState(setLoading, false);
+      }
+      
+    } catch (error) {
+      console.error('❌ [RECONNECT] Failed:', error);
+      
+      // Check if the error is due to session being ended
+      if (error.message.includes('session') || error.message.includes('ended') || error.message.includes('completed')) {
+        console.log('❌ [RECONNECT] Session ended during reconnection, navigating back');
+        Alert.alert(
+          'Session Ended',
+          'Your consultation session has ended.',
+          [{ text: 'OK', onPress: () => navigation.goBack() }]
+        );
+        return;
+      }
+      
+      // Exponential backoff for retry
+      const delay = Math.min(1000 * Math.pow(2, reconnectAttemptsRef.current - 1), 30000);
+      console.log(`🔄 [RECONNECT] Retrying in ${delay}ms`);
+      
+      reconnectTimeoutRef.current = setTimeout(() => {
+        if (mountedRef.current) {
+          handleReconnection();
+        }
+      }, delay);
+    } finally {
+      isReconnectingRef.current = false;
+    }
+  }, [safeSetState, syncTimerFromSession, requestMissedMessages, initializeSocket, joinConsultationRoom, bookingId, authUser?.token, navigation]);
+  
+  // Update ref to current function
+  handleReconnectionRef.current = handleReconnection;
+
+  const requestMissedMessages = useCallback(async () => {
+    console.log('📨 [MESSAGES] Requesting missed messages since:', lastMessageTimestampRef.current);
+    
+    try {
+      // Try socket first
+      const socket = socketRef.current;
+      if (socket?.connected) {
+        console.log('📨 [MESSAGES] Using socket for missed messages');
+        
+        return new Promise((resolve) => {
+          const timeout = setTimeout(() => {
+            console.log('⚠️ [MESSAGES] Socket timeout, falling back to API');
+            resolve();
+          }, 5000);
+          
+          socket.emit('get_missed_messages', {
+            bookingId,
+            sessionId,
+            since: lastMessageTimestampRef.current,
+            roomId: getCurrentRoomId()
+          }, (response) => {
+            clearTimeout(timeout);
+            console.log('📨 [MESSAGES] Socket missed messages response:', response);
+            
+            if (response?.messages && Array.isArray(response.messages)) {
+              const newMessages = response.messages.filter(msg => 
+                !messages.find(existing => existing.id === msg.id)
+              );
+              
+              if (newMessages.length > 0) {
+                console.log(`📨 [MESSAGES] Adding ${newMessages.length} missed messages via socket`);
+                safeSetState(setMessages, prev => {
+                  const combined = [...prev, ...newMessages];
+                  return combined.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+                });
+                
+                // Update last message timestamp
+                const latestTimestamp = Math.max(...newMessages.map(msg => new Date(msg.timestamp).getTime()));
+                lastMessageTimestampRef.current = latestTimestamp;
+              }
+            }
+            resolve();
+          });
+        });
+      }
+      
+      // API fallback if socket not available
+      console.log('📨 [MESSAGES] Socket not available, using API fallback');
+      await requestMissedMessagesViaAPI();
+      
+    } catch (error) {
+      console.error('❌ [MESSAGES] Failed to request missed messages:', error);
+      // Try API fallback on any error
+      await requestMissedMessagesViaAPI();
+    }
+  }, [bookingId, sessionId, getCurrentRoomId, messages, safeSetState]);
+  
+  const requestMissedMessagesViaAPI = useCallback(async () => {
+    try {
+      console.log('🌐 [MESSAGES] Fetching missed messages via API');
+      
+      // Get fresh token (with refresh if needed)
+      let token = authUser?.token;
+      
+      // Fix: Use correct API endpoint for chat history messages
+      let response = await fetch(`${API_BASE_URL}/chat-history/${sessionId}`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      
+      // If 401, try to refresh token and retry
+      if (response.status === 401) {
+        console.log('🔄 [MESSAGES] Token expired, attempting refresh...');
+        try {
+          // Try to refresh token
+          const refreshResponse = await fetch(`${API_BASE_URL}/auth/refresh`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${token}`
+            }
+          });
+          
+          if (refreshResponse.ok) {
+            const refreshData = await refreshResponse.json();
+            token = refreshData.token;
+            console.log('✅ [MESSAGES] Token refreshed successfully');
+            
+            // Retry the original request with new token
+            response = await fetch(`${API_BASE_URL}/chat-history/${sessionId}`, {
+              method: 'GET',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+              }
+            });
+          } else {
+            console.log('❌ [MESSAGES] Token refresh failed, using socket fallback');
+            return; // Fall back to socket-based missed messages
+          }
+        } catch (refreshError) {
+          console.error('❌ [MESSAGES] Token refresh error:', refreshError);
+          return; // Fall back to socket-based missed messages
+        }
+      }
+      
+      if (response.ok) {
+        const data = await response.json();
+        // Chat history endpoint returns data.data.messages format
+        const messagesArray = data.success && data.data && data.data.messages ? data.data.messages : [];
+        if (messagesArray && Array.isArray(messagesArray)) {
+          // Filter messages that are newer than our last timestamp
+          const newMessages = messagesArray.filter(msg => {
+            const msgTime = new Date(msg.timestamp || msg.createdAt).getTime();
+            return msgTime > lastMessageTimestampRef.current && 
+                   !messages.find(existing => existing.id === msg.id);
+          });
+          
+          if (newMessages.length > 0) {
+            console.log(`📨 [MESSAGES] Adding ${newMessages.length} missed messages via API`);
+            safeSetState(setMessages, prev => {
+              const combined = [...prev, ...newMessages];
+              return combined.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+            });
+            
+            // Update last message timestamp
+            const latestTimestamp = Math.max(...newMessages.map(msg => new Date(msg.timestamp).getTime()));
+            lastMessageTimestampRef.current = latestTimestamp;
+          }
+        }
+      } else {
+        console.error('❌ [MESSAGES] API request failed:', response.status);
+      }
+    } catch (error) {
+      console.error('❌ [MESSAGES] API fallback failed:', error);
+    }
+  }, [bookingId, messages, safeSetState]);
+  
+  // Update ref to current function
+  requestMissedMessagesRef.current = requestMissedMessages;
 
   // ===== TIMER MANAGEMENT =====
-  const startLocalTimer = useCallback((duration = 0) => {
-    console.log('⏱️ [TIMER] Starting local timer with duration:', duration);
+  const startLocalTimer = useCallback((duration = 0, existingStartTime = null) => {
+    console.log('⏱️ [TIMER] Starting local timer with duration:', duration, 'existingStartTime:', existingStartTime);
     
     if (timerIntervalRef.current) {
       clearInterval(timerIntervalRef.current);
     }
     
-    const startTime = Date.now();
+    const startTime = existingStartTime || Date.now();
+    const currentElapsed = existingStartTime ? Math.floor((Date.now() - existingStartTime) / 1000) : 0;
+    
+    // Save session state with proper startTime
+    saveSessionState(startTime, duration);
+    
     safeSetState(setTimerData, {
-      elapsed: 0,
+      elapsed: currentElapsed,
       duration,
       isActive: true,
       startTime
     });
     
+    console.log('⏱️ [TIMER] Timer started with startTime:', startTime, 'currentElapsed:', currentElapsed);
+    
     timerIntervalRef.current = setInterval(() => {
       if (!mountedRef.current) return;
       
       const elapsed = Math.floor((Date.now() - startTime) / 1000);
-      safeSetState(setTimerData, prev => ({
-        ...prev,
-        elapsed
-      }));
+      if (elapsed < duration) {
+        safeSetState(setTimerData, prev => ({
+          ...prev,
+          elapsed
+        }));
+      } else {
+        // Timer completed
+        clearInterval(timerIntervalRef.current);
+        timerIntervalRef.current = null;
+        safeSetState(setTimerData, prev => ({
+          ...prev,
+          elapsed: duration,
+          isActive: false
+        }));
+      }
     }, 1000);
   }, [safeSetState]);
 
@@ -122,37 +543,43 @@ const FixedChatScreen = ({ route, navigation }) => {
   }, [safeSetState]);
 
   // ===== MESSAGE HANDLING =====
-  const handleIncomingMessage = useCallback((messageData) => {
-    console.log('📨 [MESSAGE] Received:', messageData);
+  const handleIncomingMessage = useCallback((data) => {
+    console.log('📨 [MESSAGE] Received:', data);
     
-    if (!messageData || !messageData.content) {
-      console.warn('⚠️ [MESSAGE] Invalid message data received');
+    if (data.senderId === authUser?.id) {
+      console.log('⚠️ [MESSAGE] Ignoring own message');
       return;
     }
-    
-    const messageTime = new Date(messageData.timestamp || Date.now()).getTime();
-    if (messageTime <= lastMessageTimestampRef.current) {
-      console.log('🔄 [MESSAGE] Duplicate message ignored');
-      return;
-    }
-    lastMessageTimestampRef.current = messageTime;
     
     const newMessage = {
-      id: messageData.id || generateMessageId(),
-      content: messageData.content,
-      senderId: messageData.senderId,
-      senderType: messageData.senderType || 'astrologer',
-      timestamp: messageData.timestamp || new Date().toISOString(),
-      status: 'delivered'
+      id: data.id || generateMessageId(),
+      content: data.content || data.text || data.message,
+      senderId: data.senderId,
+      senderType: data.senderType || 'astrologer',
+      timestamp: data.timestamp || new Date().toISOString(),
+      status: 'received'
     };
     
-    safeSetState(setMessages, prev => [...prev, newMessage]);
+    // Update last message timestamp for missed message tracking
+    const messageTimestamp = new Date(newMessage.timestamp).getTime();
+    if (messageTimestamp > lastMessageTimestampRef.current) {
+      lastMessageTimestampRef.current = messageTimestamp;
+    }
+    
+    safeSetState(setMessages, prev => {
+      const exists = prev.find(msg => msg.id === newMessage.id);
+      if (exists) {
+        console.log('⚠️ [MESSAGE] Duplicate message ignored:', newMessage.id);
+        return prev;
+      }
+      return [...prev, newMessage];
+    });
     
     setTimeout(() => {
       flatListRef.current?.scrollToEnd({ animated: true });
     }, 100);
-  }, [generateMessageId, safeSetState]);
-  
+  }, [authUser?.id, generateMessageId, safeSetState]);
+
   const handleMessageDelivered = useCallback((data) => {
     console.log('✅ [MESSAGE] Delivered:', data);
     
@@ -167,14 +594,14 @@ const FixedChatScreen = ({ route, navigation }) => {
   
   const handleTypingIndicator = useCallback((data) => {
     if (data.userId !== authUser?.id) {
-      safeSetState(setAstrologerTyping, data.isTyping);
+      safeSetState(setIsTyping, data.isTyping);
       
       if (data.isTyping) {
         if (typingTimeoutRef.current) {
           clearTimeout(typingTimeoutRef.current);
         }
         typingTimeoutRef.current = setTimeout(() => {
-          safeSetState(setAstrologerTyping, false);
+          safeSetState(setIsTyping, false);
         }, 3000);
       }
     }
@@ -182,72 +609,104 @@ const FixedChatScreen = ({ route, navigation }) => {
   
   // ===== SESSION EVENT HANDLERS =====
   const handleSessionStarted = useCallback((data) => {
-    console.log('🚀 [SESSION] Session started:', data);
-    console.log('🚀 [SESSION] Setting sessionActive to true');
+    console.log('🎯 [SESSION] Session started:', data);
     safeSetState(setSessionActive, true);
-    safeSetState(setConnectionStatus, 'connected');
+    safeSetState(setConnected, true);
     
     if (data.duration) {
-      console.log('🚀 [SESSION] Starting local timer with duration:', data.duration);
-      startLocalTimer(data.duration);
+      const duration = parseInt(data.duration, 10);
+      console.log('⏱️ [SESSION] Starting timer with duration from session start:', duration);
+      
+      // Save session state for reconnection
+      const startTime = Date.now();
+      saveSessionState(startTime, duration);
+      
+      startLocalTimer(duration);
     } else {
       console.log('⚠️ [SESSION] No duration provided in session start data');
     }
-  }, [safeSetState, startLocalTimer]);
+  }, [safeSetState, startLocalTimer, saveSessionState]);
   
   const handleTimerUpdate = useCallback((data) => {
     console.log('⏱️ [TIMER] Update received:', data);
     console.log('⏱️ [TIMER] Current bookingId:', bookingId);
     console.log('⏱️ [TIMER] Data bookingId:', data.bookingId);
     
+    // Validate the timer update is for this session
     if (data.bookingId !== bookingId) {
-      console.log('⚠️ [TIMER] Ignoring timer for different booking');
+      console.log('⚠️ [TIMER] Ignoring timer update for different booking');
       return;
     }
     
-    safeSetState(setConnectionStatus, 'connected');
+    const duration = data.duration || data.elapsed || 0;
+    const totalDuration = data.totalDuration || duration;
+    console.log('⏱️ [TIMER] Activating timer with backend elapsed:', duration, 'totalDuration:', totalDuration);
     
-    // Always activate timer when receiving backend timer events
-    if (data.elapsed !== undefined || data.durationSeconds !== undefined || data.duration !== undefined) {
-      const backendElapsed = parseInt(data.elapsed || data.durationSeconds || data.duration, 10);
-      console.log('⏱️ [TIMER] Activating timer with backend elapsed:', backendElapsed);
-      console.log('⏱️ [TIMER] Setting timer data - isActive: true, elapsed:', backendElapsed);
-      
-      safeSetState(setTimerData, prev => {
-        const newTimerData = {
-          ...prev,
-          elapsed: backendElapsed,
-          isActive: true,
-          duration: data.duration || prev.duration
-        };
-        console.log('⏱️ [TIMER] New timer data:', newTimerData);
-        return newTimerData;
-      });
-    } else {
-      console.log('⚠️ [TIMER] No elapsed, durationSeconds, or duration in data:', data);
-    }
-  }, [bookingId, safeSetState]);
-  
+    // Calculate proper startTime based on backend elapsed time
+    const backendStartTime = Date.now() - (duration * 1000);
+    saveSessionState(backendStartTime, totalDuration);
+    
+    console.log('⏱️ [TIMER] Setting timer data - isActive: true, elapsed:', duration, 'startTime:', backendStartTime);
+    safeSetState(setTimerData, {
+      elapsed: duration,
+      duration: totalDuration,
+      isActive: true,
+      startTime: backendStartTime // Fix: Use calculated startTime instead of null
+    });
+    
+    console.log('⏱️ [TIMER] New timer data:', {
+      duration: totalDuration,
+      elapsed: duration,
+      isActive: true,
+      startTime: backendStartTime
+    });
+    
+    safeSetState(setSessionActive, true);
+    
+    // Start local timer with existing startTime to maintain continuity
+    startLocalTimer(totalDuration, backendStartTime);
+  }, [bookingId, safeSetState, startLocalTimer]);
 
-  
   const handleSessionEnded = useCallback((data) => {
     console.log('🛑 [SESSION] Session ended:', data);
+    
+    // Validate this session end event is for current session
+    if (data.bookingId && data.bookingId !== bookingId) {
+      console.log('⚠️ [SESSION] Ignoring session end for different booking:', data.bookingId);
+      return;
+    }
+    
     safeSetState(setSessionActive, false);
+    safeSetState(setConnected, false);
     stopLocalTimer();
+    
+    // Clear any ongoing reconnection attempts
+    if (reconnectTimeoutRef.current) {
+      clearTimeout(reconnectTimeoutRef.current);
+      reconnectTimeoutRef.current = null;
+    }
+    isReconnectingRef.current = false;
+    reconnectAttemptsRef.current = 0;
+    
+    const endReason = data.endedBy === 'astrologer' ? 'The astrologer has ended the session.' : 'The session has ended.';
     
     Alert.alert(
       'Session Ended',
-      'Your consultation session has ended.',
-      [{ text: 'OK', onPress: () => navigation.goBack() }]
+      endReason,
+      [{ text: 'OK', onPress: () => {
+        if (mountedRef.current) {
+          navigation.goBack();
+        }
+      }}]
     );
-  }, [safeSetState, stopLocalTimer, navigation]);
+  }, [safeSetState, stopLocalTimer, navigation, bookingId]);
 
   const joinConsultationRoom = useCallback(() => {
     const currentSocket = socketRef.current;
-    if (!currentSocket || roomJoinedRef.current) {
+    if (!currentSocket || initializationCompleteRef.current) {
       console.log('⚠️ [ROOM] Skipping room join - socket not available or already joined');
       console.log('⚠️ [ROOM] Socket available:', !!currentSocket);
-      console.log('⚠️ [ROOM] Already joined:', roomJoinedRef.current);
+      console.log('⚠️ [ROOM] Already joined:', initializationCompleteRef.current);
       return;
     }
     
@@ -279,39 +738,106 @@ const FixedChatScreen = ({ route, navigation }) => {
     });
     console.log('✅ [EMIT] user_joined_consultation event emitted successfully');
     
-    roomJoinedRef.current = true;
+    initializationCompleteRef.current = true;
     console.log('🏠 [ROOM] Room join process completed');
   }, [getCurrentRoomId, bookingId, sessionId, authUser?.id]);
 
-  const setupSocketListeners = useCallback(() => {
+  const cleanupSocketListeners = useCallback(() => {
     const socket = socketRef.current;
     if (!socket) return;
     
+    console.log('🧹 [SOCKET] Cleaning up event listeners');
+    
+    const events = [
+      'connect', 'disconnect', 'connect_error',
+      'receive_message', 'message_delivered', 'typing_indicator',
+      'session_started', 'session_timer', 'session_timer_update', 'session_ended',
+      'consultation_ended'
+    ];
+    
+    events.forEach(event => {
+      socket.off(event);
+    });
+  }, []);
+
+  const setupSocketListeners = useCallback(() => {
+    const socket = socketRef.current;
+    if (!socket) {
+      console.log('⚠️ [SOCKET] No socket available for listener setup');
+      return;
+    }
+    
     console.log('👂 [SOCKET] Setting up event listeners');
     
+    // Clean up existing listeners first to prevent duplicates
+    cleanupSocketListeners();
+    
     socket.on('connect', () => {
-      console.log('✅ [SOCKET] Connected successfully');
-      safeSetState(setConnectionStatus, 'connecting');
-      joinConsultationRoom();
+      console.log(`🔗 [SOCKET] Connected to server (Instance: ${instanceId.current})`);
+      safeSetState(setConnected, true);
+      reconnectAttemptsRef.current = 0;
+      
+      // Clear loading state on successful connection
+      if (!loadingStateSetRef.current && mountedRef.current) {
+        console.log(`🎯 [LOADING] Clearing loading on connect (Instance: ${instanceId.current})`);
+        loadingStateSetRef.current = true;
+        safeSetState(setLoading, false);
+      }
+      
+      // Join consultation room after connection
+      if (!initializationCompleteRef.current) {
+        joinConsultationRoom();
+      }
     });
     
     socket.on('disconnect', (reason) => {
-      console.log('❌ [SOCKET] Disconnected:', reason);
-      safeSetState(setConnectionStatus, 'connecting');
-      if (reason === 'io server disconnect') {
-        socket.connect();
+      console.log(`🔌 [SOCKET] Disconnected from server (Instance: ${instanceId.current}):`, reason);
+      safeSetState(setConnected, false);
+      
+      // Reset initialization flag to allow rejoining room on reconnect
+      initializationCompleteRef.current = false;
+      
+      // Reset loading state on disconnect to show reconnecting state
+      if (loadingStateSetRef.current && mountedRef.current) {
+        console.log(`🎯 [LOADING] Setting loading on disconnect (Instance: ${instanceId.current})`);
+        loadingStateSetRef.current = false;
+        safeSetState(setLoading, true);
+      }
+      
+      // Auto-reconnect for any disconnect reason except manual disconnects
+      if (mountedRef.current && reason !== 'io client disconnect') {
+        console.log('🔄 [RECONNECT] Starting auto-reconnection due to disconnect');
+        setTimeout(() => {
+          if (mountedRef.current && handleReconnectionRef.current) {
+            handleReconnectionRef.current();
+          }
+        }, 1000); // Small delay to prevent rapid reconnection attempts
       }
     });
     
     socket.on('connect_error', (error) => {
       console.error('❌ [SOCKET] Connection error:', error);
-      safeSetState(setConnectionStatus, 'error');
+      safeSetState(setConnected, false);
     });
     
-    socket.on('receive_message', handleIncomingMessage);
+    socket.on('receive_message', (data) => {
+      console.log('📨 [MESSAGE] Received via socket listener:', data);
+      handleIncomingMessage(data);
+    });
     socket.on('message_delivered', handleMessageDelivered);
     socket.on('typing_indicator', handleTypingIndicator);
     socket.on('session_started', handleSessionStarted);
+    socket.on('session_timer_update', handleTimerUpdate);
+    socket.on('session_ended', handleSessionEnded);
+    
+    // Global session end listener for consultation_ended events
+    socket.on('consultation_ended', (data) => {
+      console.log('🏁 [GLOBAL] Consultation ended event received:', data);
+      if (data.bookingId === bookingId) {
+        console.log('🏁 [GLOBAL] Consultation ended for current session, handling...');
+        handleSessionEnded(data);
+      }
+    });
     socket.on('session_timer', (data) => {
       console.log('🎯 [DEBUG] Raw session_timer event received:', JSON.stringify(data, null, 2));
       handleTimerUpdate(data);
@@ -322,87 +848,18 @@ const FixedChatScreen = ({ route, navigation }) => {
       console.log('🎯 [DEBUG] Raw session_timer_update event received:', JSON.stringify(data, null, 2));
       handleTimerUpdate(data);
     });
-    socket.on('session_ended', handleSessionEnded);
     
-    // Add debug listeners for room join events
-    socket.on('room_joined', (data) => {
-      console.log('🏠 [DEBUG] Room joined confirmation:', JSON.stringify(data, null, 2));
-    });
-    
-    socket.on('user_joined_consultation_ack', (data) => {
-      console.log('🏠 [DEBUG] User joined consultation ack:', JSON.stringify(data, null, 2));
-    });
-    
-    // Debug: Listen for all timer-related events
-    socket.on('session_timer_started', (data) => {
-      console.log('🎯 [DEBUG] session_timer_started event:', JSON.stringify(data, null, 2));
-    });
-    
-    socket.on('session_timer_update', (data) => {
-      console.log('🎯 [DEBUG] session_timer_update event:', JSON.stringify(data, null, 2));
-    });
-    
-    // Debug: Track socket connection events
-    const originalOnevent = socket.onevent;
-    socket.onevent = function(packet) {
-      const args = packet.data || [];
-      const eventName = args[0];
-      const eventData = args[1];
-      
-      // Log all events for debugging
-      if (eventName && eventName.includes('timer') || eventName.includes('session')) {
-        console.log('🔍 [DEBUG] Socket event received:', eventName, JSON.stringify(eventData, null, 2));
-      }
-      
-      originalOnevent.call(this, packet);
-    };
-    
-  }, [bookingId]); // Only stable dependencies to prevent event listener loss
-
-  const initializeSocket = useCallback(async () => {
-    console.log('🔌 [SOCKET] Initializing socket connection');
-    
-    try {
-      const socket = await getSocket();
-      if (!socket) {
-        throw new Error('Failed to get socket instance');
-      }
-      
-      socketRef.current = socket;
-      
-      if (!socket.connected) {
-        console.log('🔌 [SOCKET] Connecting socket...');
-        socket.connect();
-      }
-      
-      setupSocketListeners();
-      safeSetState(setConnectionStatus, 'connecting');
-      
-    } catch (error) {
-      console.error('❌ [SOCKET] Initialization failed:', error);
-      safeSetState(setConnectionStatus, 'error');
-      
-      if (reconnectTimeoutRef.current) {
-        clearTimeout(reconnectTimeoutRef.current);
-      }
-      
-      reconnectTimeoutRef.current = setTimeout(() => {
-        if (mountedRef.current) {
-          console.log('🔄 [SOCKET] Attempting reconnection...');
-          initializeSocket();
-        }
-      }, 3000);
-    }
-  }, [safeSetState, setupSocketListeners]);
+    console.log('✅ [SOCKET] Event listeners setup complete');
+  }, [safeSetState, cleanupSocketListeners, joinConsultationRoom, handleIncomingMessage, handleMessageDelivered, handleTypingIndicator, handleSessionStarted, handleTimerUpdate, handleSessionEnded, bookingId]);
 
   // ===== MESSAGE SENDING =====
   const sendMessage = useCallback(async () => {
-    if (!inputText.trim() || !sessionActive) {
+    if (!messageText.trim() || !sessionActive) {
       console.log('⚠️ [MESSAGE] Cannot send - empty text or session inactive');
       return;
     }
     
-    const messageContent = inputText.trim();
+    const messageContent = messageText.trim();
     const messageId = generateMessageId();
     
     const optimisticMessage = {
@@ -415,7 +872,7 @@ const FixedChatScreen = ({ route, navigation }) => {
     };
     
     safeSetState(setMessages, prev => [...prev, optimisticMessage]);
-    safeSetState(setInputText, '');
+    safeSetState(setMessageText, '');
     
     setTimeout(() => {
       flatListRef.current?.scrollToEnd({ animated: true });
@@ -481,10 +938,10 @@ const FixedChatScreen = ({ route, navigation }) => {
         )
       );
     }
-  }, [inputText, sessionActive, generateMessageId, authUser?.id, bookingId, sessionId, getCurrentRoomId, safeSetState]);
+  }, [messageText, sessionActive, generateMessageId, authUser?.id, bookingId, sessionId, getCurrentRoomId, safeSetState]);
   
   const handleInputChange = useCallback((text) => {
-    safeSetState(setInputText, text);
+    safeSetState(setMessageText, text);
     
     const socket = socketRef.current;
     if (socket?.connected && sessionActive) {
@@ -540,15 +997,31 @@ const FixedChatScreen = ({ route, navigation }) => {
     console.log('🔄 [LIFECYCLE] Component mounted');
     mountedRef.current = true;
     
-    // Remove duplicate socket initialization - handled by main init useEffect
-    
     const handleAppStateChange = (nextAppState) => {
       console.log('📱 [APP-STATE] Changed to:', nextAppState);
       
       if (appStateRef.current.match(/inactive|background/) && nextAppState === 'active') {
-        console.log('🔄 [APP-STATE] App foregrounded, reconnecting...');
-        if (socketRef.current && !socketRef.current.connected) {
-          initializeSocket();
+        console.log('🔄 [APP-STATE] App foregrounded, checking connection...');
+        
+        // Reset reconnection attempts on app foreground
+        reconnectAttemptsRef.current = 0;
+        
+        if (!socketRef.current?.connected) {
+          console.log('🔄 [APP-STATE] Socket disconnected, triggering auto-reconnection...');
+          handleReconnection();
+        } else {
+          console.log('✅ [APP-STATE] Socket still connected, syncing state...');
+          
+          // Re-join room if needed
+          if (!initializationCompleteRef.current) {
+            console.log('🔄 [APP-STATE] Re-joining consultation room after foreground');
+            joinConsultationRoom();
+          }
+          
+          // Sync timer from session state even if connected
+          syncTimerFromSession();
+          // Request any missed messages
+          requestMissedMessages();
         }
       }
       
@@ -557,13 +1030,27 @@ const FixedChatScreen = ({ route, navigation }) => {
     
     const appStateSubscription = AppState.addEventListener('change', handleAppStateChange);
     
-    setTimeout(() => {
-      safeSetState(setLoading, false);
-    }, 1000);
+    // Improved loading state management
+    const clearLoadingState = () => {
+      if (!loadingStateSetRef.current && mountedRef.current) {
+        console.log(`🎯 [LOADING] Clearing loading state (Instance: ${instanceId.current})`);
+        loadingStateSetRef.current = true;
+        safeSetState(setLoading, false);
+      }
+    };
+    
+    // Clear loading after initialization or timeout
+    setTimeout(clearLoadingState, 1000);
     
     return () => {
-      console.log('🧹 [LIFECYCLE] Component unmounting');
+      console.log(`🧹 [LIFECYCLE] Component unmounting (Instance: ${instanceId.current})`);
       mountedRef.current = false;
+      
+      // Reset all refs for cleanup
+      socketInitializedRef.current = false;
+      mountingGuardRef.current = false;
+      initializationCompleteRef.current = false;
+      loadingStateSetRef.current = false;
       
       if (timerIntervalRef.current) {
         clearInterval(timerIntervalRef.current);
@@ -576,30 +1063,31 @@ const FixedChatScreen = ({ route, navigation }) => {
       }
       
       if (socketRef.current) {
-        const events = [
-          'connect', 'disconnect', 'connect_error',
-          'receive_message', 'message_delivered', 'typing_indicator',
-          'session_started', 'session_timer', 'session_ended'
-        ];
-        
-        events.forEach(event => {
-          socketRef.current.off(event);
-        });
+        cleanupSocketListeners();
       }
       
       appStateSubscription?.remove();
     };
-  }, [safeSetState]); // Remove initializeSocket from dependencies
+  }, []); // Remove all dependencies to prevent remounting
 
   // ===== MAIN COMPONENT INITIALIZATION =====
   useEffect(() => {
-    console.log('🚀 [INIT] Starting component initialization');
-    console.log('🚀 [INIT] BookingId:', bookingId, 'SessionId:', sessionId);
-    // Prevent duplicate initialization
-    if (socketInitializedRef.current) {
-      console.log('⚠️ [INIT] Socket already initialized, skipping duplicate initialization');
+    // Skip initialization for duplicate mounts
+    if (mountingGuardRef.current) {
+      console.log('⚠️ [INIT] Skipping initialization for duplicate mount:', instanceId.current);
       return;
     }
+    
+    // Prevent duplicate initialization
+    if (socketInitializedRef.current) {
+      console.log('⚠️ [INIT] Socket already initialized, skipping duplicate initialization:', instanceId.current);
+      return;
+    }
+    
+    console.log('🚀 [INIT] Starting component initialization for:', instanceId.current);
+    console.log('🚀 [INIT] BookingId:', bookingId, 'SessionId:', sessionId);
+    console.log('🚀 [INIT] AuthUser:', !!authUser?.id);
+    console.log('🚀 [INIT] ContextSocket available:', !!contextSocket);
     
     if (!bookingId) {
       console.error('❌ [INIT] Missing bookingId:', bookingId);
@@ -611,64 +1099,86 @@ const FixedChatScreen = ({ route, navigation }) => {
       return;
     }
     
+    if (!contextSocket) {
+      console.log('⚠️ [INIT] No context socket available yet, waiting...');
+      return;
+    }
+    
     // Mark socket as being initialized
     socketInitializedRef.current = true;
+    mountingGuardRef.current = true;
     
     // Initialize socket connection
     const initTimer = setTimeout(() => {
       console.log('🚀 [INIT] Initializing socket after delay');
-      initializeSocket();
-      
-      // Join room after socket initialization
-      setTimeout(() => {
-        console.log('🚀 [INIT] Joining consultation room');
-        joinConsultationRoom();
-      }, 1000);
+      initializeSocket().then(() => {
+        if (mountedRef.current) {
+          console.log(`✅ [INIT] Initialization complete (Instance: ${instanceId.current})`);
+          
+          // Join room after socket initialization
+          setTimeout(() => {
+            if (mountedRef.current && !initializationCompleteRef.current) {
+              console.log('🚀 [INIT] Joining consultation room');
+              joinConsultationRoom();
+            }
+          }, 500);
+          
+          // Clear loading state after successful initialization
+          setTimeout(() => {
+            if (!loadingStateSetRef.current && mountedRef.current) {
+              console.log(`🎯 [LOADING] Clearing loading after init (Instance: ${instanceId.current})`);
+              loadingStateSetRef.current = true;
+              safeSetState(setLoading, false);
+            }
+          }, 1000);
+        }
+      }).catch(error => {
+        console.error(`❌ [INIT] Initialization failed (Instance: ${instanceId.current}):`, error);
+        mountingGuardRef.current = false;
+        socketInitializedRef.current = false;
+        
+        // Show error state if initialization fails
+        if (mountedRef.current) {
+          safeSetState(setConnected, false);
+          Alert.alert('Connection Error', 'Failed to connect to the consultation. Please try again.');
+        }
+      });
     }, 500);
     
     return () => {
       clearTimeout(initTimer);
-      console.log('🚀 [CLEANUP] Component cleanup');
+      console.log('🚀 [CLEANUP] Component cleanup for:', instanceId.current);
       
       // Clean up socket listeners and connection
       if (socketRef.current) {
         console.log('🚀 [CLEANUP] Cleaning up socket listeners');
-        const events = [
-          'connect', 'disconnect', 'connect_error',
-          'receive_message', 'message_delivered', 'typing_indicator',
-          'session_started', 'session_timer', 'session_ended'
-        ];
+        cleanupSocketListeners();
         
-        events.forEach(event => {
-          socketRef.current.off(event);
-        });
-        
+        // Reset socket reference
         socketRef.current = null;
       }
       
       // Reset initialization flags for proper remount handling
       socketInitializedRef.current = false;
-      roomJoinedRef.current = false;
+      mountingGuardRef.current = false;
+      initializationCompleteRef.current = false;
+      loadingStateSetRef.current = false;
       
       // Clear any active timers
       if (timerIntervalRef.current) {
         clearInterval(timerIntervalRef.current);
         timerIntervalRef.current = null;
       }
-      
       if (reconnectTimeoutRef.current) {
         clearTimeout(reconnectTimeoutRef.current);
         reconnectTimeoutRef.current = null;
       }
-      
       if (typingTimeoutRef.current) {
         clearTimeout(typingTimeoutRef.current);
         typingTimeoutRef.current = null;
       }
-      initializationCompleteRef.current = false;
-      socketInitializedRef.current = false;
     };
-  }, [bookingId, sessionId, authUser?.id]);
+  }, []); // Empty dependency array to prevent remounting
 
   // ===== RENDER =====
   const renderMessage = useCallback(({ item }) => {
@@ -686,9 +1196,8 @@ const FixedChatScreen = ({ route, navigation }) => {
             </Text>
             {isOwnMessage && (
               <View style={styles.messageStatus}>
-                {item.status === 'sending' && <Ionicons name="time-outline" size={12} color="#E0E0E0" />}
-                {item.status === 'sent' && <Ionicons name="checkmark" size={12} color="#E0E0E0" />}
-                {item.status === 'delivered' && <Ionicons name="checkmark-done" size={12} color="#E0E0E0" />}
+                {item.status === 'sending' && <ActivityIndicator size={10} color="#999" />}
+                {item.status === 'sent' && <Ionicons name="checkmark" size={12} color="#4CAF50" />}
                 {item.status === 'failed' && <Ionicons name="alert-circle" size={12} color="#FF6B6B" />}
               </View>
             )}
@@ -710,16 +1219,19 @@ const FixedChatScreen = ({ route, navigation }) => {
   }
 
   const getStatusInfo = () => {
-    switch (connectionStatus) {
-      case 'connected':
-        return { color: '#10B981', text: sessionActive ? 'Connected' : 'Waiting for session to start...' };
-      case 'connecting':
-        return { color: '#F59E0B', text: 'Connecting...' };
-      case 'error':
-        return { color: '#EF4444', text: 'Connection lost. Retrying...' };
-      default:
-        return { color: '#6B7280', text: 'Unknown status' };
+    if (loading) {
+      return { color: '#F59E0B', text: 'Connecting...' };
     }
+    if (connected && sessionActive) {
+      return { color: '#10B981', text: 'Connected' };
+    }
+    if (connected && !sessionActive) {
+      return { color: '#F59E0B', text: 'Waiting for session to start...' };
+    }
+    if (!connected) {
+      return { color: '#EF4444', text: 'Connection lost. Retrying...' };
+    }
+    return { color: '#6B7280', text: 'Initializing...' };
   };
 
   const statusInfo = getStatusInfo();
@@ -784,7 +1296,7 @@ const FixedChatScreen = ({ route, navigation }) => {
           onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: true })}
         />
 
-        {astrologerTyping && (
+        {isTyping && (
           <View style={styles.typingContainer}>
             <Text style={styles.typingText}>Astrologer is typing...</Text>
           </View>
@@ -793,21 +1305,21 @@ const FixedChatScreen = ({ route, navigation }) => {
         <View style={styles.inputContainer}>
           <TextInput
             style={styles.textInput}
-            value={inputText}
+            value={messageText}
             onChangeText={handleInputChange}
             placeholder="Type your message..."
             placeholderTextColor="#999"
             multiline
             maxLength={1000}
-            editable={sessionActive && connectionStatus !== 'error'}
+            editable={sessionActive && connected}
           />
           <TouchableOpacity
             style={[
               styles.sendButton,
-              (!inputText.trim() || !sessionActive) && styles.sendButtonDisabled
+              (!messageText.trim() || !sessionActive) && styles.sendButtonDisabled
             ]}
             onPress={sendMessage}
-            disabled={!inputText.trim() || !sessionActive}
+            disabled={!messageText.trim() || !sessionActive}
           >
             <Ionicons name="send" size={20} color="#FFFFFF" />
           </TouchableOpacity>
@@ -1019,4 +1531,21 @@ const styles = StyleSheet.create({
   },
 });
 
-export default FixedChatScreen;
+// Wrap component in React.memo to prevent unnecessary remounts
+const MemoizedFixedChatScreen = React.memo(FixedChatScreen, (prevProps, nextProps) => {
+  // Only re-render if essential route params change
+  const prevParams = prevProps.route?.params || {};
+  const nextParams = nextProps.route?.params || {};
+  
+  const isEqual = (
+    prevParams.bookingId === nextParams.bookingId &&
+    prevParams.sessionId === nextParams.sessionId &&
+    prevParams.astrologerId === nextParams.astrologerId
+  );
+  
+  console.log('🔍 [MEMO] Props comparison result:', isEqual ? 'EQUAL (no re-render)' : 'DIFFERENT (re-render)');
+  
+  return isEqual;
+});
+
+export default MemoizedFixedChatScreen;
