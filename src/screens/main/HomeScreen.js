@@ -192,17 +192,17 @@ const HomeScreen = ({ navigation }) => {
          // console.log('✅ [FETCH_BOOKINGS] User pending bookings fetched:', response.pendingBookings);
           
           // Debug each booking's structure and status
-          (response.pendingBookings || []).forEach((booking, index) => {
-            console.log(`📝 [BOOKING_DEBUG] Booking ${index + 1}:`, {
-              id: booking._id || booking.bookingId,
-              status: booking.status,
-              callStatus: booking.callStatus,
-              type: booking.type,
-              astrologerName: booking.astrologer?.name,
-              createdAt: booking.createdAt,
-              fullBooking: JSON.stringify(booking, null, 2)
-            });
-          });
+          // (response.pendingBookings || []).forEach((booking, index) => {
+          //   console.log(`📝 [BOOKING_DEBUG] Booking ${index + 1}:`, {
+          //     id: booking._id || booking.bookingId,
+          //     status: booking.status,
+          //     callStatus: booking.callStatus,
+          //     type: booking.type,
+          //     astrologerName: booking.astrologer?.name,
+          //     createdAt: booking.createdAt,
+          //     fullBooking: JSON.stringify(booking, null, 2)
+          //   });
+          // });
           
           // Get only the most recent booking with valid status (accepted, pending, in-progress)
           let latestValidBooking = null;

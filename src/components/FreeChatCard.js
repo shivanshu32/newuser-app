@@ -31,7 +31,7 @@ const FreeChatCard = ({ navigation }) => {
   // Re-check eligibility when screen comes into focus (e.g., returning from chat session)
   useFocusEffect(
     React.useCallback(() => {
-      console.log('🆓 [FREE_CHAT_CARD] Screen focused - re-checking eligibility');
+     // console.log('🆓 [FREE_CHAT_CARD] Screen focused - re-checking eligibility');
       checkEligibility();
     }, [])
   );
@@ -137,30 +137,30 @@ const FreeChatCard = ({ navigation }) => {
 
   const checkEligibility = async () => {
     try {
-      console.log('🆓 [FREE_CHAT_CARD] Starting eligibility check...');
-      console.log('🆓 [FREE_CHAT_CARD] User:', user);
-      console.log('🆓 [FREE_CHAT_CARD] User ID:', user?._id);
+     // console.log('🆓 [FREE_CHAT_CARD] Starting eligibility check...');
+      // console.log('🆓 [FREE_CHAT_CARD] User:', user);
+      // console.log('🆓 [FREE_CHAT_CARD] User ID:', user?._id);
       
       setLoading(true);
       const response = await freeChatAPI.checkEligibility();
       
-      console.log('🆓 [FREE_CHAT_CARD] Eligibility API response:', response);
+      // console.log('🆓 [FREE_CHAT_CARD] Eligibility API response:', response);
       
       if (response.success) {
-        console.log('🆓 [FREE_CHAT_CARD] Eligibility check successful');
-        console.log('🆓 [FREE_CHAT_CARD] Is eligible:', response.data.isEligible);
-        console.log('🆓 [FREE_CHAT_CARD] Response data:', response.data);
+        // console.log('🆓 [FREE_CHAT_CARD] Eligibility check successful');
+        // console.log('🆓 [FREE_CHAT_CARD] Is eligible:', response.data.isEligible);
+        // console.log('🆓 [FREE_CHAT_CARD] Response data:', response.data);
         setIsEligible(response.data.isEligible);
       } else {
-        console.log('🆓 [FREE_CHAT_CARD] Eligibility check failed:', response.message);
+        // console.log('🆓 [FREE_CHAT_CARD] Eligibility check failed:', response.message);
         setIsEligible(false);
       }
     } catch (error) {
-      console.error('🆓 [FREE_CHAT_CARD] Error checking free chat eligibility:', error);
-      console.error('🆓 [FREE_CHAT_CARD] Error details:', error.response?.data || error.message);
+       console.error('🆓 [FREE_CHAT_CARD] Error checking free chat eligibility:', error);
+       console.error('🆓 [FREE_CHAT_CARD] Error details:', error.response?.data || error.message);
       setIsEligible(false);
     } finally {
-      console.log('🆓 [FREE_CHAT_CARD] Eligibility check complete. Loading:', false, 'Eligible:', isEligible);
+      // console.log('🆓 [FREE_CHAT_CARD] Eligibility check complete. Loading:', false, 'Eligible:', isEligible);
       setLoading(false);
     }
   };
@@ -203,15 +203,15 @@ const FreeChatCard = ({ navigation }) => {
   };
 
   // Debug logging for render logic
-  console.log('🆓 [FREE_CHAT_CARD] Render check - Loading:', loading, 'Eligible:', isEligible);
+  // console.log('🆓 [FREE_CHAT_CARD] Render check - Loading:', loading, 'Eligible:', isEligible);
   
   // Don't render if loading or not eligible
   if (loading || !isEligible) {
-    console.log('🆓 [FREE_CHAT_CARD] Not rendering - Loading:', loading, 'Not eligible:', !isEligible);
+    // console.log('🆓 [FREE_CHAT_CARD] Not rendering - Loading:', loading, 'Not eligible:', !isEligible);
     return null;
   }
   
-  console.log('🆓 [FREE_CHAT_CARD] Rendering FreeChatCard component');
+  // console.log('🆓 [FREE_CHAT_CARD] Rendering FreeChatCard component');
 
   return (
     <>
