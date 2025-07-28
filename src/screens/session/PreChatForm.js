@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   StyleSheet,
   View,
@@ -10,6 +10,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   ActivityIndicator,
+  Modal,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -27,12 +28,43 @@ const PreChatForm = ({ route, navigation }) => {
   const [formData, setFormData] = useState({
     name: '',
     dateOfBirth: new Date(),
+    timeOfBirth: new Date(),
     placeOfBirth: '',
+    gender: '',
+    isTimeOfBirthUnknown: false,
   });
   
   const [showDatePicker, setShowDatePicker] = useState(false);
+  const [showTimePicker, setShowTimePicker] = useState(false);
+  const [showGenderModal, setShowGenderModal] = useState(false);
+  const [isTimeOfBirthUnknown, setIsTimeOfBirthUnknown] = useState(false);
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState({});
+
+  // Gender options
+  const genderOptions = [
+    { label: 'Male', value: 'male' },
+    { label: 'Female', value: 'female' },
+    { label: 'Other', value: 'other' },
+    { label: 'Prefer not to say', value: 'prefer_not_to_say' },
+  ];
+
+  // Pre-fill form with user profile data
+  useEffect(() => {
+    if (user) {
+      const isTimeUnknown = user.isTimeOfBirthUnknown || false;
+      const initialData = {
+        name: user.name || '',
+        dateOfBirth: user.birthDate ? new Date(user.birthDate) : new Date(),
+        timeOfBirth: isTimeUnknown ? new Date() : (user.birthTime ? new Date(user.birthTime) : new Date()),
+        placeOfBirth: user.birthLocation || '',
+        gender: user.gender || '',
+        isTimeOfBirthUnknown: isTimeUnknown,
+      };
+      setFormData(initialData);
+      setIsTimeOfBirthUnknown(isTimeUnknown);
+    }
+  }, [user]);
 
   // Validation function
   const validateForm = () => {
@@ -49,6 +81,10 @@ const PreChatForm = ({ route, navigation }) => {
     } else if (formData.placeOfBirth.trim().length < 2) {
       newErrors.placeOfBirth = 'Place of birth must be at least 2 characters';
     }
+
+    if (!formData.gender) {
+      newErrors.gender = 'Gender is required';
+    }
     
     // Check if date of birth is reasonable (not in future, not too old)
     const today = new Date();
@@ -58,6 +94,11 @@ const PreChatForm = ({ route, navigation }) => {
       newErrors.dateOfBirth = 'Date of birth cannot be in the future';
     } else if (formData.dateOfBirth < minDate) {
       newErrors.dateOfBirth = 'Please enter a valid date of birth';
+    }
+
+    // Time of birth validation (only if not unknown)
+    if (!formData.isTimeOfBirthUnknown && !formData.timeOfBirth) {
+      newErrors.timeOfBirth = 'Time of birth is required';
     }
     
     setErrors(newErrors);
@@ -73,6 +114,42 @@ const PreChatForm = ({ route, navigation }) => {
       if (errors.dateOfBirth) {
         setErrors(prev => ({ ...prev, dateOfBirth: null }));
       }
+    }
+  };
+
+  // Handle time change
+  const onTimeChange = (event, selectedTime) => {
+    setShowTimePicker(false);
+    if (selectedTime) {
+      setFormData(prev => ({ ...prev, timeOfBirth: selectedTime }));
+      // Clear time error if it exists
+      if (errors.timeOfBirth) {
+        setErrors(prev => ({ ...prev, timeOfBirth: null }));
+      }
+    }
+  };
+
+  // Handle gender selection
+  const handleGenderSelect = (gender) => {
+    setFormData(prev => ({ ...prev, gender }));
+    setShowGenderModal(false);
+    // Clear gender error if it exists
+    if (errors.gender) {
+      setErrors(prev => ({ ...prev, gender: null }));
+    }
+  };
+
+  // Handle time of birth unknown change
+  const handleTimeOfBirthUnknownChange = (value) => {
+    setIsTimeOfBirthUnknown(value);
+    setFormData(prev => ({ 
+      ...prev, 
+      isTimeOfBirthUnknown: value,
+      timeOfBirth: value ? null : (prev.timeOfBirth || new Date())
+    }));
+    // Clear time error if checking unknown
+    if (value && errors.timeOfBirth) {
+      setErrors(prev => ({ ...prev, timeOfBirth: null }));
     }
   };
 
@@ -92,6 +169,24 @@ const PreChatForm = ({ route, navigation }) => {
       month: '2-digit',
       year: 'numeric'
     });
+  };
+
+  // Format time for display
+  const formatTime = (time) => {
+    if (!time || time === null) {
+      return 'Select time';
+    }
+    return time.toLocaleTimeString('en-IN', {
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: true
+    });
+  };
+
+  // Get gender display text
+  const getGenderDisplayText = (genderValue) => {
+    const option = genderOptions.find(opt => opt.value === genderValue);
+    return option ? option.label : 'Select Gender';
   };
 
   // Check wallet balance before booking
@@ -226,7 +321,10 @@ const PreChatForm = ({ route, navigation }) => {
         userInfo: {
           name: formData.name.trim(),
           dateOfBirth: formData.dateOfBirth.toISOString(),
+          timeOfBirth: formData.isTimeOfBirthUnknown ? null : formData.timeOfBirth?.toISOString(),
           placeOfBirth: formData.placeOfBirth.trim(),
+          gender: formData.gender,
+          isTimeOfBirthUnknown: formData.isTimeOfBirthUnknown,
         }
       };
 
@@ -420,6 +518,64 @@ const PreChatForm = ({ route, navigation }) => {
               {errors.dateOfBirth && <Text style={styles.errorText}>{errors.dateOfBirth}</Text>}
             </View>
 
+            {/* Time of Birth Field */}
+            <View style={styles.fieldContainer}>
+              <Text style={styles.fieldLabel}>Time of Birth</Text>
+              
+              {/* Time of Birth Unknown Checkbox */}
+              <TouchableOpacity
+                style={styles.checkboxContainer}
+                onPress={() => handleTimeOfBirthUnknownChange(!isTimeOfBirthUnknown)}
+              >
+                <View style={[styles.checkbox, isTimeOfBirthUnknown && styles.checkboxChecked]}>
+                  {isTimeOfBirthUnknown && <Ionicons name="checkmark" size={16} color="#fff" />}
+                </View>
+                <Text style={styles.checkboxLabel}>I don't know my time of birth</Text>
+              </TouchableOpacity>
+
+              {/* Time Picker */}
+              <TouchableOpacity
+                style={[
+                  styles.dateInput, 
+                  errors.timeOfBirth && styles.inputError,
+                  isTimeOfBirthUnknown && styles.inputDisabled
+                ]}
+                onPress={() => !isTimeOfBirthUnknown && setShowTimePicker(true)}
+                disabled={isTimeOfBirthUnknown}
+              >
+                <Text style={[
+                  styles.dateText,
+                  isTimeOfBirthUnknown && styles.disabledText
+                ]}>
+                  {isTimeOfBirthUnknown ? 'Time unknown' : formatTime(formData.timeOfBirth)}
+                </Text>
+                <Ionicons 
+                  name="time-outline" 
+                  size={20} 
+                  color={isTimeOfBirthUnknown ? "#ccc" : "#666"} 
+                />
+              </TouchableOpacity>
+              {errors.timeOfBirth && <Text style={styles.errorText}>{errors.timeOfBirth}</Text>}
+            </View>
+
+            {/* Gender Field */}
+            <View style={styles.fieldContainer}>
+              <Text style={styles.fieldLabel}>Gender *</Text>
+              <TouchableOpacity
+                style={[styles.dateInput, errors.gender && styles.inputError]}
+                onPress={() => setShowGenderModal(true)}
+              >
+                <Text style={[
+                  styles.dateText,
+                  !formData.gender && styles.placeholderText
+                ]}>
+                  {getGenderDisplayText(formData.gender)}
+                </Text>
+                <Ionicons name="chevron-down" size={20} color="#666" />
+              </TouchableOpacity>
+              {errors.gender && <Text style={styles.errorText}>{errors.gender}</Text>}
+            </View>
+
             {/* Place of Birth Field */}
             <View style={styles.fieldContainer}>
               <Text style={styles.fieldLabel}>Place of Birth *</Text>
@@ -476,6 +632,61 @@ const PreChatForm = ({ route, navigation }) => {
             minimumDate={new Date(1900, 0, 1)}
           />
         )}
+
+        {/* Time Picker Modal */}
+        {showTimePicker && (
+          <DateTimePicker
+            value={formData.timeOfBirth || new Date()}
+            mode="time"
+            display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+            onChange={onTimeChange}
+          />
+        )}
+
+        {/* Gender Selection Modal */}
+        <Modal
+          visible={showGenderModal}
+          transparent={true}
+          animationType="slide"
+          onRequestClose={() => setShowGenderModal(false)}
+        >
+          <View style={styles.modalOverlay}>
+            <View style={styles.modalContent}>
+              <View style={styles.modalHeader}>
+                <Text style={styles.modalTitle}>Select Gender</Text>
+                <TouchableOpacity
+                  style={styles.modalCloseButton}
+                  onPress={() => setShowGenderModal(false)}
+                >
+                  <Ionicons name="close" size={24} color="#666" />
+                </TouchableOpacity>
+              </View>
+              
+              <View style={styles.genderOptions}>
+                {genderOptions.map((option) => (
+                  <TouchableOpacity
+                    key={option.value}
+                    style={[
+                      styles.genderOption,
+                      formData.gender === option.value && styles.genderOptionSelected
+                    ]}
+                    onPress={() => handleGenderSelect(option.value)}
+                  >
+                    <Text style={[
+                      styles.genderOptionText,
+                      formData.gender === option.value && styles.genderOptionTextSelected
+                    ]}>
+                      {option.label}
+                    </Text>
+                    {formData.gender === option.value && (
+                      <Ionicons name="checkmark" size={20} color="#F97316" />
+                    )}
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+          </View>
+        </Modal>
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
@@ -647,6 +858,100 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#fff',
     marginRight: 8,
+  },
+  // Checkbox styles
+  checkboxContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  checkbox: {
+    width: 20,
+    height: 20,
+    borderRadius: 4,
+    borderWidth: 2,
+    borderColor: '#d1d5db',
+    backgroundColor: '#fff',
+    marginRight: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  checkboxChecked: {
+    backgroundColor: '#F97316',
+    borderColor: '#F97316',
+  },
+  checkboxLabel: {
+    fontSize: 14,
+    color: '#6b7280',
+  },
+  // Disabled input styles
+  inputDisabled: {
+    backgroundColor: '#f9fafb',
+    borderColor: '#e5e7eb',
+  },
+  disabledText: {
+    color: '#9ca3af',
+  },
+  placeholderText: {
+    color: '#9ca3af',
+  },
+  // Modal styles
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'flex-end',
+  },
+  modalContent: {
+    backgroundColor: '#fff',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    paddingBottom: 34,
+    maxHeight: '50%',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e5e7eb',
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#1f2937',
+  },
+  modalCloseButton: {
+    padding: 4,
+  },
+  // Gender options styles
+  genderOptions: {
+    paddingHorizontal: 20,
+    paddingTop: 8,
+  },
+  genderOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 16,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    marginVertical: 4,
+    backgroundColor: '#f9fafb',
+  },
+  genderOptionSelected: {
+    backgroundColor: '#FEF3E2',
+    borderWidth: 1,
+    borderColor: '#F97316',
+  },
+  genderOptionText: {
+    fontSize: 16,
+    color: '#1f2937',
+  },
+  genderOptionTextSelected: {
+    color: '#F97316',
+    fontWeight: '600',
   },
 });
 
