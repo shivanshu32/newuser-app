@@ -253,12 +253,19 @@ export const AuthProvider = ({ children }) => {
     if (!user) return false;
     
     // Check if all required profile fields are present and not empty
-    const requiredFields = ['name', 'birthDate', 'birthTime', 'birthLocation'];
+    const requiredFields = ['name', 'birthDate', 'birthLocation', 'gender'];
     
-    return requiredFields.every(field => {
+    // Check required fields
+    const requiredFieldsValid = requiredFields.every(field => {
       const value = user[field];
       return value !== null && value !== undefined && value !== '';
     });
+    
+    // Check birth time - either it should have a value OR isTimeOfBirthUnknown should be true
+    const birthTimeValid = user.isTimeOfBirthUnknown === true || 
+                          (user.birthTime !== null && user.birthTime !== undefined && user.birthTime !== '');
+    
+    return requiredFieldsValid && birthTimeValid;
   };
 
   // Refresh token
