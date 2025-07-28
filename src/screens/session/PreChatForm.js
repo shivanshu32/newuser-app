@@ -43,10 +43,10 @@ const PreChatForm = ({ route, navigation }) => {
 
   // Gender options
   const genderOptions = [
-    { label: 'Male', value: 'male' },
-    { label: 'Female', value: 'female' },
-    { label: 'Other', value: 'other' },
-    { label: 'Prefer not to say', value: 'prefer_not_to_say' },
+    { label: 'Male', value: 'Male' },
+    { label: 'Female', value: 'Female' },
+    { label: 'Other', value: 'Other' },
+    { label: 'Prefer not to say', value: 'Prefer not to say' },
   ];
 
   // Pre-fill form with user profile data
@@ -119,12 +119,23 @@ const PreChatForm = ({ route, navigation }) => {
 
   // Handle time change
   const onTimeChange = (event, selectedTime) => {
-    setShowTimePicker(false);
+    if (Platform.OS === 'android') {
+      setShowTimePicker(false);
+    }
+    
+    if (event.type === 'dismissed') {
+      setShowTimePicker(false);
+      return;
+    }
+    
     if (selectedTime) {
       setFormData(prev => ({ ...prev, timeOfBirth: selectedTime }));
       // Clear time error if it exists
       if (errors.timeOfBirth) {
         setErrors(prev => ({ ...prev, timeOfBirth: null }));
+      }
+      if (Platform.OS === 'ios') {
+        setShowTimePicker(false);
       }
     }
   };

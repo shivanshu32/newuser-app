@@ -77,9 +77,20 @@ const AddUserProfile = ({ navigation, route }) => {
 
   // Handle time picker change
   const handleTimeChange = (event, selectedTime) => {
-    setShowTimePicker(false);
+    if (Platform.OS === 'android') {
+      setShowTimePicker(false);
+    }
+    
+    if (event.type === 'dismissed') {
+      setShowTimePicker(false);
+      return;
+    }
+    
     if (selectedTime) {
       handleInputChange('birthTime', selectedTime);
+      if (Platform.OS === 'ios') {
+        setShowTimePicker(false);
+      }
     }
   };
 

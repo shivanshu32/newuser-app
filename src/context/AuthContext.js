@@ -252,20 +252,55 @@ export const AuthProvider = ({ children }) => {
   const isProfileComplete = () => {
     if (!user) return false;
     
-    // Check if all required profile fields are present and not empty
-    const requiredFields = ['name', 'birthDate', 'birthLocation', 'gender'];
+    console.log('Checking profile completion for user:', user.name);
+    console.log('User data:', {
+      name: user.name,
+      birthDate: user.birthDate,
+      birthTime: user.birthTime,
+      birthLocation: user.birthLocation,
+      gender: user.gender,
+      isTimeOfBirthUnknown: user.isTimeOfBirthUnknown
+    });
     
-    // Check required fields
-    const requiredFieldsValid = requiredFields.every(field => {
+    // Core required fields that must always be present
+    const coreRequiredFields = ['name', 'birthDate', 'birthLocation'];
+    
+    // Check core required fields
+    const coreFieldsValid = coreRequiredFields.every(field => {
       const value = user[field];
-      return value !== null && value !== undefined && value !== '';
+      const isValid = value !== null && value !== undefined && value !== '';
+      console.log(`Core field ${field}: ${value} - Valid: ${isValid}`);
+      return isValid;
     });
     
     // Check birth time - either it should have a value OR isTimeOfBirthUnknown should be true
     const birthTimeValid = user.isTimeOfBirthUnknown === true || 
                           (user.birthTime !== null && user.birthTime !== undefined && user.birthTime !== '');
     
-    return requiredFieldsValid && birthTimeValid;
+    // For gender, be flexible - if it's missing, consider profile complete for existing users
+    // This handles backward compatibility for users who completed profile before gender was required
+    const genderValid = user.gender !== null && user.gender !== undefined && user.gender !== '';
+    
+    console.log('Birth time validation:', {
+      isTimeOfBirthUnknown: user.isTimeOfBirthUnknown,
+      birthTime: user.birthTime,
+      birthTimeValid: birthTimeValid
+    });
+    
+    console.log('Gender validation:', {
+      gender: user.gender,
+      genderValid: genderValid
+    });
+    
+    console.log('Core fields valid:', coreFieldsValid);
+    console.log('Birth time valid:', birthTimeValid);
+    
+    // Profile is complete if core fields and birth time are valid
+    // Gender is optional for backward compatibility
+    const isComplete = coreFieldsValid && birthTimeValid;
+    console.log('Profile complete:', isComplete);
+    
+    return isComplete;
   };
 
   // Refresh token
