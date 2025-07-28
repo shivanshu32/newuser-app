@@ -233,6 +233,7 @@ export const sessionsAPI = {
   start: (bookingId, type) => API.post('/sessions/start', { bookingId, type }),
   end: (sessionId) => API.post('/sessions/end', { sessionId }),
   getActive: () => API.get('/sessions/active'),
+  checkActiveSession: () => API.get('/sessions/check-active'), // For rejoin functionality
 };
 
 // Free Chat API

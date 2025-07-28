@@ -20,7 +20,11 @@
       "bundleIdentifier": "com.jyotishtalk",
       "infoPlist": {
         "NSMicrophoneUsageDescription": "Allow Jyotish Call to access your microphone for voice consultations with astrologers",
-        "NSCameraUsageDescription": "Allow Jyotish Call to access your camera for video consultations with astrologers"
+        "NSCameraUsageDescription": "Allow Jyotish Call to access your camera for video consultations with astrologers",
+        "NSUserNotificationsUsageDescription": "Allow Jyotish Call to send you notifications about booking requests, chat messages, and important updates"
+      },
+      "entitlements": {
+        "aps-environment": "production"
       }
     },
     "android": {
@@ -34,7 +38,11 @@
       "permissions": [
         "MODIFY_AUDIO_SETTINGS",
         "INTERNET",
-        "ACCESS_NETWORK_STATE"
+        "ACCESS_NETWORK_STATE",
+        "RECEIVE_BOOT_COMPLETED",
+        "VIBRATE",
+        "WAKE_LOCK",
+        "com.google.android.c2dm.permission.RECEIVE"
       ],
       "usesCleartextTraffic": true,
       "networkSecurityConfig": {
@@ -55,7 +63,10 @@
         "expo-notifications",
         {
           "icon": "./assets/notification-icon.png",
-          "color": "#ffffff"
+          "color": "#ffffff",
+          "sounds": [
+            "./assets/notification-sound.wav"
+          ]
         }
       ],
       "expo-dev-client"

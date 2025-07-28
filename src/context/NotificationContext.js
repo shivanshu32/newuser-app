@@ -1,184 +1,287 @@
 import React, { createContext, useState, useContext, useEffect, useRef } from 'react';
-import { Platform } from 'react-native';
-import * as Device from 'expo-device';
-import * as Notifications from 'expo-notifications';
+import { Platform, AppState } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import axios from 'axios';
 import { useAuth } from './AuthContext';
+import FCMService from '../services/FCMService';
 
 // Create context
 const NotificationContext = createContext();
 
-// Import API service
-import { authAPI } from '../services/api';
-
-// Configure notification handler
-Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowAlert: true,
-    shouldPlaySound: true,
-    shouldSetBadge: true,
-  }),
-});
-
 export const NotificationProvider = ({ children }) => {
-  const [expoPushToken, setExpoPushToken] = useState('');
+  const [fcmToken, setFcmToken] = useState('');
   const [notification, setNotification] = useState(null);
-  const notificationListener = useRef();
-  const responseListener = useRef();
-  const { token } = useAuth();
+  const [isInitialized, setIsInitialized] = useState(false);
+  const [unreadCount, setUnreadCount] = useState(0);
+  const appStateRef = useRef(AppState.currentState);
+  const { token, user } = useAuth();
 
+  // Initialize FCM service when user is authenticated
   useEffect(() => {
-    // Register for push notifications
-    registerForPushNotificationsAsync().then(token => {
-      if (token) {
-        setExpoPushToken(token);
-        console.log('Expo push token obtained:', token);
-      }
-    });
-
-    // Set up notification listeners
-    notificationListener.current = Notifications.addNotificationReceivedListener(notification => {
-      console.log('Notification received:', notification);
-      setNotification(notification);
-      
-      // Handle offer notifications specially
-      const data = notification.request.content.data;
-      if (data && data.type === 'offer') {
-        console.log('Offer notification received:', data);
-        // You could store offer notifications in AsyncStorage or state for later display
-      }
-    });
-
-    responseListener.current = Notifications.addNotificationResponseReceivedListener(response => {
-      console.log('Notification response received:', response);
-      // Handle notification tap here
-      const data = response.notification.request.content.data;
-      handleNotificationNavigation(data);
-    });
-
-    // Register token with backend if user is logged in
-    if (token && expoPushToken) {
-      registerTokenWithBackend(expoPushToken);
+    if (token && user && !isInitialized) {
+      initializeFCMService();
     }
+  }, [token, user, isInitialized]);
 
-    // Setup socket listener for real-time offer notifications
-    const setupSocketListener = async () => {
-      try {
-        const { socket } = require('../context/SocketContext');
-        if (socket && socket.connected) {
-          socket.on('offer_notification', (data) => {
-            console.log('Real-time offer notification received:', data);
-            // Display the notification immediately
-            scheduleLocalNotification(
-              data.title,
-              data.message,
-              { type: 'offer', notificationId: data.notificationId }
-            );
-          });
-        }
-      } catch (error) {
-        console.log('Error setting up socket listener for offers:', error);
+  // Handle app state changes
+  useEffect(() => {
+    const handleAppStateChange = (nextAppState) => {
+      if (appStateRef.current.match(/inactive|background/) && nextAppState === 'active') {
+        console.log('📱 [NotificationContext] App has come to the foreground');
+        // Process any pending notifications
+        FCMService.processPendingNotifications();
+        // Update unread count
+        updateUnreadCount();
       }
+      appStateRef.current = nextAppState;
     };
-    
-    setupSocketListener();
 
+    const subscription = AppState.addEventListener('change', handleAppStateChange);
+    return () => subscription?.remove();
+  }, []);
+
+  // Cleanup on unmount
+  useEffect(() => {
     return () => {
-      Notifications.removeNotificationSubscription(notificationListener.current);
-      Notifications.removeNotificationSubscription(responseListener.current);
-      
-      // Clean up socket listener
-      try {
-        const { socket } = require('../context/SocketContext');
-        if (socket) {
-          socket.off('offer_notification');
-        }
-      } catch (error) {
-        console.log('Error cleaning up socket listener:', error);
-      }
+      FCMService.cleanup();
     };
-  }, [token, expoPushToken]);
+  }, []);
 
-  // Register token with backend
-  const registerTokenWithBackend = async (pushToken) => {
+  /**
+   * Initialize FCM service
+   */
+  const initializeFCMService = async () => {
     try {
-      // Call the backend API to register the token
-      await authAPI.registerDeviceToken(pushToken);
-      console.log('FCM token registered with backend:', pushToken);
+      console.log('🚀 [NotificationContext] Initializing FCM service...');
+      
+      const success = await FCMService.initialize();
+      
+      if (success) {
+        const token = await FCMService.getToken();
+        if (token) {
+          setFcmToken(token);
+          console.log('✅ [NotificationContext] FCM service initialized with token');
+        }
+        setIsInitialized(true);
+        
+        // Load initial unread count
+        await updateUnreadCount();
+      } else {
+        console.error('❌ [NotificationContext] Failed to initialize FCM service');
+      }
     } catch (error) {
-      console.log('Error registering token with backend:', error);
+      console.error('❌ [NotificationContext] FCM initialization error:', error);
     }
   };
 
-  // Handle notification navigation
-  const handleNotificationNavigation = (data) => {
-    console.log('Handling notification navigation with data:', data);
-    
-    // Navigation logic based on notification type
-    if (data.type === 'booking' && data.bookingId) {
-      // Navigate to booking details
-      // navigation.navigate('Bookings', { screen: 'BookingDetails', params: { id: data.bookingId } });
-    } else if (data.type === 'chat' && data.sessionId) {
-      // Navigate to chat session
-      // navigation.navigate('Chat', { sessionId: data.sessionId });
-    } else if (data.type === 'offer') {
-      // Navigate to wallet or offers screen for promotional offers
-      // navigation.navigate('Wallet');
-      console.log('Received offer notification:', data.title, data.message);
-    }
-  };
-
-  // Send test notification
-  const sendTestNotification = async () => {
+  /**
+   * Update unread notification count
+   */
+  const updateUnreadCount = async () => {
     try {
-      // In a real app, this would call your backend API
-      // await axios.post(`${API_URL}/notifications/test`);
-      console.log('Test notification sent');
-      
-      // For demo purposes, schedule a local notification
-      await scheduleLocalNotification(
-        'Test Notification',
-        'This is a test notification from Jyotish Call',
-        { type: 'test' }
-      );
-      
-      return { success: true };
+      const storedCount = await AsyncStorage.getItem('unread_notification_count');
+      const count = storedCount ? parseInt(storedCount) : 0;
+      setUnreadCount(count);
     } catch (error) {
-      console.log('Error sending test notification:', error);
-      return { success: false, message: 'Failed to send test notification' };
+      console.error('❌ [NotificationContext] Failed to update unread count:', error);
     }
   };
 
-  // Schedule a local notification
+  /**
+   * Mark notification as read
+   */
+  const markAsRead = async (notificationId) => {
+    try {
+      console.log('✅ [NotificationContext] Marking notification as read:', notificationId);
+      
+      const newCount = Math.max(0, unreadCount - 1);
+      setUnreadCount(newCount);
+      await AsyncStorage.setItem('unread_notification_count', newCount.toString());
+    } catch (error) {
+      console.error('❌ [NotificationContext] Failed to mark notification as read:', error);
+    }
+  };
+
+  /**
+   * Mark all notifications as read
+   */
+  const markAllAsRead = async () => {
+    try {
+      console.log('✅ [NotificationContext] Marking all notifications as read');
+      
+      setUnreadCount(0);
+      await AsyncStorage.setItem('unread_notification_count', '0');
+      
+      // Clear badge count
+      await FCMService.updateBadgeCount();
+    } catch (error) {
+      console.error('❌ [NotificationContext] Failed to mark all notifications as read:', error);
+    }
+  };
+
+  /**
+   * Refresh FCM token
+   */
+  const refreshToken = async () => {
+    try {
+      console.log('🔄 [NotificationContext] Refreshing FCM token...');
+      
+      await FCMService.refreshToken();
+      const newToken = await FCMService.getToken();
+      
+      if (newToken) {
+        setFcmToken(newToken);
+        console.log('✅ [NotificationContext] FCM token refreshed');
+      }
+    } catch (error) {
+      console.error('❌ [NotificationContext] Failed to refresh FCM token:', error);
+    }
+  };
+
+  /**
+   * Clear FCM token (for logout)
+   */
+  const clearToken = async () => {
+    try {
+      console.log('🗑️ [NotificationContext] Clearing FCM token...');
+      
+      await FCMService.clearToken();
+      setFcmToken('');
+      setIsInitialized(false);
+      setUnreadCount(0);
+      
+      console.log('✅ [NotificationContext] FCM token cleared');
+    } catch (error) {
+      console.error('❌ [NotificationContext] Failed to clear FCM token:', error);
+    }
+  };
+
+  /**
+   * Get FCM service status
+   */
+  const getStatus = () => {
+    return {
+      isInitialized,
+      hasToken: !!fcmToken,
+      token: fcmToken,
+      unreadCount,
+      fcmServiceStatus: FCMService.getStatus(),
+    };
+  };
+
+  /**
+   * Handle booking request notifications
+   */
+  const handleBookingRequest = async (bookingData) => {
+    try {
+      console.log('📅 [NotificationContext] Handling booking request:', bookingData);
+      
+      const newCount = unreadCount + 1;
+      setUnreadCount(newCount);
+      await AsyncStorage.setItem('unread_notification_count', newCount.toString());
+      
+      const existingRequests = await AsyncStorage.getItem('pending_booking_requests');
+      const requests = existingRequests ? JSON.parse(existingRequests) : [];
+      
+      requests.push({
+        ...bookingData,
+        receivedAt: new Date().toISOString(),
+        read: false,
+      });
+      
+      await AsyncStorage.setItem('pending_booking_requests', JSON.stringify(requests));
+    } catch (error) {
+      console.error('❌ [NotificationContext] Failed to handle booking request:', error);
+    }
+  };
+
+  /**
+   * Handle chat message notifications
+   */
+  const handleChatMessage = async (messageData) => {
+    try {
+      console.log('💬 [NotificationContext] Handling chat message:', messageData);
+      
+      const newCount = unreadCount + 1;
+      setUnreadCount(newCount);
+      await AsyncStorage.setItem('unread_notification_count', newCount.toString());
+      
+      const chatId = messageData.chatId;
+      if (chatId) {
+        const chatUnreadKey = `chat_unread_${chatId}`;
+        const currentChatUnread = await AsyncStorage.getItem(chatUnreadKey);
+        const chatCount = currentChatUnread ? parseInt(currentChatUnread) : 0;
+        await AsyncStorage.setItem(chatUnreadKey, (chatCount + 1).toString());
+      }
+    } catch (error) {
+      console.error('❌ [NotificationContext] Failed to handle chat message:', error);
+    }
+  };
+
+  /**
+   * Schedule local notification
+   */
   const scheduleLocalNotification = async (title, body, data = {}) => {
-    await Notifications.scheduleNotificationAsync({
-      content: {
-        title,
-        body,
-        data,
-      },
-      trigger: { seconds: 1 },
-    });
+    try {
+      console.log('📱 [NotificationContext] Scheduling local notification:', { title, body, data });
+      setNotification({ title, body, data, timestamp: new Date().toISOString() });
+    } catch (error) {
+      console.error('❌ [NotificationContext] Failed to schedule local notification:', error);
+    }
+  };
+
+  /**
+   * Handle notification navigation
+   */
+  const handleNotificationNavigation = (data) => {
+    console.log('🧭 [NotificationContext] Handling notification navigation:', data);
+    
+    const type = data?.type;
+    
+    switch (type) {
+      case 'booking_request':
+        // Navigate to bookings screen
+        break;
+      case 'chat_message':
+        // Navigate to chat screen
+        break;
+      case 'payment':
+        // Navigate to wallet screen
+        break;
+      default:
+        // Navigate to home screen
+    }
+  };
+
+  // Context value
+  const value = {
+    // State
+    fcmToken,
+    notification,
+    isInitialized,
+    unreadCount,
+    
+    // Methods
+    initializeFCMService,
+    updateUnreadCount,
+    markAsRead,
+    markAllAsRead,
+    refreshToken,
+    clearToken,
+    getStatus,
+    handleBookingRequest,
+    handleChatMessage,
+    scheduleLocalNotification,
+    handleNotificationNavigation,
   };
 
   return (
-    <NotificationContext.Provider
-      value={{
-        expoPushToken,
-        notification,
-        sendTestNotification,
-        scheduleLocalNotification,
-        handleNotificationNavigation,
-        registerTokenWithBackend
-      }}
-    >
+    <NotificationContext.Provider value={value}>
       {children}
     </NotificationContext.Provider>
   );
 };
 
-// Custom hook to use notification context
+// Hook to use notification context
 export const useNotification = () => {
   const context = useContext(NotificationContext);
   if (!context) {
@@ -186,62 +289,5 @@ export const useNotification = () => {
   }
   return context;
 };
-
-// Helper function to register for push notifications
-async function registerForPushNotificationsAsync() {
-  let token;
-  
-  // Create offer notification channel for Android
-  if (Platform.OS === 'android') {
-    // Default channel
-    await Notifications.setNotificationChannelAsync('default', {
-      name: 'Default',
-      importance: Notifications.AndroidImportance.MAX,
-      vibrationPattern: [0, 250, 250, 250],
-      lightColor: '#FF231F7C',
-    });
-    
-    // Special channel for offers
-    await Notifications.setNotificationChannelAsync('offers', {
-      name: 'Offers & Promotions',
-      description: 'Notifications for special offers and promotions',
-      importance: Notifications.AndroidImportance.HIGH,
-      vibrationPattern: [0, 100, 200, 300],
-      lightColor: '#FF9800',
-      sound: 'default',
-    });
-  }
-
-  if (Device.isDevice) {
-    const { status: existingStatus } = await Notifications.getPermissionsAsync();
-    let finalStatus = existingStatus;
-    
-    if (existingStatus !== 'granted') {
-      const { status } = await Notifications.requestPermissionsAsync();
-      finalStatus = status;
-    }
-    
-    if (finalStatus !== 'granted') {
-      console.log('Failed to get push notification permissions');
-      return null;
-    }
-    
-    try {
-      token = (await Notifications.getExpoPushTokenAsync({
-        projectId: "19ce1c4d-7c68-407f-96a0-d41bedaa3d55" // JyotishCall User App project ID
-      })).data;
-      console.log('Expo push token:', token);
-      
-      // Store token in AsyncStorage for persistence
-      await AsyncStorage.setItem('expoPushToken', token);
-    } catch (error) {
-      console.log('Error getting push token:', error);
-    }
-  } else {
-    console.log('Must use physical device for Push Notifications');
-  }
-
-  return token;
-}
 
 export default NotificationContext;

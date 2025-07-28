@@ -20,12 +20,13 @@ import { Ionicons, MaterialIcons, FontAwesome } from '@expo/vector-icons';
 import Toast from 'react-native-toast-message';
 import { useAuth } from '../../context/AuthContext';
 import { useSocket } from '../../context/SocketContext';
-import { astrologersAPI, walletAPI, versionAPI, freeChatAPI } from '../../services/api';
+import { astrologersAPI, walletAPI, versionAPI, freeChatAPI, sessionsAPI } from '../../services/api';
 import BookingAcceptedModal from '../../components/BookingAcceptedModal';
 import FreeChatCard from '../../components/FreeChatCard';
+import RejoinChatBottomSheet from '../../components/RejoinChatBottomSheet';
 
 // Hardcoded app version - update this when releasing new versions
-const APP_VERSION = '5.0.5';
+const APP_VERSION = '5.0.6';
 
 const HomeScreen = ({ navigation }) => {
   const { user } = useAuth();
@@ -42,6 +43,12 @@ const HomeScreen = ({ navigation }) => {
   const [pendingBookings, setPendingBookings] = useState([]);
   const [loadingPendingBookings, setLoadingPendingBookings] = useState(false);
   const [freeChatEnabled, setFreeChatEnabled] = useState(true); // Global free chat toggle
+  
+  // Rejoin Chat Bottom Sheet State
+  const [showRejoinBottomSheet, setShowRejoinBottomSheet] = useState(false);
+  const [activeSessionData, setActiveSessionData] = useState(null);
+  const [remainingTime, setRemainingTime] = useState(null);
+  const [timerInterval, setTimerInterval] = useState(null);
 
 
 
@@ -114,26 +121,153 @@ const HomeScreen = ({ navigation }) => {
   }, []);
 
   // Check global free chat settings
-  const checkFreeChatGlobalSettings = useCallback(async () => {
+  const checkFreeChatSettings = useCallback(async () => {
     try {
       console.log('🔄 Checking global free chat settings...');
       const response = await freeChatAPI.getGlobalSettings();
-      console.log('🆓 Free chat settings response:', response);
+      console.log('⚙️ Free chat settings response:', response);
       
       if (response.success && response.data) {
-        const isEnabled = response.data.isEnabled !== false; // Default to true if not specified
-        setFreeChatEnabled(isEnabled);
-        console.log('✅ Free chat global setting updated:', isEnabled);
+        setFreeChatEnabled(response.data.enabled);
+        console.log('✅ Free chat enabled:', response.data.enabled);
       } else {
-        console.warn('⚠️ Free chat settings API returned success: false or no data, defaulting to enabled');
+        console.warn('⚠️ Free chat settings API returned success: false or no data');
         setFreeChatEnabled(true); // Default to enabled if API fails
       }
     } catch (error) {
       console.error('❌ Error fetching free chat settings:', error);
-      // Default to enabled if API fails (graceful degradation)
-      setFreeChatEnabled(true);
+      setFreeChatEnabled(true); // Default to enabled if API fails
     }
   }, []);
+
+  // Check for active session (for rejoin functionality)
+  const checkActiveSession = useCallback(async () => {
+    try {
+      console.log('🔄 Checking for active session...');
+      const response = await sessionsAPI.checkActiveSession();
+      console.log('📋 Active session response:', response);
+      
+      if (response.success && response.hasActiveSession && response.data) {
+        const sessionData = response.data;
+        console.log('✅ Found active session:', sessionData);
+        
+        setActiveSessionData(sessionData);
+        setShowRejoinBottomSheet(true);
+        
+        // Start timer for free chat sessions
+        if (sessionData.isFreeChat && sessionData.remainingTime !== null) {
+          setRemainingTime(sessionData.remainingTime);
+          startRemainingTimeTimer(sessionData.remainingTime);
+        }
+      } else {
+        console.log('ℹ️ No active session found');
+        setActiveSessionData(null);
+        setShowRejoinBottomSheet(false);
+        clearRemainingTimeTimer();
+      }
+    } catch (error) {
+      console.error('❌ Error checking active session:', error);
+      // Don't show error to user, just hide the bottom sheet
+      setActiveSessionData(null);
+      setShowRejoinBottomSheet(false);
+      clearRemainingTimeTimer();
+    }
+  }, []);
+
+  // Start timer for remaining time countdown
+  const startRemainingTimeTimer = useCallback((initialTime) => {
+    // Clear existing timer
+    clearRemainingTimeTimer();
+    
+    if (initialTime <= 0) {
+      setRemainingTime(0);
+      return;
+    }
+    
+    let currentTime = initialTime;
+    const interval = setInterval(() => {
+      currentTime -= 1;
+      setRemainingTime(currentTime);
+      
+      if (currentTime <= 0) {
+        clearInterval(interval);
+        setTimerInterval(null);
+        // Hide bottom sheet when time expires
+        setShowRejoinBottomSheet(false);
+        setActiveSessionData(null);
+        
+        Toast.show({
+          type: 'info',
+          text1: 'Session Expired',
+          text2: 'Your free chat session has ended.',
+        });
+      }
+    }, 1000);
+    
+    setTimerInterval(interval);
+  }, []);
+
+  // Clear remaining time timer
+  const clearRemainingTimeTimer = useCallback(() => {
+    if (timerInterval) {
+      clearInterval(timerInterval);
+      setTimerInterval(null);
+    }
+  }, [timerInterval]);
+
+  // Handle rejoin chat button press
+  const handleRejoinChat = useCallback((sessionData) => {
+    console.log('🔄 Rejoining chat session:', sessionData);
+    
+    // Hide bottom sheet
+    setShowRejoinBottomSheet(false);
+    clearRemainingTimeTimer();
+    
+    try {
+      if (sessionData.isFreeChat) {
+        // Navigate to free chat screen
+        navigation.navigate('FreeChatScreen', {
+          sessionId: sessionData.sessionIdentifier,
+          astrologerName: sessionData.astrologer?.name,
+          rejoin: true
+        });
+      } else {
+        // Navigate to enhanced chat screen for paid consultations
+        navigation.navigate('EnhancedChat', {
+          bookingId: sessionData.bookingId,
+          sessionId: sessionData.sessionId,
+          astrologerName: sessionData.astrologer?.name,
+          rejoin: true
+        });
+      }
+      
+      Toast.show({
+        type: 'success',
+        text1: 'Rejoining Session',
+        text2: 'Connecting you back to your consultation...',
+      });
+    } catch (error) {
+      console.error('❌ Error rejoining session:', error);
+      Alert.alert(
+        'Navigation Error',
+        'Unable to rejoin the session. Please try again.',
+        [{ text: 'OK' }]
+      );
+    }
+  }, [navigation, clearRemainingTimeTimer]);
+
+  // Handle bottom sheet close
+  const handleBottomSheetClose = useCallback(() => {
+    setShowRejoinBottomSheet(false);
+    clearRemainingTimeTimer();
+  }, [clearRemainingTimeTimer]);
+
+  // Cleanup timer on component unmount
+  useEffect(() => {
+    return () => {
+      clearRemainingTimeTimer();
+    };
+  }, [clearRemainingTimeTimer]);
 
   // Check app version and redirect to update screen if needed
   const checkAppVersion = useCallback(async () => {
@@ -1028,15 +1162,30 @@ const HomeScreen = ({ navigation }) => {
                 );
                 
                 // Make API call to cancel booking
-                const response = await fetch(`${process.env.EXPO_PUBLIC_API_URL}/api/bookings/${booking.bookingId}/cancel`, {
-                  method: 'POST',
+                const API_BASE_URL = 'https://jyotishcallbackend-2uxrv.ondigitalocean.app';
+                const bookingId = booking.bookingId || booking._id;
+                
+                console.log('🗑️ [CANCEL_BOOKING] Making API call to:', `${API_BASE_URL}/api/v1/bookings/${bookingId}/cancel`);
+                console.log('🗑️ [CANCEL_BOOKING] Using token:', user.token ? 'Token available' : 'No token');
+                
+                const response = await fetch(`${API_BASE_URL}/api/v1/bookings/${bookingId}/cancel`, {
+                  method: 'PUT',
                   headers: {
                     'Content-Type': 'application/json',
                     'Authorization': `Bearer ${user.token}`
-                  }
+                  },
+                  body: JSON.stringify({
+                    reason: 'Cancelled by user from pending bookings'
+                  })
                 });
                 
+                console.log('🗑️ [CANCEL_BOOKING] Response status:', response.status);
+                console.log('🗑️ [CANCEL_BOOKING] Response ok:', response.ok);
+                
                 if (response.ok) {
+                  const responseData = await response.json();
+                  console.log('🗑️ [CANCEL_BOOKING] Success response:', responseData);
+                  
                   // Remove booking from local state immediately
                   setPendingBookings(prevBookings => 
                     prevBookings.filter(b => 
@@ -1050,7 +1199,14 @@ const HomeScreen = ({ navigation }) => {
                     [{ text: 'OK' }]
                   );
                 } else {
-                  const errorData = await response.json();
+                  let errorData;
+                  try {
+                    errorData = await response.json();
+                    console.log('🗑️ [CANCEL_BOOKING] Error response:', errorData);
+                  } catch (parseError) {
+                    console.error('🗑️ [CANCEL_BOOKING] Failed to parse error response:', parseError);
+                    errorData = { message: `HTTP ${response.status}: ${response.statusText}` };
+                  }
                   throw new Error(errorData.message || 'Failed to cancel booking');
                 }
               } catch (error) {
@@ -1134,6 +1290,9 @@ const HomeScreen = ({ navigation }) => {
             }),
             fetchWalletBalance().catch(error => {
               console.error('❌ [FOCUS_EFFECT] Error fetching wallet balance:', error);
+            }),
+            checkActiveSession().catch(error => {
+              console.error('❌ [FOCUS_EFFECT] Error checking active session:', error);
             })
           ]);
           
@@ -2228,6 +2387,15 @@ const HomeScreen = ({ navigation }) => {
           </View>
         </View>
       </Modal>
+      
+      {/* Rejoin Chat Bottom Sheet */}
+      <RejoinChatBottomSheet
+        visible={showRejoinBottomSheet}
+        onClose={handleBottomSheetClose}
+        sessionData={activeSessionData}
+        onRejoinPress={handleRejoinChat}
+        remainingTime={remainingTime}
+      />
     </SafeAreaView>
   );
 };

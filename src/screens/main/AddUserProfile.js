@@ -374,14 +374,18 @@ const AddUserProfile = ({ navigation, route }) => {
           <View style={styles.inputGroup}>
             <Text style={styles.label}>Birth Location *</Text>
             <View style={styles.googlePlacesContainer}>
-              {/* Temporarily using TextInput instead of GooglePlacesAutocomplete to debug filter error */}
+              {/* Fallback to TextInput if Google Places causes issues */}
               <TextInput
                 style={styles.textInput}
                 value={formData.birthLocation}
                 onChangeText={(text) => handleInputChange('birthLocation', text)}
                 placeholder="Enter your birth city/place"
                 placeholderTextColor="#9CA3AF"
+                autoCapitalize="words"
+                autoCorrect={false}
               />
+              {/* Note: Google Places Autocomplete temporarily disabled due to filter error */}
+              {/* Will be re-enabled once the react-native-google-places-autocomplete library issue is resolved */}
             </View>
           </View>
         </View>

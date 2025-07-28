@@ -15,9 +15,11 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import DateTimePicker from '@react-native-community/datetimepicker';
+// import { GooglePlacesAutocomplete } from 'react-native-google-places-autocomplete';
 import { useAuth } from '../../context/AuthContext';
 import { useSocket } from '../../context/SocketContext';
 import { walletAPI } from '../../services/api';
+import { GOOGLE_PLACES_CONFIG } from '../../config/googlePlaces';
 
 const PreChatForm = ({ route, navigation }) => {
   const { astrologer, bookingType = 'chat' } = route.params || {};
@@ -198,6 +200,36 @@ const PreChatForm = ({ route, navigation }) => {
   const getGenderDisplayText = (genderValue) => {
     const option = genderOptions.find(opt => opt.value === genderValue);
     return option ? option.label : 'Select Gender';
+  };
+
+  // Handle place of birth selection from Google Places
+  const handlePlaceOfBirthSelect = (data, details = null) => {
+    try {
+      if (!data) {
+        console.log('GooglePlacesAutocomplete: No data received');
+        return;
+      }
+      
+      const locationName = data.description || 
+                          data.structured_formatting?.main_text || 
+                          data.formatted_address || 
+                          data.name || 
+                          '';
+      
+      if (locationName) {
+        console.log('Selected place of birth:', locationName);
+        setFormData(prev => ({ ...prev, placeOfBirth: locationName }));
+        // Clear place of birth error if it exists
+        if (errors.placeOfBirth) {
+          setErrors(prev => ({ ...prev, placeOfBirth: null }));
+        }
+      } else {
+        console.log('GooglePlacesAutocomplete: No valid location name found in data:', data);
+      }
+    } catch (error) {
+      console.error('Error handling place of birth selection:', error);
+      Alert.alert('Error', 'Failed to select location. Please try again.');
+    }
   };
 
   // Check wallet balance before booking
@@ -599,6 +631,7 @@ const PreChatForm = ({ route, navigation }) => {
                 autoCapitalize="words"
                 autoCorrect={false}
               />
+              {/* Note: Google Places Autocomplete temporarily disabled due to filter error */}
               {errors.placeOfBirth && <Text style={styles.errorText}>{errors.placeOfBirth}</Text>}
             </View>
           </View>
@@ -926,20 +959,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingVertical: 16,
     borderBottomWidth: 1,
-    borderBottomColor: '#e5e7eb',
-  },
-  modalTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#1f2937',
-  },
-  modalCloseButton: {
-    padding: 4,
-  },
-  // Gender options styles
-  genderOptions: {
-    paddingHorizontal: 20,
-    paddingTop: 8,
   },
   genderOption: {
     flexDirection: 'row',
@@ -963,6 +982,10 @@ const styles = StyleSheet.create({
   genderOptionTextSelected: {
     color: '#F97316',
     fontWeight: '600',
+  },
+  googlePlacesContainer: {
+    flex: 1,
+    zIndex: 1,
   },
 });
 
