@@ -41,7 +41,8 @@ const FixedChatScreen = ({ route, navigation }) => {
   const [connected, setConnected] = useState(false);
   const [messages, setMessages] = useState([]);
   const [messageText, setMessageText] = useState('');
-  const [isTyping, setIsTyping] = useState(false);
+  const [isTyping, setIsTyping] = useState(false); // User typing state
+  const [astrologerTyping, setAstrologerTyping] = useState(false); // Astrologer typing state
   const [sessionActive, setSessionActive] = useState(false);
   const [timerData, setTimerData] = useState({
     elapsed: 0,
@@ -66,6 +67,7 @@ const FixedChatScreen = ({ route, navigation }) => {
   const reconnectTimeoutRef = useRef(null);
   const timerIntervalRef = useRef(null);
   const typingTimeoutRef = useRef(null);
+  const astrologerTypingTimeoutRef = useRef(null);
   const lastMessageTimestampRef = useRef(null);
   const appStateRef = useRef(AppState.currentState);
   const sessionStartTimeRef = useRef(null);
@@ -299,8 +301,9 @@ const FixedChatScreen = ({ route, navigation }) => {
       // Sync timer from session state
       syncTimerFromSession();
       
-      // Request missed messages
-      await requestMissedMessages();
+      // Note: No need to manually request missed messages anymore
+      // Backend automatically sends missed messages via 'missed_messages_recovery' event when rejoining room
+      console.log('📨 [RECONNECT] Skipping manual missed message request - backend handles this automatically');
       
       console.log('✅ [RECONNECT] Successfully reconnected and synced');
       safeSetState(setConnected, true);
@@ -339,134 +342,42 @@ const FixedChatScreen = ({ route, navigation }) => {
     } finally {
       isReconnectingRef.current = false;
     }
-  }, [safeSetState, syncTimerFromSession, requestMissedMessages, initializeSocket, joinConsultationRoom, bookingId, authUser?.token, navigation]);
+  }, [safeSetState, syncTimerFromSession, initializeSocket, joinConsultationRoom, bookingId, authUser?.token, navigation]);
   
   // Update ref to current function
   handleReconnectionRef.current = handleReconnection;
 
   const requestMissedMessages = useCallback(async () => {
+    const socket = socketRef.current;
+    if (!socket?.connected) {
+      console.log('📨 [MESSAGES] Socket not connected, skipping missed message request');
+      return;
+    }
+
     console.log('📨 [MESSAGES] Requesting missed messages since:', lastMessageTimestampRef.current);
     
-    try {
-      // Try socket first
-      const socket = socketRef.current;
-      if (socket?.connected) {
-        console.log('📨 [MESSAGES] Using socket for missed messages');
+    return new Promise((resolve) => {
+      const timeout = setTimeout(() => {
+        console.log('⚠️ [MESSAGES] Socket timeout for missed messages');
+        resolve();
+      }, 5000);
+      
+      socket.emit('get_missed_messages', {
+        bookingId,
+        sessionId,
+        since: lastMessageTimestampRef.current,
+        roomId: getCurrentRoomId()
+      }, (response) => {
+        clearTimeout(timeout);
+        console.log('📨 [MESSAGES] Missed messages response:', response);
         
-        return new Promise((resolve) => {
-          const timeout = setTimeout(() => {
-            console.log('⚠️ [MESSAGES] Socket timeout, falling back to API');
-            resolve();
-          }, 5000);
-          
-          socket.emit('get_missed_messages', {
-            bookingId,
-            sessionId,
-            since: lastMessageTimestampRef.current,
-            roomId: getCurrentRoomId()
-          }, (response) => {
-            clearTimeout(timeout);
-            console.log('📨 [MESSAGES] Socket missed messages response:', response);
-            
-            if (response?.messages && Array.isArray(response.messages)) {
-              const newMessages = response.messages.filter(msg => 
-                !messages.find(existing => existing.id === msg.id)
-              );
-              
-              if (newMessages.length > 0) {
-                console.log(`📨 [MESSAGES] Adding ${newMessages.length} missed messages via socket`);
-                safeSetState(setMessages, prev => {
-                  const combined = [...prev, ...newMessages];
-                  return combined.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
-                });
-                
-                // Update last message timestamp
-                const latestTimestamp = Math.max(...newMessages.map(msg => new Date(msg.timestamp).getTime()));
-                lastMessageTimestampRef.current = latestTimestamp;
-              }
-            }
-            resolve();
-          });
-        });
-      }
-      
-      // API fallback if socket not available
-      console.log('📨 [MESSAGES] Socket not available, using API fallback');
-      await requestMissedMessagesViaAPI();
-      
-    } catch (error) {
-      console.error('❌ [MESSAGES] Failed to request missed messages:', error);
-      // Try API fallback on any error
-      await requestMissedMessagesViaAPI();
-    }
-  }, [bookingId, sessionId, getCurrentRoomId, messages, safeSetState]);
-  
-  const requestMissedMessagesViaAPI = useCallback(async () => {
-    try {
-      console.log('🌐 [MESSAGES] Fetching missed messages via API');
-      
-      // Get fresh token (with refresh if needed)
-      let token = authUser?.token;
-      
-      // Fix: Use correct API endpoint for chat history messages
-      let response = await fetch(`${API_BASE_URL}/chat-history/${sessionId}`, {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        }
-      });
-      
-      // If 401, try to refresh token and retry
-      if (response.status === 401) {
-        console.log('🔄 [MESSAGES] Token expired, attempting refresh...');
-        try {
-          // Try to refresh token
-          const refreshResponse = await fetch(`${API_BASE_URL}/auth/refresh`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${token}`
-            }
-          });
-          
-          if (refreshResponse.ok) {
-            const refreshData = await refreshResponse.json();
-            token = refreshData.token;
-            console.log('✅ [MESSAGES] Token refreshed successfully');
-            
-            // Retry the original request with new token
-            response = await fetch(`${API_BASE_URL}/chat-history/${sessionId}`, {
-              method: 'GET',
-              headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${token}`
-              }
-            });
-          } else {
-            console.log('❌ [MESSAGES] Token refresh failed, using socket fallback');
-            return; // Fall back to socket-based missed messages
-          }
-        } catch (refreshError) {
-          console.error('❌ [MESSAGES] Token refresh error:', refreshError);
-          return; // Fall back to socket-based missed messages
-        }
-      }
-      
-      if (response.ok) {
-        const data = await response.json();
-        // Chat history endpoint returns data.data.messages format
-        const messagesArray = data.success && data.data && data.data.messages ? data.data.messages : [];
-        if (messagesArray && Array.isArray(messagesArray)) {
-          // Filter messages that are newer than our last timestamp
-          const newMessages = messagesArray.filter(msg => {
-            const msgTime = new Date(msg.timestamp || msg.createdAt).getTime();
-            return msgTime > lastMessageTimestampRef.current && 
-                   !messages.find(existing => existing.id === msg.id);
-          });
+        if (response?.messages && Array.isArray(response.messages)) {
+          const newMessages = response.messages.filter(msg => 
+            !messages.find(existing => existing.id === msg.id)
+          );
           
           if (newMessages.length > 0) {
-            console.log(`📨 [MESSAGES] Adding ${newMessages.length} missed messages via API`);
+            console.log(`📨 [MESSAGES] Adding ${newMessages.length} missed messages`);
             safeSetState(setMessages, prev => {
               const combined = [...prev, ...newMessages];
               return combined.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
@@ -477,13 +388,10 @@ const FixedChatScreen = ({ route, navigation }) => {
             lastMessageTimestampRef.current = latestTimestamp;
           }
         }
-      } else {
-        console.error('❌ [MESSAGES] API request failed:', response.status);
-      }
-    } catch (error) {
-      console.error('❌ [MESSAGES] API fallback failed:', error);
-    }
-  }, [bookingId, messages, safeSetState]);
+        resolve();
+      });
+    });
+  }, [bookingId, sessionId, getCurrentRoomId, messages, safeSetState]);
   
   // Update ref to current function
   requestMissedMessagesRef.current = requestMissedMessages;
@@ -542,9 +450,105 @@ const FixedChatScreen = ({ route, navigation }) => {
     safeSetState(setTimerData, prev => ({ ...prev, isActive: false }));
   }, [safeSetState]);
 
+  // ===== TYPING INDICATOR HANDLING =====
+  const handleTypingStarted = useCallback((data) => {
+    console.log('✏️ [TYPING] Received typing_started:', data);
+    
+    // Only handle typing from astrologer
+    if (data.senderType === 'astrologer' && data.bookingId === bookingId) {
+      safeSetState(setAstrologerTyping, true);
+      
+      // Clear existing timeout
+      if (astrologerTypingTimeoutRef.current) {
+        clearTimeout(astrologerTypingTimeoutRef.current);
+      }
+      
+      // Auto-clear typing indicator after 5 seconds
+      astrologerTypingTimeoutRef.current = setTimeout(() => {
+        safeSetState(setAstrologerTyping, false);
+      }, 5000);
+    }
+  }, [bookingId, safeSetState]);
+  
+  const handleTypingStopped = useCallback((data) => {
+    console.log('✏️ [TYPING] Received typing_stopped:', data);
+    
+    // Only handle typing from astrologer
+    if (data.senderType === 'astrologer' && data.bookingId === bookingId) {
+      safeSetState(setAstrologerTyping, false);
+      
+      // Clear existing timeout
+      if (astrologerTypingTimeoutRef.current) {
+        clearTimeout(astrologerTypingTimeoutRef.current);
+      }
+    }
+  }, [bookingId, safeSetState]);
+  
+  // Legacy handler for backward compatibility
+  const handleTypingIndicator = useCallback((data) => {
+    console.log('✏️ [TYPING] Received typing indicator (legacy):', data);
+    
+    // Only handle typing from astrologer
+    if (data.senderType === 'astrologer' && data.bookingId === bookingId) {
+      safeSetState(setAstrologerTyping, data.isTyping);
+      
+      // Clear existing timeout
+      if (astrologerTypingTimeoutRef.current) {
+        clearTimeout(astrologerTypingTimeoutRef.current);
+      }
+      
+      // Auto-clear typing indicator after 5 seconds if still showing
+      if (data.isTyping) {
+        astrologerTypingTimeoutRef.current = setTimeout(() => {
+          safeSetState(setAstrologerTyping, false);
+        }, 5000);
+      }
+    }
+  }, [bookingId, safeSetState]);
+  
+  const handleMessageDelivered = useCallback((data) => {
+    console.log('✓ [READ_RECEIPT] Message delivered:', data);
+    
+    if (data.messageId) {
+      safeSetState(setMessages, prev => 
+        prev.map(msg => 
+          msg.id === data.messageId 
+            ? { ...msg, status: 'delivered', deliveredAt: new Date() }
+            : msg
+        )
+      );
+    }
+  }, [safeSetState]);
+  
+  const handleMessageRead = useCallback((data) => {
+    console.log('✓✓ [READ_RECEIPT] Message read:', data);
+    
+    if (data.messageId) {
+      safeSetState(setMessages, prev => 
+        prev.map(msg => 
+          msg.id === data.messageId 
+            ? { ...msg, status: 'read', readAt: new Date() }
+            : msg
+        )
+      );
+    }
+  }, [safeSetState]);
+
   // ===== MESSAGE HANDLING =====
   const handleIncomingMessage = useCallback((data) => {
     console.log('📨 [MESSAGE] Received:', data);
+    
+    // Send read receipt for received message
+    const socket = socketRef.current;
+    if (socket?.connected && data.id) {
+      socket.emit('message_read', {
+        messageId: data.id,
+        bookingId,
+        sessionId,
+        userId: authUser?.id,
+        roomId: getCurrentRoomId()
+      });
+    }
     
     if (data.senderId === authUser?.id) {
       console.log('⚠️ [MESSAGE] Ignoring own message');
@@ -580,32 +584,9 @@ const FixedChatScreen = ({ route, navigation }) => {
     }, 100);
   }, [authUser?.id, generateMessageId, safeSetState]);
 
-  const handleMessageDelivered = useCallback((data) => {
-    console.log('✅ [MESSAGE] Delivered:', data);
-    
-    safeSetState(setMessages, prev => 
-      prev.map(msg => 
-        msg.id === data.messageId 
-          ? { ...msg, status: 'delivered' }
-          : msg
-      )
-    );
-  }, [safeSetState]);
+
   
-  const handleTypingIndicator = useCallback((data) => {
-    if (data.userId !== authUser?.id) {
-      safeSetState(setIsTyping, data.isTyping);
-      
-      if (data.isTyping) {
-        if (typingTimeoutRef.current) {
-          clearTimeout(typingTimeoutRef.current);
-        }
-        typingTimeoutRef.current = setTimeout(() => {
-          safeSetState(setIsTyping, false);
-        }, 3000);
-      }
-    }
-  }, [authUser?.id, safeSetState]);
+
   
   // ===== SESSION EVENT HANDLERS =====
   const handleSessionStarted = useCallback((data) => {
@@ -752,7 +733,7 @@ const FixedChatScreen = ({ route, navigation }) => {
       'connect', 'disconnect', 'connect_error',
       'receive_message', 'message_delivered', 'typing_indicator',
       'session_started', 'session_timer', 'session_timer_update', 'session_ended',
-      'consultation_ended'
+      'consultation_ended', 'missed_messages_recovery'
     ];
     
     events.forEach(event => {
@@ -825,7 +806,9 @@ const FixedChatScreen = ({ route, navigation }) => {
       handleIncomingMessage(data);
     });
     socket.on('message_delivered', handleMessageDelivered);
-    socket.on('typing_indicator', handleTypingIndicator);
+    socket.on('message_status_update', handleMessageRead);
+    socket.on('typing_started', handleTypingStarted);
+    socket.on('typing_stopped', handleTypingStopped);
     socket.on('session_started', handleSessionStarted);
     socket.on('session_timer_update', handleTimerUpdate);
     socket.on('session_ended', handleSessionEnded);
@@ -849,8 +832,75 @@ const FixedChatScreen = ({ route, navigation }) => {
       handleTimerUpdate(data);
     });
     
+    // Handle automatic missed message recovery from backend
+    socket.on('missed_messages_recovery', (data) => {
+      console.log('📨 [AUTO_RECOVERY] Missed messages recovery received:', data);
+      console.log('📨 [AUTO_RECOVERY] Current messages count:', messages.length);
+      
+      if (data.success && data.messages && Array.isArray(data.messages)) {
+        console.log(`📨 [AUTO_RECOVERY] Processing ${data.messages.length} recovered messages`);
+        
+        // More robust deduplication using both ID and content+timestamp
+        const newMessages = data.messages.filter(recoveredMsg => {
+          const existingById = messages.find(existing => existing.id === recoveredMsg.id);
+          if (existingById) {
+            console.log(`📨 [AUTO_RECOVERY] Skipping duplicate by ID: ${recoveredMsg.id}`);
+            return false;
+          }
+          
+          // Also check for duplicates by content and timestamp (in case IDs differ)
+          const existingByContent = messages.find(existing => 
+            existing.content === recoveredMsg.content && 
+            existing.senderId === recoveredMsg.senderId &&
+            Math.abs(new Date(existing.timestamp).getTime() - new Date(recoveredMsg.timestamp).getTime()) < 1000 // Within 1 second
+          );
+          
+          if (existingByContent) {
+            console.log(`📨 [AUTO_RECOVERY] Skipping duplicate by content/timestamp: ${recoveredMsg.content.substring(0, 50)}...`);
+            return false;
+          }
+          
+          return true;
+        });
+        
+        if (newMessages.length > 0) {
+          console.log(`📨 [AUTO_RECOVERY] Adding ${newMessages.length} new recovered messages (filtered from ${data.messages.length})`);
+          
+          safeSetState(setMessages, prev => {
+            // Double-check for duplicates in the state update as well
+            const filteredNewMessages = newMessages.filter(newMsg => 
+              !prev.find(existing => existing.id === newMsg.id)
+            );
+            
+            if (filteredNewMessages.length !== newMessages.length) {
+              console.log(`📨 [AUTO_RECOVERY] Final filter removed ${newMessages.length - filteredNewMessages.length} additional duplicates`);
+            }
+            
+            const combined = [...prev, ...filteredNewMessages];
+            return combined.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+          });
+          
+          // Update last message timestamp
+          const latestTimestamp = Math.max(...newMessages.map(msg => new Date(msg.timestamp).getTime()));
+          if (latestTimestamp > lastMessageTimestampRef.current) {
+            lastMessageTimestampRef.current = latestTimestamp;
+            console.log(`📨 [AUTO_RECOVERY] Updated last message timestamp to:`, new Date(latestTimestamp));
+          }
+          
+          // Scroll to bottom to show recovered messages
+          setTimeout(() => {
+            flatListRef.current?.scrollToEnd({ animated: true });
+          }, 100);
+        } else {
+          console.log('📨 [AUTO_RECOVERY] No new messages to add after deduplication (all already present)');
+        }
+      } else {
+        console.log('📨 [AUTO_RECOVERY] Invalid or empty recovery data:', data);
+      }
+    });
+    
     console.log('✅ [SOCKET] Event listeners setup complete');
-  }, [safeSetState, cleanupSocketListeners, joinConsultationRoom, handleIncomingMessage, handleMessageDelivered, handleTypingIndicator, handleSessionStarted, handleTimerUpdate, handleSessionEnded, bookingId]);
+  }, [safeSetState, cleanupSocketListeners, joinConsultationRoom, handleIncomingMessage, handleMessageDelivered, handleTypingIndicator, handleSessionStarted, handleTimerUpdate, handleSessionEnded, bookingId, messages]);
 
   // ===== MESSAGE SENDING =====
   const sendMessage = useCallback(async () => {
@@ -945,13 +995,47 @@ const FixedChatScreen = ({ route, navigation }) => {
     
     const socket = socketRef.current;
     if (socket?.connected && sessionActive) {
-      socket.emit('typing_indicator', {
-        bookingId,
-        sessionId,
-        userId: authUser?.id,
-        isTyping: text.length > 0,
-        roomId: getCurrentRoomId()
-      });
+      const isCurrentlyTyping = text.length > 0;
+      
+      // Emit typing indicator
+      if (isCurrentlyTyping) {
+        socket.emit('typing_started', {
+          bookingId,
+          sessionId,
+          userId: authUser?.id,
+          roomId: getCurrentRoomId()
+        });
+      } else {
+        socket.emit('typing_stopped', {
+          bookingId,
+          sessionId,
+          userId: authUser?.id,
+          roomId: getCurrentRoomId()
+        });
+      }
+      
+      // Update local typing state
+      safeSetState(setIsTyping, isCurrentlyTyping);
+      
+      // Clear existing timeout
+      if (typingTimeoutRef.current) {
+        clearTimeout(typingTimeoutRef.current);
+      }
+      
+      // Set timeout to auto-clear typing after 5 seconds of inactivity
+      if (isCurrentlyTyping) {
+        typingTimeoutRef.current = setTimeout(() => {
+          if (socketRef.current?.connected && sessionActive) {
+            socketRef.current.emit('typing_stopped', {
+              bookingId,
+              sessionId,
+              userId: authUser?.id,
+              roomId: getCurrentRoomId()
+            });
+          }
+          safeSetState(setIsTyping, false);
+        }, 5000);
+      }
     }
   }, [safeSetState, sessionActive, bookingId, sessionId, authUser?.id, getCurrentRoomId]);
   
@@ -1198,6 +1282,17 @@ const FixedChatScreen = ({ route, navigation }) => {
               <View style={styles.messageStatus}>
                 {item.status === 'sending' && <ActivityIndicator size={10} color="#999" />}
                 {item.status === 'sent' && <Ionicons name="checkmark" size={12} color="#4CAF50" />}
+                {item.status === 'delivered' && (
+                  <View style={styles.readReceiptContainer}>
+                    <Ionicons name="checkmark" size={12} color="#4CAF50" />
+                  </View>
+                )}
+                {item.status === 'read' && (
+                  <View style={styles.readReceiptContainer}>
+                    <Ionicons name="checkmark" size={12} color="#2196F3" style={styles.readTick1} />
+                    <Ionicons name="checkmark" size={12} color="#2196F3" style={styles.readTick2} />
+                  </View>
+                )}
                 {item.status === 'failed' && <Ionicons name="alert-circle" size={12} color="#FF6B6B" />}
               </View>
             )}
@@ -1266,9 +1361,6 @@ const FixedChatScreen = ({ route, navigation }) => {
                 <Text style={styles.timerText}>
                   {formatTime(timerData.elapsed || 0)}
                 </Text>
-                <Text style={styles.amountText}>
-                  ₹{Math.ceil(((timerData.elapsed || 0) / 60) * (bookingDetails?.rate || 50))}/min
-                </Text>
               </View>
             )}
             
@@ -1296,7 +1388,7 @@ const FixedChatScreen = ({ route, navigation }) => {
           onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: true })}
         />
 
-        {isTyping && (
+        {astrologerTyping && (
           <View style={styles.typingContainer}>
             <Text style={styles.typingText}>Astrologer is typing...</Text>
           </View>
@@ -1528,6 +1620,31 @@ const styles = StyleSheet.create({
   },
   sendButtonDisabled: {
     backgroundColor: '#CCCCCC',
+  },
+  typingContainer: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    backgroundColor: 'rgba(107, 70, 193, 0.1)',
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(107, 70, 193, 0.2)',
+  },
+  typingText: {
+    color: '#6B46C1',
+    fontSize: 14,
+    fontStyle: 'italic',
+  },
+  readReceiptContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    position: 'relative',
+  },
+  readTick1: {
+    position: 'absolute',
+    left: 0,
+  },
+  readTick2: {
+    position: 'absolute',
+    left: 3,
   },
 });
 
