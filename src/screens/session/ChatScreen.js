@@ -16,7 +16,7 @@ import {
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../context/AuthContext';
-import { bookingsAPI, sessionsAPI } from '../../services/api';
+import { bookingsAPI, sessionsAPI, chatHistoryAPI } from '../../services/api';
 import io from 'socket.io-client';
 import * as socketService from '../../services/socketService';
 
@@ -97,6 +97,49 @@ const ChatScreen = ({ route, navigation }) => {
       console.error('ChatScreen: Error fetching booking details:', error);
       setLoading(false);
       Alert.alert('Error', 'Failed to load chat session. Please try again.');
+    }
+  };
+
+  const fetchChatHistory = async (currentSessionId) => {
+    try {
+      console.log('🔍 [USER-CHAT] Fetching chat history for sessionId:', currentSessionId);
+      
+      if (!currentSessionId) {
+        console.log('⚠️ [USER-CHAT] No sessionId provided, skipping chat history fetch');
+        return;
+      }
+
+      const response = await chatHistoryAPI.getChatHistory(currentSessionId);
+      const chatHistory = response.data || [];
+      
+      console.log('✅ [USER-CHAT] Chat history fetched:', chatHistory.length, 'messages');
+      
+      if (chatHistory.length > 0) {
+        // Transform chat history to match the expected message format
+        const transformedMessages = chatHistory.map(msg => ({
+          id: msg.id || msg._id || Date.now().toString(),
+          senderId: msg.senderId || msg.sender_id,
+          senderName: msg.senderName || msg.sender_name || (msg.sender === 'user' ? 'User' : 'Astrologer'),
+          text: msg.text || msg.message || msg.content,
+          timestamp: msg.timestamp || msg.createdAt || msg.created_at,
+          status: msg.status || 'sent', // Default status for historical messages
+          sender: msg.sender // Keep original sender field for compatibility
+        }));
+        
+        // Sort messages by timestamp (oldest first)
+        transformedMessages.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+        
+        console.log('📝 [USER-CHAT] Setting', transformedMessages.length, 'historical messages');
+        setMessages(transformedMessages);
+      } else {
+        console.log('📝 [USER-CHAT] No chat history found, starting with empty messages');
+        setMessages([]);
+      }
+    } catch (error) {
+      console.error('❌ [USER-CHAT] Failed to fetch chat history:', error);
+      // Don't show alert for chat history errors, just log and continue
+      // The session can still work with empty message history
+      setMessages([]);
     }
   };
 
@@ -210,6 +253,10 @@ const ChatScreen = ({ route, navigation }) => {
             console.log('[USER-APP] Session response received:', sessionResponse);
             // sessionId is already set in startSession function, no need to set it again
             console.log('[USER-APP] SessionId already set in startSession function');
+            
+            // Fetch existing chat history for this session
+            await fetchChatHistory(sessionResponse);
+            
             // Explicitly request timer start
             socketRef.current.emit('start_session_timer', { bookingId, sessionId: sessionResponse });
           }

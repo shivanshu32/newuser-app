@@ -1648,21 +1648,5 @@ const styles = StyleSheet.create({
   },
 });
 
-// Wrap component in React.memo to prevent unnecessary remounts
-const MemoizedFixedChatScreen = React.memo(FixedChatScreen, (prevProps, nextProps) => {
-  // Only re-render if essential route params change
-  const prevParams = prevProps.route?.params || {};
-  const nextParams = nextProps.route?.params || {};
-  
-  const isEqual = (
-    prevParams.bookingId === nextParams.bookingId &&
-    prevParams.sessionId === nextParams.sessionId &&
-    prevParams.astrologerId === nextParams.astrologerId
-  );
-  
-  console.log('🔍 [MEMO] Props comparison result:', isEqual ? 'EQUAL (no re-render)' : 'DIFFERENT (re-render)');
-  
-  return isEqual;
-});
-
-export default MemoizedFixedChatScreen;
+// Export the component directly to fix runtime error
+export default FixedChatScreen;

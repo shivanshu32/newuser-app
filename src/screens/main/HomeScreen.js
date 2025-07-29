@@ -226,8 +226,10 @@ const HomeScreen = ({ navigation }) => {
     try {
       if (sessionData.isFreeChat) {
         // Navigate to free chat screen
-        navigation.navigate('FreeChatScreen', {
+        navigation.navigate('FixedFreeChatScreen', {
           sessionId: sessionData.sessionIdentifier,
+          freeChatId: sessionData.freeChatId,
+          astrologerId: sessionData.astrologer?.id,
           astrologerName: sessionData.astrologer?.name,
           rejoin: true
         });
@@ -523,6 +525,18 @@ const HomeScreen = ({ navigation }) => {
     const handleConsultationEnded = (data) => {
       console.log('🏁 [HOME] Consultation ended event received:', data);
       
+      // Clear active session state to hide RejoinChatBottomSheet
+      console.log('🧹 [HOME] Clearing active session state after consultation ended...');
+      setActiveSessionData(null);
+      setShowRejoinBottomSheet(false);
+      setRemainingTime(null);
+      
+      // Clear timer if it exists
+      if (timerInterval) {
+        clearInterval(timerInterval);
+        setTimerInterval(null);
+      }
+      
       // Immediately refresh pending bookings to remove completed consultation
       console.log('🔄 [HOME] Refreshing pending bookings after consultation ended...');
       fetchUserPendingBookings().catch(error => {
@@ -545,6 +559,15 @@ const HomeScreen = ({ navigation }) => {
           
           return filteredBookings;
         });
+        
+        // Also clear active session if it matches the ended booking
+        if (activeSessionData && 
+            (activeSessionData.bookingId === data.bookingId || 
+             activeSessionData.sessionId === data.sessionId)) {
+          console.log('🧹 [HOME] Clearing active session data for ended consultation:', data.bookingId);
+          setActiveSessionData(null);
+          setShowRejoinBottomSheet(false);
+        }
       }
     };
 
