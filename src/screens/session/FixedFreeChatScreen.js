@@ -25,14 +25,39 @@ const API_BASE_URL = 'https://jyotishcallbackend-2uxrv.ondigitalocean.app/api/v1
  */
 const FixedFreeChatScreen = ({ route, navigation }) => {
   console.log('🚀 FixedFreeChatScreen: Component mounting with params:', route.params);
+  console.log('🔍 [DEBUG] Raw route.params:', JSON.stringify(route.params, null, 2));
   
   const {
     freeChatId,
     sessionId,
     astrologerId,
     userProfile,
+    bookingDetails, // May be undefined for free chat
+    astrologer, // May be passed directly
+    isFreeChat = true, // Default to true for this screen
     sessionDuration = 180, // 3 minutes default for free chat
+    consultationType = 'chat', // Default to 'chat' for free chat sessions
   } = route.params || {};
+  
+  console.log('🔍 [DEBUG] Extracted parameters:');
+  console.log('🔍 [DEBUG] freeChatId:', freeChatId);
+  console.log('🔍 [DEBUG] sessionId:', sessionId);
+  console.log('🔍 [DEBUG] astrologerId:', astrologerId);
+  console.log('🔍 [DEBUG] isFreeChat:', isFreeChat);
+  
+  // Create fallback booking details for free chat if not provided
+  const effectiveBookingDetails = bookingDetails || {
+    id: freeChatId || sessionId,
+    _id: freeChatId || sessionId,
+    type: 'chat',
+    rate: 0,
+    notes: 'Free 3-minute chat consultation',
+    isFreeChat: true,
+    user: userProfile || authUser,
+    astrologer: astrologer || { id: astrologerId },
+    sessionDuration: sessionDuration,
+    createdAt: new Date().toISOString()
+  };
   
   const { user: authUser, refreshToken, getValidToken } = useAuth();
 
@@ -94,8 +119,9 @@ const FixedFreeChatScreen = ({ route, navigation }) => {
   }, []);
 
   const getCurrentRoomId = useCallback(() => {
-    return `consultation:${sessionId}`;
-  }, [sessionId]);
+    // Free chat messages should use free_chat:freeChatId format, not consultation:sessionId
+    return `free_chat:${freeChatId}`;
+  }, [freeChatId]);
 
   const safeSetState = useCallback((setter, value) => {
     if (mountedRef.current) {
@@ -345,7 +371,7 @@ const FixedFreeChatScreen = ({ route, navigation }) => {
     } finally {
       isReconnectingRef.current = false;
     }
-  }, [safeSetState, syncTimerFromSession, initializeSocket, joinConsultationRoom, bookingId, authUser?.token, navigation]);
+  }, [safeSetState, syncTimerFromSession, initializeSocket, freeChatId, authUser?.token, navigation]);
   
   // Update ref to current function
   handleReconnectionRef.current = handleReconnection;
@@ -544,10 +570,21 @@ const FixedFreeChatScreen = ({ route, navigation }) => {
   // ===== MESSAGE HANDLING =====
   const handleIncomingMessage = useCallback((data) => {
     console.log('📨 [FREE_CHAT_MESSAGE] Received:', data);
+    console.log('📨 [DEBUG] Message content fields:', {
+      content: data.content,
+      text: data.text,
+      message: data.message,
+      senderId: data.senderId,
+      senderRole: data.senderRole,
+      senderType: data.senderType,
+      freeChatId: data.freeChatId,
+      messageId: data.messageId
+    });
     
     // Validate message is for this free chat session
     if (data.freeChatId !== freeChatId) {
       console.log('⚠️ [FREE_CHAT_MESSAGE] Message not for this free chat session, ignoring');
+      console.log('⚠️ [DEBUG] Expected freeChatId:', freeChatId, 'Received freeChatId:', data.freeChatId);
       return;
     }
     
@@ -569,15 +606,21 @@ const FixedFreeChatScreen = ({ route, navigation }) => {
       return;
     }
     
+    const extractedText = data.message || data.content || data.text;
+    console.log('📨 [DEBUG] Extracted message text:', extractedText);
+    console.log('📨 [DEBUG] Text extraction order - message:', data.message, 'content:', data.content, 'text:', data.text);
+    
     const newMessage = {
       id: data.messageId || generateMessageId(),
-      text: data.message || data.content || data.text,
+      text: extractedText,
       sender: 'astrologer',
       senderId: data.senderId,
       senderType: data.senderType || 'astrologer',
       timestamp: data.timestamp || new Date().toISOString(),
       status: 'delivered'
     };
+    
+    console.log('📨 [DEBUG] Final message object:', newMessage);
     
     // Update last message timestamp for missed message tracking
     const messageTimestamp = new Date(newMessage.timestamp).getTime();
@@ -757,7 +800,7 @@ const FixedFreeChatScreen = ({ route, navigation }) => {
       'connect', 'disconnect', 'connect_error',
       'free_chat_message', 'free_chat_message_delivered', 'free_chat_message_read',
       'free_chat_typing_started', 'free_chat_typing_stopped',
-      'free_chat_session_started', 'free_chat_timer_update', 'free_chat_session_ended',
+      'session_started', 'session_timer', 'session_ended',
       'free_chat_session_resumed', 'get_free_chat_message_history'
     ];
     
@@ -832,10 +875,9 @@ const FixedFreeChatScreen = ({ route, navigation }) => {
     socket.on('free_chat_typing_stopped', handleTypingStopped);
     
     // Free chat session events
-    socket.on('free_chat_session_started', handleSessionStarted);
-    socket.on('free_chat_timer_update', handleTimerUpdate);
-    socket.on('free_chat_session_ended', handleSessionEnded);
-    socket.on('free_chat_session_resumed', handleSessionResumed);
+    socket.on('session_started', handleSessionStarted);
+    socket.on('session_timer', handleTimerUpdate);
+    socket.on('session_ended', handleSessionEnded);
     
     // Handle free chat message history recovery
     socket.on('get_free_chat_message_history', (data) => {
@@ -905,7 +947,7 @@ const FixedFreeChatScreen = ({ route, navigation }) => {
     });
     
     console.log('✅ [FREE_CHAT_SOCKET] Event listeners setup complete');
-  }, [safeSetState, cleanupSocketListeners, joinFreeChatRoom, handleIncomingMessage, handleMessageDelivered, handleMessageRead, handleTypingStarted, handleTypingStopped, handleSessionStarted, handleTimerUpdate, handleSessionEnded, handleSessionResumed, freeChatId, messages]);
+  }, [safeSetState, cleanupSocketListeners, joinFreeChatRoom, handleIncomingMessage, handleMessageDelivered, handleMessageRead, handleTypingStarted, handleTypingStopped, handleSessionStarted, handleTimerUpdate, handleSessionEnded, freeChatId, messages]);
 
   // ===== MESSAGE SENDING =====
   const sendMessage = useCallback(async () => {
@@ -1285,7 +1327,7 @@ const FixedFreeChatScreen = ({ route, navigation }) => {
       <View style={[styles.messageContainer, isOwnMessage ? styles.ownMessage : styles.otherMessage]}>
         <View style={[styles.messageBubble, isOwnMessage ? styles.ownBubble : styles.otherBubble]}>
           <Text style={[styles.messageText, isOwnMessage ? styles.ownMessageText : styles.otherMessageText]}>
-            {item.content}
+            {item.text || item.content || item.message}
           </Text>
           <View style={styles.messageFooter}>
             <Text style={[styles.messageTime, isOwnMessage ? styles.ownMessageTime : styles.otherMessageTime]}>
@@ -1668,7 +1710,7 @@ const MemoizedFixedFreeChatScreen = React.memo(FixedFreeChatScreen, (prevProps, 
   const nextParams = nextProps.route?.params || {};
   
   const isEqual = (
-    prevParams.bookingId === nextParams.bookingId &&
+    prevParams.freeChatId === nextParams.freeChatId &&
     prevParams.sessionId === nextParams.sessionId &&
     prevParams.astrologerId === nextParams.astrologerId
   );

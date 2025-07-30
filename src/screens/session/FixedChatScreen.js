@@ -372,20 +372,62 @@ const FixedChatScreen = ({ route, navigation }) => {
         console.log('📨 [MESSAGES] Missed messages response:', response);
         
         if (response?.messages && Array.isArray(response.messages)) {
-          const newMessages = response.messages.filter(msg => 
-            !messages.find(existing => existing.id === msg.id)
-          );
+          console.log(`📨 [MESSAGES] Processing ${response.messages.length} messages from server`);
+          
+          // Enhanced deduplication logic to handle ID mismatches
+          const newMessages = response.messages.filter(serverMsg => {
+            // First check by exact ID match (for messages that haven't been locally modified)
+            const existsByID = messages.find(existing => existing.id === serverMsg.id);
+            if (existsByID) {
+              console.log(`📨 [DEDUP] Skipping duplicate by ID: ${serverMsg.id}`);
+              return false;
+            }
+            
+            // Enhanced deduplication: Check by content, timestamp, and sender
+            // This handles cases where local message ID != database message ID
+            const existsByContent = messages.find(existing => {
+              const contentMatch = existing.content === serverMsg.content;
+              const senderMatch = existing.senderId === serverMsg.senderId || 
+                                  existing.senderType === serverMsg.senderType;
+              
+              // Allow 5 second tolerance for timestamp comparison (network delays)
+              const timeDiff = Math.abs(
+                new Date(existing.timestamp).getTime() - 
+                new Date(serverMsg.timestamp).getTime()
+              );
+              const timestampMatch = timeDiff < 5000; // 5 seconds tolerance
+              
+              return contentMatch && senderMatch && timestampMatch;
+            });
+            
+            if (existsByContent) {
+              console.log(`📨 [DEDUP] Skipping duplicate by content/sender/time: ${serverMsg.content.substring(0, 30)}...`);
+              return false;
+            }
+            
+            return true; // Message is new
+          });
           
           if (newMessages.length > 0) {
-            console.log(`📨 [MESSAGES] Adding ${newMessages.length} missed messages`);
+            console.log(`📨 [MESSAGES] Adding ${newMessages.length} new missed messages (filtered from ${response.messages.length})`);
+            
             safeSetState(setMessages, prev => {
+              // Merge messages and sort by timestamp
               const combined = [...prev, ...newMessages];
-              return combined.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+              const sorted = combined.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+              
+              console.log(`📨 [MESSAGES] Total messages after merge: ${sorted.length}`);
+              return sorted;
             });
             
             // Update last message timestamp
             const latestTimestamp = Math.max(...newMessages.map(msg => new Date(msg.timestamp).getTime()));
-            lastMessageTimestampRef.current = latestTimestamp;
+            if (latestTimestamp > lastMessageTimestampRef.current) {
+              lastMessageTimestampRef.current = latestTimestamp;
+              console.log(`📨 [MESSAGES] Updated last message timestamp to: ${new Date(latestTimestamp).toISOString()}`);
+            }
+          } else {
+            console.log(`📨 [MESSAGES] No new messages to add (all ${response.messages.length} messages already exist)`);
           }
         }
         resolve();

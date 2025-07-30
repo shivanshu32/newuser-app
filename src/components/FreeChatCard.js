@@ -51,24 +51,14 @@ const FreeChatCard = ({ navigation }) => {
       setShowWaitingModal(false);
       setRequesting(false);
       
-      // Navigate to chat screen
-      navigation.navigate('EnhancedChat', {
-        bookingId: data.freeChatId, // Use freeChatId as bookingId for consistency
+      // Navigate to free chat screen
+      navigation.navigate('FixedFreeChatScreen', {
+        freeChatId: data.freeChatId,
         sessionId: data.sessionId,
+        astrologerId: data.astrologer.id,
         astrologer: data.astrologer,
         isFreeChat: true,
-        freeChatId: data.freeChatId,
-        userProfile: user,
-        bookingDetails: {
-          _id: data.freeChatId,
-          sessionId: data.sessionId,
-          astrologer: data.astrologer,
-          isFreeChat: true,
-          type: 'chat',
-          rate: 0,
-          duration: 3,
-          userProfile: user
-        }
+        userProfile: user
       });
     };
 
