@@ -69,6 +69,8 @@ const FixedFreeChatScreen = ({ route, navigation }) => {
   const [isTyping, setIsTyping] = useState(false); // User typing state
   const [astrologerTyping, setAstrologerTyping] = useState(false); // Astrologer typing state
   const [sessionActive, setSessionActive] = useState(false);
+  const [sessionEnded, setSessionEnded] = useState(false);
+  const [sessionEndReason, setSessionEndReason] = useState(null); // 'timer_expired', 'user_ended', 'astrologer_ended'
   const [timerData, setTimerData] = useState({
     elapsed: 0,
     duration: sessionDuration,
@@ -132,6 +134,106 @@ const FixedFreeChatScreen = ({ route, navigation }) => {
   // Update ref to current function
   safeSetStateRef.current = safeSetState;
 
+  // ===== SESSION END HANDLING =====
+  const handleSessionEnd = useCallback((reason, initiatedBy = 'system') => {
+    console.log('🛑 [FREE_CHAT_END] Session ending - Reason:', reason, 'Initiated by:', initiatedBy);
+    
+    // Update session end state
+    safeSetState(setSessionEnded, true);
+    safeSetState(setSessionEndReason, reason);
+    safeSetState(setSessionActive, false);
+    
+    // Stop any running timers
+    if (timerIntervalRef.current) {
+      clearInterval(timerIntervalRef.current);
+      timerIntervalRef.current = null;
+    }
+    
+    // Emit socket event if not already ended by backend
+    if (reason !== 'timer_expired' && socketRef.current?.connected) {
+      socketRef.current.emit('end_free_chat_session', {
+        freeChatId,
+        sessionId,
+        userId: authUser?.id,
+        astrologerId,
+        endedBy: initiatedBy,
+        reason
+      });
+    }
+    
+    console.log('✅ [FREE_CHAT_END] Session ended successfully');
+  }, [freeChatId, sessionId, authUser?.id, astrologerId, safeSetState]);
+  
+  const handleUserEndSession = useCallback(() => {
+    Alert.alert(
+      'End Free Chat',
+      'Are you sure you want to end this free chat session?',
+      [
+        {
+          text: 'Cancel',
+          style: 'cancel'
+        },
+        {
+          text: 'End Session',
+          style: 'destructive',
+          onPress: () => {
+            handleSessionEnd('user_ended', 'user');
+            // Navigate back after a short delay to show the end message
+            setTimeout(() => {
+              if (mountedRef.current) {
+                navigation.goBack();
+              }
+            }, 2000);
+          }
+        }
+      ]
+    );
+  }, [handleSessionEnd, navigation]);
+  
+  const handleTimerExpiry = useCallback(() => {
+    console.log('⏰ [FREE_CHAT_TIMER] Timer expired - ending session');
+    handleSessionEnd('timer_expired', 'system');
+    
+    // Show timer expiry message and navigate back
+    setTimeout(() => {
+      if (mountedRef.current) {
+        Alert.alert(
+          'Time Up!',
+          'Your free 3-minute chat session has ended. Thank you for using our service!',
+          [
+            {
+              text: 'OK',
+              onPress: () => navigation.goBack()
+            }
+          ],
+          { cancelable: false }
+        );
+      }
+    }, 500);
+  }, [handleSessionEnd, navigation]);
+  
+  const handleAstrologerEndSession = useCallback((data) => {
+    console.log('🛑 [FREE_CHAT_END] Session ended by astrologer:', data);
+    handleSessionEnd('astrologer_ended', 'astrologer');
+    
+    // Show astrologer end message
+    setTimeout(() => {
+      if (mountedRef.current) {
+        Alert.alert(
+          'Session Ended',
+          'The astrologer has ended the free chat session. Thank you for using our service!',
+          [
+            {
+              text: 'OK',
+              onPress: () => navigation.goBack()
+            }
+          ],
+          { cancelable: false }
+        );
+      }
+    }, 500);
+  }, [handleSessionEnd, navigation]);
+
   // ===== SESSION PERSISTENCE =====
   const saveSessionState = useCallback((startTime, duration) => {
     console.log('💾 [FREE_CHAT] Saving session state - startTime:', startTime, 'duration:', duration);
@@ -171,6 +273,15 @@ const FixedFreeChatScreen = ({ route, navigation }) => {
   
   // Update ref to current function
   syncTimerFromSessionRef.current = syncTimerFromSession;
+  
+  // ===== TIMER EXPIRY MONITORING =====
+  useEffect(() => {
+    // Monitor timer data for expiry
+    if (timerData.timeRemaining <= 0 && timerData.isActive && sessionActive && !sessionEnded) {
+      console.log('⏰ [FREE_CHAT_TIMER] Timer expired - triggering session end');
+      handleTimerExpiry();
+    }
+  }, [timerData.timeRemaining, timerData.isActive, sessionActive, sessionEnded, handleTimerExpiry]);
 
   // Get socket from context
   const { socket: contextSocket, isConnected: socketConnected } = useSocket();
@@ -714,7 +825,7 @@ const FixedFreeChatScreen = ({ route, navigation }) => {
   }, [freeChatId, sessionDuration, safeSetState]);
 
   const handleSessionEnded = useCallback((data) => {
-    console.log('🛑 [FREE_CHAT_SESSION] Session ended:', data);
+    console.log('🛑 [FREE_CHAT_SESSION] Session ended by backend:', data);
     
     // Validate this session end event is for current free chat session
     if (data.freeChatId && data.freeChatId !== freeChatId) {
@@ -722,31 +833,36 @@ const FixedFreeChatScreen = ({ route, navigation }) => {
       return;
     }
     
-    safeSetState(setSessionActive, false);
-    safeSetState(setConnected, false);
-    stopLocalTimer();
+    // Determine who ended the session and why
+    const reason = data.reason || 'unknown';
+    const endedBy = data.endedBy || 'system';
     
-    // Clear any ongoing reconnection attempts
-    if (reconnectTimeoutRef.current) {
-      clearTimeout(reconnectTimeoutRef.current);
-      reconnectTimeoutRef.current = null;
-    }
-    isReconnectingRef.current = false;
-    reconnectAttemptsRef.current = 0;
+    console.log('🛑 [FREE_CHAT_SESSION] Session end details - reason:', reason, 'endedBy:', endedBy);
     
-    const duration = data.duration || sessionDuration;
-    const endReason = data.reason === 'time_expired' ? 'Your 3-minute free chat session has ended.' : 'The free chat session has ended.';
-    
-    Alert.alert(
-      'Free Chat Ended',
-      `${endReason}\nDuration: ${formatTime(duration)}`,
-      [{ text: 'OK', onPress: () => {
+    // Update session end state using our new state management
+    if (endedBy === 'astrologer') {
+      handleAstrologerEndSession(data);
+    } else if (reason === 'timer_expired' || reason === 'time_expired') {
+      handleTimerExpiry();
+    } else {
+      // Generic session end
+      handleSessionEnd(reason, endedBy);
+      
+      // Show generic end message
+      setTimeout(() => {
         if (mountedRef.current) {
-          navigation.goBack();
+          const duration = data.duration || sessionDuration;
+          const endReason = reason === 'time_expired' ? 'Your 3-minute free chat session has ended.' : 'The free chat session has ended.';
+          
+          Alert.alert(
+            'Free Chat Ended',
+            `${endReason}\nDuration: ${formatTime(duration)}`,
+            [{ text: 'OK', onPress: () => navigation.goBack() }]
+          );
         }
-      }}]
-    );
-  }, [freeChatId, sessionDuration, formatTime, safeSetState, stopLocalTimer, navigation]);
+      }, 500);
+    }
+  }, [freeChatId, sessionDuration, formatTime, handleSessionEnd, handleTimerExpiry, handleAstrologerEndSession, navigation]);
 
   const joinFreeChatRoom = useCallback(() => {
     const currentSocket = socketRef.current;
@@ -800,7 +916,7 @@ const FixedFreeChatScreen = ({ route, navigation }) => {
       'connect', 'disconnect', 'connect_error',
       'free_chat_message', 'free_chat_message_delivered', 'free_chat_message_read',
       'free_chat_typing_started', 'free_chat_typing_stopped',
-      'session_started', 'session_timer', 'session_ended',
+      'session_started', 'session_timer', 'session_end', // Fixed: backend emits 'session_end'
       'free_chat_session_resumed', 'get_free_chat_message_history'
     ];
     
@@ -877,7 +993,7 @@ const FixedFreeChatScreen = ({ route, navigation }) => {
     // Free chat session events
     socket.on('session_started', handleSessionStarted);
     socket.on('session_timer', handleTimerUpdate);
-    socket.on('session_ended', handleSessionEnded);
+    socket.on('session_end', handleSessionEnded); // Fixed: backend emits 'session_end', not 'session_ended'
     
     // Handle free chat message history recovery
     socket.on('get_free_chat_message_history', (data) => {
@@ -995,8 +1111,10 @@ const FixedFreeChatScreen = ({ route, navigation }) => {
         };
         
         socket.emit('free_chat_message', messagePayload, (acknowledgment) => {
+          console.log('🔥 [USER_APP_ACK] Backend acknowledgment received:', acknowledgment);
           if (acknowledgment?.success) {
-            console.log('✅ [MESSAGE] Socket send acknowledged');
+            console.log('✅ [USER_APP_ACK] Message acknowledged successfully - updating status to SENT (single tick)');
+            console.log('📝 [USER_APP_ACK] Message ID:', messageId, 'Backend Message ID:', acknowledgment.messageId);
             safeSetState(setMessages, prev => 
               prev.map(msg => 
                 msg.id === messageId 
@@ -1005,7 +1123,7 @@ const FixedFreeChatScreen = ({ route, navigation }) => {
               )
             );
           } else {
-            console.warn('⚠️ [MESSAGE] Socket send not acknowledged');
+            console.warn('❌ [USER_APP_ACK] Message acknowledgment failed:', acknowledgment);
             safeSetState(setMessages, prev => 
               prev.map(msg => 
                 msg.id === messageId 
@@ -1419,8 +1537,8 @@ const FixedFreeChatScreen = ({ route, navigation }) => {
               </View>
             )}
             
-            {sessionActive && (
-              <TouchableOpacity style={styles.endSessionButton} onPress={endSession}>
+            {sessionActive && !sessionEnded && (
+              <TouchableOpacity style={styles.endSessionButton} onPress={handleUserEndSession}>
                 <Ionicons name="stop-circle" size={16} color="#FF4444" />
                 <Text style={styles.endSessionText}>End</Text>
               </TouchableOpacity>
@@ -1443,30 +1561,45 @@ const FixedFreeChatScreen = ({ route, navigation }) => {
           onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: true })}
         />
 
-        {astrologerTyping && (
+        {astrologerTyping && !sessionEnded && (
           <View style={styles.typingContainer}>
             <Text style={styles.typingText}>Astrologer is typing...</Text>
           </View>
         )}
 
+        {/* End of Session Message */}
+        {sessionEnded && (
+          <View style={styles.sessionEndContainer}>
+            <View style={styles.sessionEndMessage}>
+              <Ionicons name="information-circle" size={24} color="#6B46C1" />
+              <Text style={styles.sessionEndText}>
+                This free chat session has ended. To continue, please start a new session.
+              </Text>
+            </View>
+          </View>
+        )}
+
         <View style={styles.inputContainer}>
           <TextInput
-            style={styles.textInput}
+            style={[
+              styles.textInput,
+              sessionEnded && styles.textInputDisabled
+            ]}
             value={messageText}
             onChangeText={handleInputChange}
-            placeholder="Type your message..."
-            placeholderTextColor="#999"
+            placeholder={sessionEnded ? "Session ended" : "Type your message..."}
+            placeholderTextColor={sessionEnded ? "#ccc" : "#999"}
             multiline
             maxLength={1000}
-            editable={sessionActive && connected}
+            editable={sessionActive && connected && !sessionEnded}
           />
           <TouchableOpacity
             style={[
               styles.sendButton,
-              (!messageText.trim() || !sessionActive) && styles.sendButtonDisabled
+              (!messageText.trim() || !sessionActive || sessionEnded) && styles.sendButtonDisabled
             ]}
             onPress={sendMessage}
-            disabled={!messageText.trim() || !sessionActive}
+            disabled={!messageText.trim() || !sessionActive || sessionEnded}
           >
             <Ionicons name="send" size={20} color="#FFFFFF" />
           </TouchableOpacity>
@@ -1675,6 +1808,39 @@ const styles = StyleSheet.create({
   },
   sendButtonDisabled: {
     backgroundColor: '#CCCCCC',
+  },
+  sessionEndContainer: {
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    backgroundColor: '#F8F9FA',
+    borderTopWidth: 1,
+    borderTopColor: '#E0E0E0',
+  },
+  sessionEndMessage: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderRadius: 8,
+    borderLeftWidth: 4,
+    borderLeftColor: '#6B46C1',
+    elevation: 1,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+  },
+  sessionEndText: {
+    flex: 1,
+    marginLeft: 12,
+    fontSize: 14,
+    color: '#374151',
+    lineHeight: 20,
+  },
+  textInputDisabled: {
+    backgroundColor: '#F5F5F5',
+    color: '#999',
   },
   typingContainer: {
     paddingHorizontal: 16,
