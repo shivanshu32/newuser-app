@@ -24,6 +24,7 @@ import { astrologersAPI, walletAPI, versionAPI, freeChatAPI, sessionsAPI } from 
 import BookingAcceptedModal from '../../components/BookingAcceptedModal';
 import FreeChatCard from '../../components/FreeChatCard';
 import RejoinChatBottomSheet from '../../components/RejoinChatBottomSheet';
+import BannerCarousel from '../../components/BannerCarousel';
 
 // Hardcoded app version - update this when releasing new versions
 const APP_VERSION = '5.1.0';
@@ -2252,7 +2253,8 @@ const HomeScreen = ({ navigation }) => {
   // Prepare data for single FlatList
   const getFlatListData = () => {
     const data = [
-      { type: 'header', id: 'header' }
+      { type: 'header', id: 'header' },
+      { type: 'bannerCarousel', id: 'bannerCarousel' }
     ];
     
     // Only add free chat section if globally enabled
@@ -2285,11 +2287,20 @@ const HomeScreen = ({ navigation }) => {
     return data;
   };
 
+  // Handle banner press events
+  const handleBannerPress = (index) => {
+    console.log(`Banner ${index + 1} pressed`);
+    // Add your banner press logic here
+    // For example: navigation.navigate('BannerDetail', { bannerId: index });
+  };
+
   // Render different item types
   const renderFlatListItem = ({ item }) => {
     switch (item.type) {
       case 'header':
         return renderHeader();
+      case 'bannerCarousel':
+        return <BannerCarousel onBannerPress={handleBannerPress} />;
       case 'freeChat':
         return <FreeChatCard navigation={navigation} />;
       case 'pendingBookingsHeader':

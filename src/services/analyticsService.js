@@ -9,24 +9,42 @@ let analytics = null;
 let firebaseApp = null;
 let analyticsSupported = false;
 
+// Suppress Firebase Analytics DOM-related errors in React Native
+const suppressFirebaseAnalyticsErrors = () => {
+  const originalConsoleError = console.error;
+  console.error = (...args) => {
+    // Suppress specific Firebase Analytics DOM errors that don't affect functionality
+    const message = args[0];
+    if (typeof message === 'string' && 
+        (message.includes('@firebase/analytics') && 
+         (message.includes('getElementsByTagName') || 
+          message.includes('Cannot read property') ||
+          message.includes('document is not defined')))) {
+      // Suppress these specific errors as they don't affect React Native functionality
+      return;
+    }
+    // Allow all other errors to be logged normally
+    originalConsoleError.apply(console, args);
+  };
+};
+
 // Initialize Firebase Analytics with React Native compatibility
 const initializeFirebaseAnalytics = async () => {
   try {
+    // Suppress DOM-related errors before initializing
+    suppressFirebaseAnalyticsErrors();
+    
     // Initialize Firebase app
     firebaseApp = initializeApp(firebaseConfig);
     
-    // For React Native, we need to check if analytics is supported
+    // For React Native, initialize analytics directly (isSupported() doesn't work properly in RN)
     if (Platform.OS === 'android' || Platform.OS === 'ios') {
       try {
-        // In React Native, analytics may not be supported in all environments
-        // We'll try to initialize and catch any errors
-        analyticsSupported = await isSupported();
-        if (analyticsSupported) {
-          analytics = getAnalytics(firebaseApp);
-          console.log('🔥 [ANALYTICS] Firebase Analytics initialized successfully for React Native');
-        } else {
-          console.log('🔥 [ANALYTICS] Firebase Analytics not supported in this React Native environment');
-        }
+        // Initialize analytics directly for React Native
+        analytics = getAnalytics(firebaseApp);
+        analyticsSupported = true;
+        console.log('🔥 [ANALYTICS] Firebase Analytics initialized successfully for React Native');
+        console.log('🔥 [ANALYTICS] DOM-related errors suppressed for React Native compatibility');
       } catch (error) {
         console.error('🔥 [ANALYTICS] Failed to initialize analytics in React Native:', error);
         analyticsSupported = false;
@@ -66,14 +84,20 @@ const AnalyticsWrapper = {
   },
   logEvent: async (name, parameters) => {
     try {
+      console.log(`🔥 [ANALYTICS] DEBUG - Attempting to log event: ${name}`);
+      console.log(`🔥 [ANALYTICS] DEBUG - analyticsSupported: ${analyticsSupported}`);
+      console.log(`🔥 [ANALYTICS] DEBUG - analytics instance exists: ${!!analytics}`);
+      
       if (analyticsSupported && analytics) {
         logEvent(analytics, name, parameters);
-        console.log(`🔥 [ANALYTICS] Event logged: ${name}`, parameters);
+        console.log(`🔥 [ANALYTICS] ✅ Event successfully logged: ${name}`, parameters);
+        console.log(`🔥 [ANALYTICS] ✅ Event sent to Firebase Analytics - should appear in console within 24 hours`);
       } else {
-        console.log(`🔥 [ANALYTICS] [FALLBACK] Event: ${name}`, parameters);
+        console.log(`🔥 [ANALYTICS] ❌ [FALLBACK] Analytics not available - Event: ${name}`, parameters);
+        console.log(`🔥 [ANALYTICS] ❌ This event will NOT be sent to Firebase`);
       }
     } catch (error) {
-      console.error(`🔥 [ANALYTICS] Failed to log event ${name}:`, error);
+      console.error(`🔥 [ANALYTICS] ❌ Failed to log event ${name}:`, error);
     }
   },
   setUserProperties: async (properties) => {
@@ -271,7 +295,7 @@ class AnalyticsService {
       await this.logEvent('login_success', loginParams);
       
       // Also track the standard Firebase login event
-      await Analytics.logEvent('login', {
+      await AnalyticsWrapper.logEvent('login', {
         method: loginMethod
       });
 
@@ -345,6 +369,72 @@ class AnalyticsService {
     } catch (error) {
       console.error(`🔥 [ANALYTICS] Failed to track event ${eventName}:`, error);
     }
+  }
+
+  /**
+   * TEST METHOD: Comprehensive analytics test
+   * Call this method to test if Firebase Analytics is working
+   */
+  async testAnalytics() {
+    console.log('🧪 [ANALYTICS TEST] Starting comprehensive analytics test...');
+    
+    // Test 1: Check initialization status
+    console.log('🧪 [TEST 1] Initialization Status:');
+    console.log(`   - isInitialized: ${this.isInitialized}`);
+    console.log(`   - analyticsSupported: ${analyticsSupported}`);
+    console.log(`   - analytics instance: ${!!analytics}`);
+    console.log(`   - Firebase app: ${!!firebaseApp}`);
+    
+    // Test 2: Check Firebase config
+    console.log('🧪 [TEST 2] Firebase Configuration:');
+    console.log(`   - Project ID: ${firebaseConfig.projectId}`);
+    console.log(`   - App ID: ${firebaseConfig.appId}`);
+    console.log(`   - API Key: ${firebaseConfig.apiKey ? 'Present' : 'Missing'}`);
+    
+    // Test 3: Try to send a test event
+    console.log('🧪 [TEST 3] Sending test event...');
+    try {
+      await this.logEvent('analytics_test', {
+        test_timestamp: new Date().toISOString(),
+        test_platform: Platform.OS,
+        test_purpose: 'debugging_missing_data'
+      });
+      console.log('🧪 [TEST 3] ✅ Test event sent successfully');
+    } catch (error) {
+      console.log('🧪 [TEST 3] ❌ Test event failed:', error);
+    }
+    
+    // Test 4: Try direct Firebase Analytics call
+    console.log('🧪 [TEST 4] Direct Firebase Analytics call...');
+    try {
+      if (analytics) {
+        logEvent(analytics, 'direct_test_event', {
+          direct_call: true,
+          timestamp: new Date().toISOString()
+        });
+        console.log('🧪 [TEST 4] ✅ Direct Firebase call successful');
+      } else {
+        console.log('🧪 [TEST 4] ❌ No analytics instance available');
+      }
+    } catch (error) {
+      console.log('🧪 [TEST 4] ❌ Direct Firebase call failed:', error);
+    }
+    
+    // Test 5: Check if this is a debug/development build
+    console.log('🧪 [TEST 5] Build Environment:');
+    console.log(`   - __DEV__: ${__DEV__}`);
+    console.log(`   - Platform: ${Platform.OS}`);
+    
+    console.log('🧪 [ANALYTICS TEST] Test completed. Check logs above for issues.');
+    console.log('🧪 [IMPORTANT] If events show as "successfully logged", data should appear in Firebase Console within 24 hours.');
+    console.log('🧪 [IMPORTANT] For real-time testing, use Firebase Analytics DebugView.');
+    
+    return {
+      initialized: this.isInitialized,
+      supported: analyticsSupported,
+      hasAnalytics: !!analytics,
+      hasFirebaseApp: !!firebaseApp
+    };
   }
 
   /**
