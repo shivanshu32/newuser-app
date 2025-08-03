@@ -15,6 +15,7 @@ import AddUserProfile from '../screens/main/AddUserProfile';
 import UpdateScreen from '../screens/UpdateScreen';
 import ProfileCompletionCheck from '../components/ProfileCompletionCheck';
 import AstrologerProfileScreen from '../screens/main/AstrologerProfileScreen';
+import AstrologersScreen from '../screens/main/AstrologersScreen';
 import BookingWaitingScreen from '../screens/main/BookingWaitingScreen';
 import PendingConsultationsScreen from '../screens/main/PendingConsultationsScreen';
 import ChatScreen from '../screens/session/ChatScreen';
@@ -24,6 +25,7 @@ import PreChatForm from '../screens/session/PreChatForm';
 import TransactionHistoryScreen from '../screens/main/TransactionHistoryScreen';
 import TransactionDetailScreen from '../screens/main/TransactionDetailScreen';
 import ChatHistoryScreen from '../screens/ChatHistoryScreen';
+import BlogDetailScreen from '../screens/main/BlogDetailScreen';
 
 import RatingScreen from '../screens/session/RatingScreen';
 
@@ -268,6 +270,11 @@ const MainNavigator = () => {
           options={{ headerShown: true, title: 'Astrologer Profile' }}
         />
         <Stack.Screen 
+          name="Astrologers" 
+          component={AstrologersScreen} 
+          options={{ headerShown: false }}
+        />
+        <Stack.Screen 
           name="Chat" 
           component={ChatScreen} 
           options={{ headerShown: true, title: 'Chat Consultation' }}
@@ -345,6 +352,11 @@ const MainNavigator = () => {
         <Stack.Screen 
           name="ChatHistory" 
           component={ChatHistoryScreen} 
+          options={{ headerShown: false }}
+        />
+        <Stack.Screen 
+          name="BlogDetail" 
+          component={BlogDetailScreen} 
           options={{ headerShown: false }}
         />
       </Stack.Navigator>

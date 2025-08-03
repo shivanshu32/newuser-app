@@ -25,6 +25,7 @@ import BookingAcceptedModal from '../../components/BookingAcceptedModal';
 import FreeChatCard from '../../components/FreeChatCard';
 import RejoinChatBottomSheet from '../../components/RejoinChatBottomSheet';
 import BannerCarousel from '../../components/BannerCarousel';
+import BlogSection from '../../components/BlogSection';
 
 // Hardcoded app version - update this when releasing new versions
 const APP_VERSION = '5.1.0';
@@ -1955,6 +1956,163 @@ const HomeScreen = ({ navigation }) => {
     return '#9E9E9E'; // Grey for offline
   };
 
+  // Render horizontal astrologers section
+  const renderAstrologersSection = (onlineAstrologers) => {
+    return (
+      <View style={styles.astrologersSection}>
+        {/* Section Header */}
+        <View style={styles.astrologersHeader}>
+          <Text style={styles.sectionTitle}>All Astrologers ({onlineAstrologers.length})</Text>
+          <TouchableOpacity
+            onPress={() => navigation.navigate('Astrologers')}
+            style={styles.viewAllButton}
+          >
+            <Text style={styles.viewAllText}>View All</Text>
+            <Ionicons name="chevron-forward" size={16} color="#F97316" />
+          </TouchableOpacity>
+        </View>
+        
+        {/* Horizontal Scrollable List */}
+        <FlatList
+          data={onlineAstrologers}
+          renderItem={({ item, index }) => (
+            <View style={{
+              marginLeft: index === 0 ? 20 : 0,
+              marginRight: index === onlineAstrologers.length - 1 ? 20 : 12
+            }}>
+              {renderHorizontalAstrologerCard(item)}
+            </View>
+          )}
+          keyExtractor={(item) => item._id || item.id}
+          horizontal
+          showsHorizontalScrollIndicator={false}
+        />
+      </View>
+    );
+  };
+
+  // Render horizontal astrologer card (optimized for horizontal scroll)
+  const renderHorizontalAstrologerCard = (astrologer) => {
+    // Determine status based on onlineStatus field
+    const getStatusText = (astrologer) => {
+      const isOnline = astrologer.onlineStatus?.chat === 1 || astrologer.onlineStatus?.call === 1;
+      
+      if (isOnline) {
+        // Check if astrologer has legacy status field for busy state
+        if (astrologer.status === 'busy') {
+          return 'Busy';
+        }
+        return 'Available';
+      }
+      return 'Offline';
+    };
+
+    const getStatusOutlineColor = (astrologer) => {
+      // Check if astrologer is online based on onlineStatus field
+      const isOnline = astrologer.onlineStatus?.chat === 1 || astrologer.onlineStatus?.call === 1;
+      
+      if (isOnline) {
+        // Check if astrologer has legacy status field for busy state
+        if (astrologer.status === 'busy') {
+          return '#FF9800'; // Orange for busy
+        }
+        return '#4CAF50'; // Green for online
+      }
+      return '#9E9E9E'; // Grey for offline
+    };
+
+    return (
+      <TouchableOpacity
+        style={[
+          styles.horizontalAstrologerCard,
+          { 
+            shadowColor: getStatusOutlineColor(astrologer),
+            borderColor: getStatusOutlineColor(astrologer) + '20',
+          }
+        ]}
+        onPress={() => navigation.navigate('AstrologerProfile', { astrologer })}
+        activeOpacity={0.9}
+      >
+        {/* Premium Background Gradient */}
+        <View style={styles.cardGradientOverlay} />
+        
+        {/* Top Badge for Premium Astrologers */}
+        {(astrologer.isPremium || astrologer.rating?.average >= 4.8) && (
+          <View style={styles.premiumBadge}>
+          
+            <Text style={styles.premiumText}>PREMIUM</Text>
+          </View>
+        )}
+        
+        <View style={styles.horizontalImageContainer}>
+          <View style={[
+            styles.horizontalAstrologerImageContainer,
+            {
+              borderColor: getStatusOutlineColor(astrologer),
+              shadowColor: getStatusOutlineColor(astrologer),
+            }
+          ]}>
+            <Image
+              source={{
+                uri: astrologer.imageUrl || astrologer.profileImage || 'https://via.placeholder.com/80x80?text=No+Image'
+              }}
+              style={styles.horizontalAstrologerImage}
+            />
+            {/* Enhanced Status Badge */}
+            <View style={[
+              styles.horizontalStatusBadge,
+              { backgroundColor: getStatusOutlineColor(astrologer) }
+            ]}>
+              <View style={styles.horizontalStatusDot} />
+            </View>
+            {/* Glow Effect for Online Status */}
+            {getStatusText(astrologer) === 'Available' && (
+              <View style={styles.onlineGlowEffect} />
+            )}
+          </View>
+        </View>
+        
+        <View style={styles.horizontalAstrologerInfo}>
+          <Text style={styles.horizontalAstrologerName} numberOfLines={1}>
+            {astrologer.displayName || astrologer.name}
+          </Text>
+          
+          {/* Specialization Pills */}
+          <View style={styles.specializationContainer}>
+            <Text style={styles.specializationText} numberOfLines={1}>
+              {astrologer.specialties?.[0] || (Array.isArray(astrologer.specialization) ? astrologer.specialization[0] : '') || 'Vedic Astrology'}
+            </Text>
+          </View>
+          
+          <Text style={styles.horizontalExperience}>
+            {astrologer.experience || '8'}+ years exp
+          </Text>
+          
+          {/* Rating and Price Row */}
+          <View style={styles.ratingPriceRow}>
+            {/* Rating Section */}
+            <View style={styles.compactRatingContainer}>
+              <View style={styles.starRatingWrapper}>
+                <FontAwesome name="star" size={12} color="#FFD700" />
+                <Text style={styles.horizontalRating}>
+                  {astrologer.rating?.average ? astrologer.rating.average.toFixed(1) : (astrologer.rating && typeof astrologer.rating === 'number' ? astrologer.rating.toFixed(1) : '4.8')}
+                </Text>
+              </View>
+            </View>
+            
+            {/* Price Section */}
+            <View style={styles.compactPriceContainer}>
+              <Text style={styles.compactPriceAmount}>
+                ₹{astrologer.consultationPrices?.chat || astrologer.chatRate || '50'}
+              </Text>
+              <Text style={styles.compactPriceUnit}>/min</Text>
+            </View>
+          </View>
+        </View>
+      </TouchableOpacity>
+    );
+  };
+
   // Render astrologer card
   const renderAstrologerCard = ({ item }) => {
     // Determine status based on onlineStatus field
@@ -2276,13 +2434,24 @@ const HomeScreen = ({ navigation }) => {
       })));
     }
 
-    // Add astrologers section
-    data.push({ type: 'astrologersHeader', id: 'astrologersHeader' });
-    data.push(...astrologers.map((astrologer, index) => ({
-      type: 'astrologer',
-      id: `astrologer_${astrologer._id || astrologer.id || index}`,
-      data: astrologer
-    })));
+    // Add astrologers section - filter to show only online astrologers
+    const onlineAstrologers = astrologers.filter(astrologer => {
+      // Check if astrologer is online based on onlineStatus field
+      const isOnline = astrologer.onlineStatus?.chat === 1 || astrologer.onlineStatus?.call === 1;
+      return isOnline;
+    });
+    
+    // Add astrologers section as a single horizontal scrollable component
+    if (onlineAstrologers.length > 0) {
+      data.push({ 
+        type: 'astrologersSection', 
+        id: 'astrologersSection',
+        data: onlineAstrologers
+      });
+    }
+
+    // Add blog section
+    data.push({ type: 'blogSection', id: 'blogSection' });
     
     return data;
   };
@@ -2303,6 +2472,8 @@ const HomeScreen = ({ navigation }) => {
         return <BannerCarousel onBannerPress={handleBannerPress} />;
       case 'freeChat':
         return <FreeChatCard navigation={navigation} />;
+      case 'blogSection':
+        return <BlogSection navigation={navigation} />;
       case 'pendingBookingsHeader':
         return (
           <View style={styles.section}>
@@ -2317,23 +2488,8 @@ const HomeScreen = ({ navigation }) => {
         );
       case 'pendingBooking':
         return renderPendingBookingCard({ item });
-      case 'astrologersHeader':
-        return (
-          <View style={styles.section}>
-            <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}>All Astrologers ({astrologers.length})</Text>
-              <TouchableOpacity
-                onPress={() => navigation.navigate('Astrologers')}
-                style={styles.viewAllButton}
-              >
-                <Text style={styles.viewAllText}>Detailed View</Text>
-                <Ionicons name="chevron-forward" size={16} color="#F97316" />
-              </TouchableOpacity>
-            </View>
-          </View>
-        );
-      case 'astrologer':
-        return renderAstrologerCard({ item: item.data });
+      case 'astrologersSection':
+        return renderAstrologersSection(item.data);
       default:
         return null;
     }
@@ -2520,11 +2676,27 @@ const styles = StyleSheet.create({
     marginTop: 20,
     paddingHorizontal: 20,
   },
+  astrologersSection: {
+    marginTop: 20,
+    paddingTop: 8,
+  },
+  astrologersHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    marginBottom: 16,
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
   sectionTitle: {
     fontSize: 20,
     fontWeight: 'bold',
     color: '#333',
-    marginBottom: 16,
   },
   consultationsList: {
     paddingRight: 20,
@@ -3058,6 +3230,252 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     color: '#fff',
+  },
+  // Horizontal Astrologers List Styles
+  horizontalAstrologersList: {
+    paddingVertical: 8,
+  },
+  horizontalAstrologerCard: {
+    width: 216,
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    padding: 12,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 4,
+    borderWidth: 1,
+    borderColor: '#F3F4F6',
+  },
+  horizontalImageContainer: {
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  horizontalAstrologerImageContainer: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    borderWidth: 2,
+    justifyContent: 'center',
+    alignItems: 'center',
+    position: 'relative',
+  },
+  horizontalAstrologerImage: {
+    width: 76,
+    height: 76,
+    borderRadius: 38,
+    backgroundColor: '#F3F4F6',
+  },
+  horizontalStatusBadge: {
+    position: 'absolute',
+    bottom: 0,
+    right: 0,
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: '#fff',
+  },
+  horizontalStatusDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#fff',
+  },
+  horizontalAstrologerInfo: {
+    alignItems: 'center',
+  },
+  horizontalAstrologerName: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#1F2937',
+    textAlign: 'center',
+    marginBottom: 4,
+  },
+  horizontalRatingContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  horizontalRating: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#1F2937',
+    marginLeft: 2,
+  },
+  horizontalExperience: {
+    fontSize: 12,
+    color: '#6B7280',
+    marginBottom: 4,
+    textAlign: 'center',
+  },
+  horizontalPrice: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#F97316',
+    marginBottom: 6,
+    textAlign: 'center',
+  },
+  horizontalStatusChip: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  horizontalStatusText: {
+    fontSize: 9,
+    fontWeight: '600',
+    textTransform: 'uppercase',
+  },
+  // Enhanced Premium UI Elements
+  cardGradientOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    borderRadius: 16,
+    backgroundColor: 'rgba(255, 255, 255, 0.02)',
+    zIndex: -1,
+  },
+  premiumBadge: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 215, 0, 0.15)',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 215, 0, 0.3)',
+    zIndex: 10,
+  },
+  premiumText: {
+    fontSize: 8,
+    fontWeight: '700',
+    color: '#FFD700',
+    marginLeft: 2,
+    letterSpacing: 0.5,
+  },
+  onlineGlowEffect: {
+    position: 'absolute',
+    top: -2,
+    left: -2,
+    right: -2,
+    bottom: -2,
+    borderRadius: 42,
+    backgroundColor: 'rgba(76, 175, 80, 0.1)',
+    zIndex: -1,
+  },
+  starRatingWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 215, 0, 0.1)',
+    paddingHorizontal: 4,
+    paddingVertical: 1,
+    borderRadius: 6,
+    marginRight: 4,
+  },
+  reviewCount: {
+    fontSize: 11,
+    color: '#9CA3AF',
+    fontWeight: '500',
+  },
+  specializationContainer: {
+    backgroundColor: 'rgba(59, 130, 246, 0.1)',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+    marginBottom: 4,
+    alignSelf: 'center',
+  },
+  specializationText: {
+    fontSize: 11,
+    color: '#3B82F6',
+    fontWeight: '600',
+    textTransform: 'capitalize',
+    textAlign: 'center',
+  },
+  enhancedPriceContainer: {
+    backgroundColor: 'rgba(249, 115, 22, 0.1)',
+    borderRadius: 8,
+    padding: 8,
+    marginBottom: 6,
+    borderWidth: 1,
+    borderColor: 'rgba(249, 115, 22, 0.2)',
+    alignItems: 'center',
+  },
+  priceMainSection: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    marginBottom: 2,
+  },
+  enhancedPriceAmount: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#F97316',
+    letterSpacing: 0.5,
+  },
+  enhancedPriceUnit: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#F97316',
+    marginLeft: 2,
+  },
+  enhancedPriceLabel: {
+    fontSize: 9,
+    color: '#9CA3AF',
+    fontWeight: '500',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  statusIndicatorDot: {
+    width: 4,
+    height: 4,
+    borderRadius: 2,
+    marginRight: 4,
+  },
+  // Rating and Price Row Layout
+  ratingPriceRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 4,
+  },
+  compactRatingContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  compactPriceContainer: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    backgroundColor: 'rgba(249, 115, 22, 0.1)',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: 'rgba(249, 115, 22, 0.2)',
+  },
+  compactPriceAmount: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#F97316',
+    letterSpacing: 0.5,
+  },
+  compactPriceUnit: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: '#F97316',
+    marginLeft: 1,
   },
 });
 

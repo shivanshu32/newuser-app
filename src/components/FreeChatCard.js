@@ -206,53 +206,85 @@ const FreeChatCard = ({ navigation }) => {
   return (
     <>
       <View style={styles.container}>
-        <View style={styles.header}>
-          <View style={styles.iconContainer}>
-            <MaterialIcons name="chat" size={24} color="#4CAF50" />
-            <View style={styles.freeBadge}>
-              <Text style={styles.freeText}>FREE</Text>
+        {/* Gradient Background Overlay */}
+        <View style={styles.gradientOverlay} />
+        
+        {/* Main Content */}
+        <View style={styles.content}>
+          <View style={styles.header}>
+            <View style={styles.iconContainer}>
+              <View style={styles.iconBackground}>
+                <MaterialIcons name="chat" size={28} color="#fff" />
+              </View>
+              <View style={styles.freeBadge}>
+                <Text style={styles.freeText}>FREE</Text>
+              </View>
+            </View>
+            <View style={styles.titleContainer}>
+              <Text style={styles.title}>🎁 Claim Your Free Chat</Text>
+              <Text style={styles.subtitle}>3 minutes with expert astrologers</Text>
             </View>
           </View>
-          <View style={styles.titleContainer}>
-            <Text style={styles.title}>Claim Your Free Chat</Text>
-            <Text style={styles.subtitle}>3 minutes • First-time users only</Text>
+
+          <Text style={styles.description}>
+            Get personalized insights about your life, career, and relationships. 
+            Perfect introduction to our premium services!
+          </Text>
+
+          <View style={styles.features}>
+            <View style={styles.feature}>
+              <View style={styles.featureIcon}>
+                <Ionicons name="time-outline" size={18} color="#F97316" />
+              </View>
+              <Text style={styles.featureText}>3 minutes duration</Text>
+            </View>
+            <View style={styles.feature}>
+              <View style={styles.featureIcon}>
+                <Ionicons name="star-outline" size={18} color="#F97316" />
+              </View>
+              <Text style={styles.featureText}>Expert astrologers</Text>
+            </View>
+            <View style={styles.feature}>
+              <View style={styles.featureIcon}>
+                <Ionicons name="gift-outline" size={18} color="#F97316" />
+              </View>
+              <Text style={styles.featureText}>Completely free</Text>
+            </View>
+          </View>
+
+          <TouchableOpacity 
+            style={[styles.button, requesting && styles.buttonDisabled]} 
+            onPress={handleStartFreeChat}
+            disabled={requesting}
+          >
+            {requesting ? (
+              <>
+                <ActivityIndicator color="#fff" size="small" style={styles.buttonLoader} />
+                <Text style={styles.buttonText}>Connecting...</Text>
+              </>
+            ) : (
+              <>
+                <View style={styles.buttonIconContainer}>
+                  <MaterialIcons name="chat-bubble" size={22} color="#fff" />
+                </View>
+                <Text style={styles.buttonText}>Start Free Chat Now</Text>
+                <Ionicons name="arrow-forward" size={20} color="#fff" />
+              </>
+            )}
+          </TouchableOpacity>
+          
+          {/* Trust indicators */}
+          <View style={styles.trustIndicators}>
+            <View style={styles.trustItem}>
+              <Ionicons name="shield-checkmark" size={16} color="#10B981" />
+              <Text style={styles.trustText}>100% Secure</Text>
+            </View>
+            <View style={styles.trustItem}>
+              <Ionicons name="people" size={16} color="#10B981" />
+              <Text style={styles.trustText}>10,000+ Happy Users</Text>
+            </View>
           </View>
         </View>
-
-        {/* <Text style={styles.description}>
-          Get a free 3-minute chat consultation with our expert astrologers. 
-          Perfect for first-time users to experience our service.
-        </Text>
-
-        <View style={styles.features}>
-          <View style={styles.feature}>
-            <Ionicons name="time-outline" size={16} color="#666" />
-            <Text style={styles.featureText}>3 minutes duration</Text>
-          </View>
-          <View style={styles.feature}>
-            <Ionicons name="person-outline" size={16} color="#666" />
-            <Text style={styles.featureText}>Expert astrologers</Text>
-          </View>
-          <View style={styles.feature}>
-            <Ionicons name="gift-outline" size={16} color="#666" />
-            <Text style={styles.featureText}>Completely free</Text>
-          </View>
-        </View> */}
-
-        <TouchableOpacity 
-          style={[styles.button, requesting && styles.buttonDisabled]} 
-          onPress={handleStartFreeChat}
-          disabled={requesting}
-        >
-          {requesting ? (
-            <ActivityIndicator color="#fff" size="small" />
-          ) : (
-            <>
-              <MaterialIcons name="chat" size={20} color="#fff" />
-              <Text style={styles.buttonText}>Start Free Chat</Text>
-            </>
-          )}
-        </TouchableOpacity>
       </View>
 
       {/* Waiting Modal */}
@@ -290,92 +322,162 @@ const FreeChatCard = ({ navigation }) => {
 
 const styles = StyleSheet.create({
   container: {
+    position: 'relative',
     backgroundColor: '#fff',
-    borderRadius: 12,
-    padding: 16,
+    borderRadius: 16,
     marginHorizontal: 16,
-    marginVertical: 8,
+    marginVertical: 12,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-    borderLeftWidth: 4,
-    borderLeftColor: '#4CAF50',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+    elevation: 8,
+    overflow: 'hidden',
+  },
+  gradientOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 6,
+    backgroundColor: '#F97316',
+  },
+  content: {
+    padding: 20,
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 12,
+    marginBottom: 16,
   },
   iconContainer: {
     position: 'relative',
-    marginRight: 12,
+    marginRight: 16,
+  },
+  iconBackground: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: '#F97316',
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#F97316',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 4,
   },
   freeBadge: {
     position: 'absolute',
-    top: -8,
-    right: -8,
-    backgroundColor: '#4CAF50',
-    borderRadius: 8,
-    paddingHorizontal: 4,
-    paddingVertical: 1,
+    top: -6,
+    right: -6,
+    backgroundColor: '#10B981',
+    borderRadius: 12,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderWidth: 2,
+    borderColor: '#fff',
   },
   freeText: {
     color: '#fff',
-    fontSize: 10,
+    fontSize: 11,
     fontWeight: 'bold',
+    letterSpacing: 0.5,
   },
   titleContainer: {
     flex: 1,
   },
   title: {
-    fontSize: 18,
+    fontSize: 20,
     fontWeight: 'bold',
-    color: '#333',
-    marginBottom: 2,
+    color: '#1F2937',
+    marginBottom: 4,
+    lineHeight: 24,
   },
   subtitle: {
-    fontSize: 14,
-    color: '#666',
+    fontSize: 15,
+    color: '#6B7280',
+    fontWeight: '500',
   },
   description: {
-    fontSize: 14,
-    color: '#666',
-    lineHeight: 20,
-    marginBottom: 16,
+    fontSize: 15,
+    color: '#4B5563',
+    lineHeight: 22,
+    marginBottom: 20,
+    fontWeight: '400',
   },
   features: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 20,
+    marginBottom: 24,
   },
   feature: {
     flexDirection: 'row',
     alignItems: 'center',
-    flex: 1,
+    marginBottom: 12,
+  },
+  featureIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#FEF3E2',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
   },
   featureText: {
-    fontSize: 12,
-    color: '#666',
-    marginLeft: 4,
+    fontSize: 14,
+    color: '#374151',
+    fontWeight: '500',
+    flex: 1,
   },
   button: {
-    backgroundColor: '#4CAF50',
-    borderRadius: 8,
-    padding: 14,
+    backgroundColor: '#F97316',
+    borderRadius: 12,
+    paddingVertical: 16,
+    paddingHorizontal: 20,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
+    shadowColor: '#F97316',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.3,
+    shadowRadius: 6,
+    elevation: 6,
+    marginBottom: 16,
   },
   buttonDisabled: {
-    backgroundColor: '#ccc',
+    backgroundColor: '#D1D5DB',
+    shadowOpacity: 0,
+    elevation: 0,
+  },
+  buttonIconContainer: {
+    marginRight: 8,
+  },
+  buttonLoader: {
+    marginRight: 8,
   },
   buttonText: {
     color: '#fff',
-    fontSize: 16,
+    fontSize: 17,
     fontWeight: 'bold',
-    marginLeft: 8,
+    flex: 1,
+    textAlign: 'center',
+  },
+  trustIndicators: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#F3F4F6',
+  },
+  trustItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  trustText: {
+    fontSize: 12,
+    color: '#6B7280',
+    fontWeight: '500',
+    marginLeft: 6,
   },
   // Modal styles
   modalOverlay: {
