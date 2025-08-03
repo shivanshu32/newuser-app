@@ -30,6 +30,9 @@ import { AuthProvider, useAuth } from './src/context/AuthContext';
 import { NotificationProvider } from './src/context/NotificationContext';
 import { SocketProvider } from './src/context/SocketContext';
 
+// Import analytics service
+import analyticsService from './src/services/analyticsService';
+
 // Import version check hook
 import useVersionCheck from './src/hooks/useVersionCheck';
 
@@ -40,12 +43,49 @@ function AppContent() {
   const [updateRequired, setUpdateRequired] = useState(null);
   const [versionCheckComplete, setVersionCheckComplete] = useState(false);
   
-  // Check for updates on app launch
+  // Initialize Firebase Analytics on app launch (non-blocking)
+  useEffect(() => {
+    const initializeAnalytics = async () => {
+      try {
+        console.log('🔥 [APP] Initializing Firebase Analytics...');
+        
+        // Add timeout to prevent hanging
+        const timeoutPromise = new Promise((_, reject) => {
+          setTimeout(() => reject(new Error('Analytics initialization timeout')), 5000); // 5 second timeout
+        });
+        
+        await Promise.race([
+          analyticsService.initialize(),
+          timeoutPromise
+        ]);
+        
+        console.log('🔥 [APP] Firebase Analytics initialized successfully');
+      } catch (error) {
+        console.error('🔥 [APP] Failed to initialize Firebase Analytics:', error);
+        // Don't crash the app if analytics fails - it's not critical for core functionality
+        console.log('🔥 [APP] Continuing app startup without analytics');
+      }
+    };
+
+    // Initialize analytics in background, don't block app startup
+    initializeAnalytics();
+  }, []);
+
+  // Check for updates on app launch (non-blocking)
   useEffect(() => {
     const performVersionCheck = async () => {
       try {
         console.log('Performing version check on app launch...');
-        const updateData = await checkForUpdatesOnLaunch();
+        
+        // Add timeout to prevent hanging
+        const timeoutPromise = new Promise((_, reject) => {
+          setTimeout(() => reject(new Error('Version check timeout')), 10000); // 10 second timeout
+        });
+        
+        const updateData = await Promise.race([
+          checkForUpdatesOnLaunch(),
+          timeoutPromise
+        ]);
         
         if (updateData && updateData.updateRequired) {
           console.log('Update required, setting update data:', updateData);
@@ -55,12 +95,16 @@ function AppContent() {
         }
       } catch (error) {
         console.error('Version check failed:', error);
+        // Don't block app startup on version check failure
+        console.log('Continuing app startup despite version check failure');
       } finally {
         setVersionCheckComplete(true);
       }
     };
 
-    performVersionCheck();
+    // Start version check but don't block UI
+    setVersionCheckComplete(true); // Allow app to start immediately
+    performVersionCheck(); // Check in background
   }, []);
   
   // Show loading during initial auth check or version check

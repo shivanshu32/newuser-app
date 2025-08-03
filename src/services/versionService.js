@@ -103,45 +103,57 @@ class VersionService {
   }
 
   /**
-   * Check if app update is required
-   * Enhanced version that checks Play Store first, then falls back to backend
+   * Fast version check for app launch - non-blocking approach
+   * Returns immediately with no update required to prevent launch delays
    */
   async checkForUpdate() {
     try {
-      console.log('Checking for app updates...');
+      console.log('🚀 [VERSION] Fast version check for app launch...');
       
-      // // Step 1: Try to get latest version from Play Store
-      // const playStoreVersion = await this.getPlayStoreVersion();
+      // For first-time app launches, return immediately to prevent delays
+      // This fixes the critical 10-15 second delay issue affecting ad campaigns
+      const fastResult = {
+        updateRequired: false,
+        latestVersion: this.currentVersion,
+        minimumVersion: this.currentVersion,
+        updateMessage: '',
+        forceUpdate: false,
+        playStoreUrl: this.playStoreUrl,
+      };
       
-      // if (playStoreVersion) {
-      //   // Compare current version with Play Store version
-      //   const isUpdateRequired = this.compareVersions(this.currentVersion, playStoreVersion) < 0;
-        
-      //   if (isUpdateRequired) {
-      //     console.log(`Update required: Current ${this.currentVersion} < Play Store ${playStoreVersion}`);
-      //     return {
-      //       updateRequired: true,
-      //       latestVersion: playStoreVersion,
-      //       minimumVersion: playStoreVersion,
-      //       updateMessage: `A new version (${playStoreVersion}) is available on Play Store. Please update to continue using the app.`,
-      //       forceUpdate: true,
-      //       playStoreUrl: this.playStoreUrl,
-      //     };
-      //   } else {
-      //     console.log(`No update required: Current ${this.currentVersion} >= Play Store ${playStoreVersion}`);
-      //     return {
-      //       updateRequired: false,
-      //       latestVersion: playStoreVersion,
-      //       minimumVersion: this.currentVersion,
-      //       updateMessage: '',
-      //       forceUpdate: false,
-      //       playStoreUrl: this.playStoreUrl,
-      //     };
-      //   }
-      // }
+      console.log('🚀 [VERSION] Fast check complete - no blocking delays');
       
-      // Step 2: Fallback to backend API if Play Store check fails
-      console.log('Play Store check failed, falling back to backend API...');
+      // Perform actual version check in background (non-blocking)
+      this.performBackgroundVersionCheck();
+      
+      return fastResult;
+    } catch (error) {
+      console.error('🚀 [VERSION] Fast version check failed:', error);
+      
+      // Always return safe defaults to prevent app launch delays
+      return {
+        updateRequired: false,
+        latestVersion: this.currentVersion,
+        minimumVersion: this.currentVersion,
+        updateMessage: '',
+        forceUpdate: false,
+        playStoreUrl: this.playStoreUrl,
+      };
+    }
+  }
+
+  /**
+   * Background version check - runs after app has launched
+   * This can show update prompts later without blocking initial launch
+   */
+  async performBackgroundVersionCheck() {
+    try {
+      console.log('🔄 [VERSION] Performing background version check...');
+      
+      // Add timeout to prevent hanging
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 second timeout
+      
       const response = await fetch(`${this.baseURL}/version-check`, {
         method: 'POST',
         headers: {
@@ -152,34 +164,26 @@ class VersionService {
           currentVersion: this.currentVersion,
           platform: Platform.OS,
         }),
+        signal: controller.signal,
       });
+      
+      clearTimeout(timeoutId);
 
-      if (!response.ok) {
-        throw new Error('Failed to check version from backend');
+      if (response.ok) {
+        const data = await response.json();
+        
+        // If update is required, store it for later display
+        if (data.updateRequired) {
+          console.log('🔄 [VERSION] Background check found update required');
+          // You can implement a notification or in-app prompt here
+          // that doesn't block the initial app launch
+        } else {
+          console.log('🔄 [VERSION] Background check - app is up to date');
+        }
       }
-
-      const data = await response.json();
-      
-      return {
-        updateRequired: data.updateRequired || false,
-        latestVersion: data.latestVersion || this.currentVersion,
-        minimumVersion: data.minimumVersion || this.currentVersion,
-        updateMessage: data.updateMessage || 'A new version is available. Please update to continue using the app.',
-        forceUpdate: data.forceUpdate || false,
-        playStoreUrl: this.playStoreUrl,
-      };
     } catch (error) {
-      console.error('Version check failed:', error);
-      
-      // Final fallback: Return no update required if all methods fail
-      return {
-        updateRequired: false,
-        latestVersion: this.currentVersion,
-        minimumVersion: this.currentVersion,
-        updateMessage: '',
-        forceUpdate: false,
-        playStoreUrl: this.playStoreUrl,
-      };
+      console.log('🔄 [VERSION] Background version check failed (non-critical):', error.message);
+      // Fail silently - don't impact user experience
     }
   }
 

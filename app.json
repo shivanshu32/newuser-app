@@ -34,7 +34,9 @@
       },
       "package": "com.jyotishtalk",
       "versionCode": 10,
-      "minSdkVersion": 25,
+      "minSdkVersion": 24,
+      "compileSdkVersion": 35,
+      "targetSdkVersion": 35,
       "permissions": [
         "MODIFY_AUDIO_SETTINGS",
         "INTERNET",
@@ -42,7 +44,8 @@
         "RECEIVE_BOOT_COMPLETED",
         "VIBRATE",
         "WAKE_LOCK",
-        "com.google.android.c2dm.permission.RECEIVE"
+        "com.google.android.c2dm.permission.RECEIVE",
+        "com.google.android.gms.permission.AD_ID"
       ],
       "usesCleartextTraffic": true,
       "networkSecurityConfig": {

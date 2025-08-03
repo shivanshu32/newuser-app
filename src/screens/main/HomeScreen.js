@@ -26,7 +26,7 @@ import FreeChatCard from '../../components/FreeChatCard';
 import RejoinChatBottomSheet from '../../components/RejoinChatBottomSheet';
 
 // Hardcoded app version - update this when releasing new versions
-const APP_VERSION = '5.0.6';
+const APP_VERSION = '5.1.0';
 
 const HomeScreen = ({ navigation }) => {
   const { user } = useAuth();

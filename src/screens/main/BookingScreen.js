@@ -67,7 +67,6 @@ const BookingScreen = ({ route, navigation }) => {
       
       // Call backend API to fetch user's bookings
       const response = await bookingsAPI.getAll();
-    //  console.log('📋 Full bookings response:', JSON.stringify(response, null, 2));
       
       // The backend returns data in response.data format (not response.data.data)
       if (response.data && Array.isArray(response.data)) {
@@ -485,18 +484,71 @@ const BookingScreen = ({ route, navigation }) => {
     const statusIcon = getStatusIcon(item.status);
     const typeIcon = getBookingTypeIcon(item.type);
     
-    // Fix: Use scheduledAt instead of scheduledTime and add validation
-    const scheduledDate = item.scheduledAt ? new Date(item.scheduledAt) : new Date();
-    const isValidDate = !isNaN(scheduledDate.getTime());
+    // Enhanced date/time formatting with proper validation
+    // Use scheduledAt if available (for future bookings), otherwise use createdAt (for instant bookings)
+    const bookingDate = item.scheduledAt ? new Date(item.scheduledAt) : 
+                       item.createdAt ? new Date(item.createdAt) : null;
+    const isValidDate = bookingDate && !isNaN(bookingDate.getTime());
+    
+    // Format date with better Indian locale formatting
+    const formatDate = () => {
+      if (!isValidDate) return 'Date not set';
+      
+      const today = new Date();
+      const tomorrow = new Date(today);
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      const yesterday = new Date(today);
+      yesterday.setDate(yesterday.getDate() - 1);
+      
+      // Check if it's today, tomorrow, or yesterday
+      if (bookingDate.toDateString() === today.toDateString()) {
+        return 'Today';
+      } else if (bookingDate.toDateString() === tomorrow.toDateString()) {
+        return 'Tomorrow';
+      } else if (bookingDate.toDateString() === yesterday.toDateString()) {
+        return 'Yesterday';
+      } else {
+        return bookingDate.toLocaleDateString('en-IN', {
+          weekday: 'short',
+          day: 'numeric',
+          month: 'short',
+          year: bookingDate.getFullYear() !== today.getFullYear() ? 'numeric' : undefined
+        });
+      }
+    };
+    
+    // Format time with proper Indian locale
+    const formatTime = () => {
+      if (!isValidDate) return 'Time not set';
+      
+      return bookingDate.toLocaleTimeString('en-IN', {
+        hour: 'numeric',
+        minute: '2-digit',
+        hour12: true
+      });
+    };
+    
+    // Format duration properly
+    const formatDuration = () => {
+      if (!item.duration || item.duration <= 0) return null;
+      
+      const duration = parseInt(item.duration);
+      // Duration is already in minutes, so only convert if >= 60 minutes
+      if (duration >= 60) {
+        const hours = Math.floor(duration / 60);
+        const minutes = duration % 60;
+        return minutes > 0 ? `${hours}h ${minutes}m` : `${hours}h`;
+      }
+      return `${duration} min`;
+    };
+    
+
     
     // Check if this booking can be joined (accepted by astrologer)
     const canJoin = ['confirmed', 'waiting_for_user'].includes(item.status);
     
     return (
-      <TouchableOpacity
-        style={styles.bookingCard}
-        onPress={() => !canJoin && handleBookingAction(item)}
-      >
+      <View style={styles.bookingCard}>
         <View style={styles.bookingHeader}>
           <View style={styles.astrologerInfo}>
             <Image 
@@ -508,7 +560,7 @@ const BookingScreen = ({ route, navigation }) => {
               <View style={styles.bookingType}>
                 <Ionicons name={typeIcon} size={14} color="#666" />
                 <Text style={styles.bookingTypeText}>
-                  {item.type.charAt(0).toUpperCase() + item.type.slice(1)} Consultation
+                  {`${item.type.charAt(0).toUpperCase() + item.type.slice(1)} Consultation`}
                 </Text>
               </View>
             </View>
@@ -523,34 +575,22 @@ const BookingScreen = ({ route, navigation }) => {
         <View style={styles.bookingDetails}>
           <View style={styles.detailItem}>
             <Ionicons name="calendar-outline" size={16} color="#666" />
-            <Text style={styles.detailText}>
-              {isValidDate ? scheduledDate.toLocaleDateString('en-IN', {
-                year: 'numeric',
-                month: 'short',
-                day: 'numeric'
-              }) : 'Date not set'}
-            </Text>
+            <Text style={styles.detailText}>{formatDate()}</Text>
           </View>
           <View style={styles.detailItem}>
             <Ionicons name="time-outline" size={16} color="#666" />
-            <Text style={styles.detailText}>
-              {isValidDate ? scheduledDate.toLocaleTimeString('en-IN', { 
-                hour: '2-digit', 
-                minute: '2-digit',
-                hour12: true 
-              }) : 'Time not set'}
-            </Text>
+            <Text style={styles.detailText}>{formatTime()}</Text>
           </View>
-          {item.duration > 0 && (
+          {formatDuration() && (
             <View style={styles.detailItem}>
               <Ionicons name="hourglass-outline" size={16} color="#666" />
-              <Text style={styles.detailText}>{item.duration} mins</Text>
+              <Text style={styles.detailText}>{formatDuration()}</Text>
             </View>
           )}
-          {item.totalAmount > 0 && (
+          {item.totalAmount && item.totalAmount > 0 && (
             <View style={styles.detailItem}>
               <Ionicons name="cash-outline" size={16} color="#666" />
-              <Text style={styles.detailText}>₹{item.totalAmount}</Text>
+              <Text style={styles.detailText}>₹{parseFloat(item.totalAmount).toFixed(0)}</Text>
             </View>
           )}
         </View>
@@ -578,7 +618,14 @@ const BookingScreen = ({ route, navigation }) => {
             {!item.rated && (
               <TouchableOpacity 
                 style={styles.rateButton}
-                onPress={() => navigation.navigate('Rating', { bookingId: item._id })}
+                onPress={() => {
+                  // Validate booking before navigating to rating
+                  if (!item._id) {
+                    Alert.alert('Error', 'This booking cannot be rated at this time.');
+                    return;
+                  }
+                  navigation.navigate('Rating', { bookingId: item._id });
+                }}
               >
                 <Ionicons name="star-outline" size={18} color="#FF9500" />
                 <Text style={styles.rateButtonText}>Rate</Text>
@@ -593,7 +640,7 @@ const BookingScreen = ({ route, navigation }) => {
             <Ionicons name="chevron-forward" size={16} color="#666" />
           </View>
         )}
-      </TouchableOpacity>
+      </View>
     );
   };
 
@@ -793,6 +840,18 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#666',
     marginLeft: 4,
+  },
+  freeChatBadge: {
+    backgroundColor: '#4CAF50',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 8,
+    marginLeft: 6,
+  },
+  freeChatBadgeText: {
+    fontSize: 10,
+    color: '#fff',
+    fontWeight: 'bold',
   },
   statusBadge: {
     paddingHorizontal: 8,

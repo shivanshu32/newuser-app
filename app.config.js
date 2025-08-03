@@ -1,6 +1,4 @@
-import { ExpoConfig, ConfigContext } from 'expo/config';
-
-export default ({ config }) => ({
+module.exports = ({ config }) => ({
   ...config,
   name: "JyotishCall User",
   slug: "jyotishcall-user-app",
@@ -29,17 +27,24 @@ export default ({ config }) => ({
       foregroundImage: "./assets/adaptive-icon.png",
       backgroundColor: "#FFFFFF"
     },
-    minSdkVersion: 25,
+    minSdkVersion: 24,        // Fixed for Hermes compatibility
+    compileSdkVersion: 35,    // Latest Android SDK
+    targetSdkVersion: 35,     // Updated for Google Play requirements
     permissions: [
       "MODIFY_AUDIO_SETTINGS",
       "INTERNET",
       "ACCESS_NETWORK_STATE",
       "BLUETOOTH",
       "BLUETOOTH_CONNECT",
-      "WAKE_LOCK"
+      "WAKE_LOCK",
+      "RECEIVE_BOOT_COMPLETED",
+      "VIBRATE",
+      "com.google.android.c2dm.permission.RECEIVE",
+      "com.google.android.gms.permission.AD_ID"
     ],
     package: "com.jyotishtalk",
-    "versionCode": 10,
+    versionCode: 10,
+    usesCleartextTraffic: true  // For development/testing
   },
   web: {
     favicon: "./assets/favicon.png"
@@ -52,7 +57,7 @@ export default ({ config }) => ({
       {
         "addGeneratedScheme": false
       }
-    ],
+    ]
     // [
     //   "@config-plugins/react-native-webrtc",
     //   {

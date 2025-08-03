@@ -310,10 +310,18 @@ const BookingCard = ({ consultation, onJoin, onDismiss, onCancel, onReschedule }
   };
 
   const formatScheduledTime = () => {
-    if (!booking.scheduledAt) return 'Time not set';
+    // Use scheduledAt if available (for future bookings), otherwise use createdAt (for instant bookings)
+    const dateField = booking.scheduledAt || booking.createdAt;
+    if (!dateField) return 'Time not set';
     
-    const date = new Date(booking.scheduledAt);
+    const date = new Date(dateField);
+    const isValidDate = !isNaN(date.getTime());
+    
+    if (!isValidDate) return 'Invalid date';
+    
     const today = new Date();
+    const yesterday = new Date(today);
+    yesterday.setDate(yesterday.getDate() - 1);
     const tomorrow = new Date(today);
     tomorrow.setDate(tomorrow.getDate() + 1);
     
@@ -322,21 +330,40 @@ const BookingCard = ({ consultation, onJoin, onDismiss, onCancel, onReschedule }
       dateStr = 'Today';
     } else if (date.toDateString() === tomorrow.toDateString()) {
       dateStr = 'Tomorrow';
+    } else if (date.toDateString() === yesterday.toDateString()) {
+      dateStr = 'Yesterday';
     } else {
       dateStr = date.toLocaleDateString('en-IN', { 
-        month: 'short', 
-        day: 'numeric' 
+        weekday: 'short',
+        day: 'numeric',
+        month: 'short',
+        year: date.getFullYear() !== today.getFullYear() ? 'numeric' : undefined
       });
     }
     
     const timeStr = date.toLocaleTimeString('en-IN', { 
-      hour: '2-digit', 
+      hour: 'numeric', 
       minute: '2-digit',
       hour12: true 
     });
     
     return `${dateStr} at ${timeStr}`;
   };
+  
+  const formatDuration = () => {
+    if (!booking.duration || booking.duration <= 0) return null;
+    
+    const duration = parseInt(booking.duration);
+    // Fix: Duration is already in minutes, so only convert if >= 60 minutes
+    if (duration >= 60) {
+      const hours = Math.floor(duration / 60);
+      const minutes = duration % 60;
+      return minutes > 0 ? `${hours}h ${minutes}m` : `${hours}h`;
+    }
+    return `${duration} min`;
+  };
+  
+
 
   const getMainActionButton = () => {
     if (isExpired) {
@@ -393,7 +420,14 @@ const BookingCard = ({ consultation, onJoin, onDismiss, onCancel, onReschedule }
             <Text style={styles.astrologerName}>{astrologer.name}</Text>
             <View style={styles.consultationType}>
               <Ionicons name={getTypeIcon()} size={14} color="#666" />
-              <Text style={styles.consultationTypeText}>{getTypeText()}</Text>
+              <Text style={styles.consultationTypeText}>
+                {isFreeChat() ? 'Free Chat' : getTypeText()}
+              </Text>
+              {isFreeChat() && (
+                <View style={styles.freeChatBadge}>
+                  <Text style={styles.freeChatBadgeText}>FREE</Text>
+                </View>
+              )}
             </View>
           </View>
         </View>
@@ -411,17 +445,17 @@ const BookingCard = ({ consultation, onJoin, onDismiss, onCancel, onReschedule }
           <Text style={styles.detailText}>{formatScheduledTime()}</Text>
         </View>
         
-        {booking.duration && (
+        {formatDuration() && (
           <View style={styles.detailRow}>
-            <Ionicons name="time-outline" size={16} color="#666" />
-            <Text style={styles.detailText}>{booking.duration} minutes</Text>
+            <Ionicons name="hourglass-outline" size={16} color="#666" />
+            <Text style={styles.detailText}>{formatDuration()}</Text>
           </View>
         )}
         
-        {booking.totalAmount && (
+        {booking.totalAmount && booking.totalAmount > 0 && (
           <View style={styles.detailRow}>
             <Ionicons name="cash-outline" size={16} color="#666" />
-            <Text style={styles.detailText}>₹{booking.totalAmount}</Text>
+            <Text style={styles.detailText}>₹{parseFloat(booking.totalAmount).toFixed(0)}</Text>
           </View>
         )}
 
@@ -522,6 +556,18 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#666',
     marginLeft: 4,
+  },
+  freeChatBadge: {
+    backgroundColor: '#4CAF50',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 8,
+    marginLeft: 6,
+  },
+  freeChatBadgeText: {
+    fontSize: 10,
+    color: '#fff',
+    fontWeight: 'bold',
   },
   statusBadge: {
     flexDirection: 'row',

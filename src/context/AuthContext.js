@@ -3,6 +3,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
 import { Alert } from 'react-native';
 import { walletAPI } from '../services/api';
+import analyticsService from '../services/analyticsService';
 // import LogRocket from '@logrocket/react-native'; // Temporarily disabled due to build issues
 
 // Create context
@@ -153,6 +154,14 @@ export const AuthProvider = ({ children }) => {
         
         // Set axios default header
         axios.defaults.headers.common['Authorization'] = `Bearer ${authToken}`;
+        
+        // Track login success event for Firebase Analytics
+        try {
+          await analyticsService.trackLoginSuccess(userData._id || userData.id, 'phone');
+          console.log('🔥 [AUTH] Login success event tracked for user:', userData._id || userData.id);
+        } catch (analyticsError) {
+          console.error('🔥 [AUTH] Failed to track login success:', analyticsError);
+        }
         
         setLoading(false);
         return { success: true, user: userData, token: authToken };

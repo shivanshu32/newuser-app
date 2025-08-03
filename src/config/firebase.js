@@ -10,7 +10,7 @@ const firebaseConfig = {
   projectId: "jyotish2-dd398",
   storageBucket: "jyotish2-dd398.firebasestorage.app",
   messagingSenderId: "225163383908", // From google-services.json
-  appId: "1:225163383908:android:a9490f2ec3af7646083b71", // From google-services.json
+  appId: "1:225163383908:android:401cf7f0a622281f083b71", // From google-services.json - User App
 };
 
 // For Expo managed workflow, we don't need to initialize Firebase manually

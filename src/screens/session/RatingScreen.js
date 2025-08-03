@@ -110,14 +110,40 @@ const RatingScreen = ({ route, navigation }) => {
       
     } catch (error) {
       console.error('Error fetching booking/astrologer details:', error);
-      Alert.alert(
-        'Error', 
-        'Failed to load consultation details. Please try again.',
-        [
-          { text: 'Retry', onPress: fetchBookingAndAstrologerDetails },
-          { text: 'Go Back', onPress: () => navigation.goBack() }
-        ]
-      );
+      console.log('🔍 Error details for debugging:', {
+        status: error.response?.status,
+        message: error.message,
+        code: error.code,
+        data: error.response?.data
+      });
+      
+      // Check if it's a 404 error (booking not found) - multiple ways to detect
+      const is404Error = 
+        error.response?.status === 404 || 
+        error.status === 404 ||
+        error.message?.includes('404') ||
+        error.message?.includes('Request failed with status code 404') ||
+        (error.response?.data && error.response.data.error?.includes('not found')) ||
+        (error.data && error.data.error?.includes('not found'));
+      
+      if (is404Error) {
+        Alert.alert(
+          'Booking Not Found', 
+          'This consultation session is no longer available for rating. It may have been removed or is not eligible for rating.',
+          [
+            { text: 'OK', onPress: () => navigation.goBack() }
+          ]
+        );
+      } else {
+        Alert.alert(
+          'Error', 
+          'Failed to load consultation details. Please check your internet connection and try again.',
+          [
+            { text: 'Retry', onPress: fetchBookingAndAstrologerDetails },
+            { text: 'Go Back', onPress: () => navigation.goBack() }
+          ]
+        );
+      }
     } finally {
       setLoading(false);
     }
