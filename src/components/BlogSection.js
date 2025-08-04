@@ -63,6 +63,8 @@ const BlogSection = ({ navigation }) => {
       <View style={styles.section}>
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>Latest from Blog</Text>
+          {/* TEMPORARILY DISABLED - BlogList screen not implemented */}
+          {/*
           <TouchableOpacity
             onPress={() => navigation.navigate('BlogList')}
             style={styles.viewAllButton}
@@ -70,6 +72,7 @@ const BlogSection = ({ navigation }) => {
             <Text style={styles.viewAllText}>View All</Text>
              <Ionicons name="chevron-forward" size={16} color="#F97316" />
           </TouchableOpacity>
+          */}
         </View>
       </View>
 

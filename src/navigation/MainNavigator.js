@@ -27,6 +27,12 @@ import TransactionDetailScreen from '../screens/main/TransactionDetailScreen';
 import ChatHistoryScreen from '../screens/ChatHistoryScreen';
 import BlogDetailScreen from '../screens/main/BlogDetailScreen';
 
+// E-Pooja screens
+import EPoojaCategories from '../screens/epooja/EPoojaCategories';
+import EPoojaDetails from '../screens/epooja/EPoojaDetails';
+import EPoojaBooking from '../screens/epooja/EPoojaBooking';
+import EPoojaBookings from '../screens/epooja/EPoojaBookings';
+
 import RatingScreen from '../screens/session/RatingScreen';
 
 // Import components
@@ -357,6 +363,26 @@ const MainNavigator = () => {
         <Stack.Screen 
           name="BlogDetail" 
           component={BlogDetailScreen} 
+          options={{ headerShown: false }}
+        />
+        <Stack.Screen 
+          name="EPoojaCategories" 
+          component={EPoojaCategories} 
+          options={{ headerShown: false }}
+        />
+        <Stack.Screen 
+          name="EPoojaDetails" 
+          component={EPoojaDetails} 
+          options={{ headerShown: false }}
+        />
+        <Stack.Screen 
+          name="EPoojaBooking" 
+          component={EPoojaBooking} 
+          options={{ headerShown: false }}
+        />
+        <Stack.Screen 
+          name="EPoojaBookings" 
+          component={EPoojaBookings} 
           options={{ headerShown: false }}
         />
       </Stack.Navigator>

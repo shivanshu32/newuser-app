@@ -26,6 +26,7 @@ import FreeChatCard from '../../components/FreeChatCard';
 import RejoinChatBottomSheet from '../../components/RejoinChatBottomSheet';
 import BannerCarousel from '../../components/BannerCarousel';
 import BlogSection from '../../components/BlogSection';
+import EPoojaHomeSection from '../../components/epooja/EPoojaHomeSection';
 
 // Hardcoded app version - update this when releasing new versions
 const APP_VERSION = '5.1.0';
@@ -2450,6 +2451,9 @@ const HomeScreen = ({ navigation }) => {
       });
     }
 
+    // Add e-pooja section - TEMPORARILY HIDDEN
+    // data.push({ type: 'epoojaSection', id: 'epoojaSection' });
+
     // Add blog section
     data.push({ type: 'blogSection', id: 'blogSection' });
     
@@ -2490,6 +2494,8 @@ const HomeScreen = ({ navigation }) => {
         return renderPendingBookingCard({ item });
       case 'astrologersSection':
         return renderAstrologersSection(item.data);
+      case 'epoojaSection':
+        return <EPoojaHomeSection />;
       default:
         return null;
     }

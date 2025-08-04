@@ -266,8 +266,12 @@ export const versionAPI = {
 export const ledgerAPI = {
   getMyTransactions: (params) => API.get('/ledger/my-transactions', { params }),
   getBalanceSummary: () => API.get('/ledger/balance-summary'),
-  getLedgerEntry: (entryId) => API.get(`/ledger/entry/${entryId}`),
-  getUserTransactions: (userId, params) => API.get(`/ledger/user/${userId}/transactions`, { params }),
+  getLedgerEntry: (entryId) => API.get(`/ledger/entries/${entryId}`),
+  getUserTransactions: (userId, params) => API.get(`/ledger/users/${userId}/transactions`, { params }),
 };
+
+// E-Pooja API
+import { epoojaAPI } from './epoojaAPI';
+export { epoojaAPI };
 
 export default API;
