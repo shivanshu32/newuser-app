@@ -2,7 +2,7 @@ module.exports = ({ config }) => ({
   ...config,
   // Use consistent configuration from app.json
   jsEngine: "hermes",
-  name: "Jyotish Call - User",
+  name: "Jyotish Call",
   slug: "jyotishcall-user-app",
   version: "5.1.3",
   orientation: "portrait",

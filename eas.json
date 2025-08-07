@@ -40,7 +40,7 @@
     "appStreaming": {
       "enabled": true,
       "streamId": "11544986827",
-      "appName": "Jyotish Call User Android",
+      "appName": "JyotishCall User Android",
       "platform": "android",
       "packageName": "com.jyotishtalk",
       "firebaseAppId": "1:225163383908:android:401cf7f0a622281f083b71"
