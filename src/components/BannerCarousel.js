@@ -6,6 +6,7 @@ import {
   Dimensions,
   StyleSheet,
   TouchableOpacity,
+  Text,
 } from 'react-native';
 
 const { width: screenWidth } = Dimensions.get('window');
@@ -14,12 +15,18 @@ const BannerCarousel = ({ onBannerPress }) => {
   const [currentIndex, setCurrentIndex] = useState(0);
   const scrollViewRef = useRef(null);
 
-  // Banner images from assets folder
+  // Debug: Log component mounting
+  useEffect(() => {
+    console.log('🎠 BannerCarousel mounted, screen width:', screenWidth);
+    console.log('🎠 Banner count:', banners.length);
+  }, []);
+
+  // Banner images from assets folder (fixed path for production)
   const banners = [
-    require('../../assets/appbanner1.png'),
-    require('../../assets/appbanner2.png'),
-    require('../../assets/appbanner3.png'),
-    require('../../assets/appbanner4.png'),
+    require('../../assets/appbanner1.webp'),
+    require('../../assets/appbanner2.webp'),
+    require('../../assets/appbanner3.webp'),
+    require('../../assets/appbanner4.webp'),
   ];
 
   // Auto-scroll functionality
@@ -72,6 +79,8 @@ const BannerCarousel = ({ onBannerPress }) => {
               source={banner}
               style={styles.bannerImage}
               resizeMode="cover"
+              onLoad={() => console.log(`🖼️ Banner ${index + 1} loaded successfully`)}
+              onError={(error) => console.log(`❌ Banner ${index + 1} failed to load:`, error.nativeEvent.error)}
             />
           </TouchableOpacity>
         ))}
@@ -103,6 +112,7 @@ const styles = StyleSheet.create({
   },
   bannerContainer: {
     width: screenWidth,
+    backgroundColor: '#f0f0f0', // Fallback background color
   },
   bannerImage: {
     width: screenWidth,
@@ -137,6 +147,19 @@ const styles = StyleSheet.create({
     backgroundColor: '#F97316',
     width: 16,
     borderRadius: 3,
+  },
+  debugOverlay: {
+    position: 'absolute',
+    top: 10,
+    left: 10,
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    padding: 8,
+    borderRadius: 4,
+  },
+  debugText: {
+    color: 'white',
+    fontSize: 12,
+    fontWeight: 'bold',
   },
 });
 

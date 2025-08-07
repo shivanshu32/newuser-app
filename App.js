@@ -29,6 +29,7 @@ import UpdateRequiredScreen from './src/screens/UpdateRequiredScreen';
 import { AuthProvider, useAuth } from './src/context/AuthContext';
 import { NotificationProvider } from './src/context/NotificationContext';
 import { SocketProvider } from './src/context/SocketContext';
+import { FreeChatProvider } from './src/context/FreeChatContext';
 
 // Import analytics service
 import analyticsService from './src/services/analyticsService';
@@ -79,7 +80,7 @@ function AppContent() {
         
         // Add timeout to prevent hanging
         const timeoutPromise = new Promise((_, reject) => {
-          setTimeout(() => reject(new Error('Version check timeout')), 10000); // 10 second timeout
+          setTimeout(() => reject(new Error('Version check timeout')), 5000); // 5 second timeout
         });
         
         const updateData = await Promise.race([
@@ -97,14 +98,14 @@ function AppContent() {
         console.error('Version check failed:', error);
         // Don't block app startup on version check failure
         console.log('Continuing app startup despite version check failure');
-      } finally {
-        setVersionCheckComplete(true);
       }
     };
 
-    // Start version check but don't block UI
-    setVersionCheckComplete(true); // Allow app to start immediately
-    performVersionCheck(); // Check in background
+    // Allow app to start immediately - don't wait for version check
+    setVersionCheckComplete(true);
+    
+    // Perform version check in background without blocking UI
+    performVersionCheck();
   }, []);
   
   // Show loading during initial auth check or version check
@@ -143,17 +144,19 @@ function AppContent() {
 
 export default function App() {
   return (
-    <NavigationContainer>
-      <SafeAreaProvider>
-        <StatusBar style="auto" />
-        <AuthProvider>
+    <SafeAreaProvider>
+      <AuthProvider>
+        <NotificationProvider>
           <SocketProvider>
-            <NotificationProvider>
-              <AppContent />
-            </NotificationProvider>
+            <FreeChatProvider>
+              <NavigationContainer>
+                <AppContent />
+              </NavigationContainer>
+            </FreeChatProvider>
           </SocketProvider>
-        </AuthProvider>
-      </SafeAreaProvider>
-    </NavigationContainer>
+        </NotificationProvider>
+      </AuthProvider>
+      <StatusBar style="auto" />
+    </SafeAreaProvider>
   );
 }

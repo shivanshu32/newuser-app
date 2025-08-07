@@ -29,7 +29,7 @@ import BlogSection from '../../components/BlogSection';
 import EPoojaHomeSection from '../../components/epooja/EPoojaHomeSection';
 
 // Hardcoded app version - update this when releasing new versions
-const APP_VERSION = '5.1.0';
+const APP_VERSION = '5.1.2';
 
 const HomeScreen = ({ navigation }) => {
   const { user } = useAuth();

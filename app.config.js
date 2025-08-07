@@ -1,10 +1,12 @@
 module.exports = ({ config }) => ({
   ...config,
-  name: "JyotishCall User",
+  // Use consistent configuration from app.json
+  jsEngine: "hermes",
+  name: "Jyotish Call - User",
   slug: "jyotishcall-user-app",
-  version: "1.0.0",
+  version: "5.1.2",
   orientation: "portrait",
-  icon: "./assets/icon.png",
+  icon: "./assets/icon-square.png",
   userInterfaceStyle: "light",
   splash: {
     image: "./assets/splash.png",
@@ -16,62 +18,71 @@ module.exports = ({ config }) => ({
   ],
   ios: {
     supportsTablet: true,
+    bundleIdentifier: "com.jyotishtalk",
     infoPlist: {
-      NSCameraUsageDescription: "This app needs access to your camera for video calls with astrologers.",
-      NSMicrophoneUsageDescription: "This app needs access to your microphone for voice and video calls with astrologers.",
-      NSLocalNetworkUsageDescription: "This app needs access to local network for WebRTC connections."
+      NSMicrophoneUsageDescription: "Allow Jyotish Call to access your microphone for voice consultations with astrologers",
+      NSCameraUsageDescription: "Allow Jyotish Call to access your camera for video consultations with astrologers",
+      NSUserNotificationsUsageDescription: "Allow Jyotish Call to send you notifications about booking requests, chat messages, and important updates"
+    },
+    entitlements: {
+      "aps-environment": "production"
     }
   },
   android: {
     adaptiveIcon: {
-      foregroundImage: "./assets/adaptive-icon.png",
-      backgroundColor: "#FFFFFF"
+      foregroundImage: "./assets/icon-square.png",
+      backgroundColor: "#ffffff"
     },
-    minSdkVersion: 24,        // Fixed for Hermes compatibility
-    compileSdkVersion: 35,    // Latest Android SDK
-    targetSdkVersion: 35,     // Updated for Google Play requirements
+    package: "com.jyotishtalk",
+    versionCode: 38,
+    minSdkVersion: 24,
+    compileSdkVersion: 35,
+    targetSdkVersion: 35,
     permissions: [
       "MODIFY_AUDIO_SETTINGS",
       "INTERNET",
       "ACCESS_NETWORK_STATE",
-      "BLUETOOTH",
-      "BLUETOOTH_CONNECT",
-      "WAKE_LOCK",
       "RECEIVE_BOOT_COMPLETED",
       "VIBRATE",
+      "WAKE_LOCK",
       "com.google.android.c2dm.permission.RECEIVE",
       "com.google.android.gms.permission.AD_ID"
     ],
-    package: "com.jyotishtalk",
-    versionCode: 10,
-    usesCleartextTraffic: true  // For development/testing
+    usesCleartextTraffic: true,
+    networkSecurityConfig: {
+      "domain-config": [
+        {
+          domain: "jyotishcallbackend-2uxrv.ondigitalocean.app",
+          includeSubdomains: true
+        }
+      ]
+    },
+    ndkVersion: "26.1.10909125"
   },
   web: {
-    favicon: "./assets/favicon.png"
+    favicon: "./assets/splash.png"
   },
   plugins: [
-    "expo-notifications",
-    "expo-av",
     [
-      "expo-dev-client",
+      "expo-notifications",
       {
-        "addGeneratedScheme": false
+        icon: "./assets/notification-icon.png",
+        color: "#ffffff",
+        sounds: [
+          "./assets/notification.mp3"
+        ]
       }
-    ]
-    // [
-    //   "@config-plugins/react-native-webrtc",
-    //   {
-    //     "cameraPermission": "This app needs access to your camera for video calls with astrologers.",
-    //     "microphonePermission": "This app needs access to your microphone for voice and video calls with astrologers."
-    //   }
-    // ]
+    ],
+    "expo-dev-client"
   ],
+  updates: {
+    url: "https://u.expo.dev/19ce1c4d-7c68-407f-96a0-d41bedaa3d55"
+  },
+  runtimeVersion: "1.0.0",
   extra: {
     eas: {
       projectId: "19ce1c4d-7c68-407f-96a0-d41bedaa3d55"
     }
   },
-  updates: {
-    url: "https://u.expo.dev/19ce1c4d-7c68-407f-96a0-d41bedaa3d55"
-  }
+  owner: "shivanshu32"
 });

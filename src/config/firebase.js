@@ -1,36 +1,47 @@
 // Firebase configuration for Expo managed workflow
-// Using Expo's Firebase integration instead of React Native Firebase
+// Proper Firebase initialization for Analytics and other services
 import { Platform } from 'react-native';
 
-// Firebase configuration
-// Replace these with your actual Firebase config values from Firebase Console
+// Firebase configuration from Firebase Console
+// This configuration is extracted from google-services.json and Firebase Console
 const firebaseConfig = {
-  apiKey: "AIzaSyDM5_yykPFf7jgUia7jKpqjvXCdYWjuqzo", // From google-services.json
+  apiKey: "AIzaSyDM5_yykPFf7jgUia7jKpqjvXCdYWjuqzo",
   authDomain: "jyotish2-dd398.firebaseapp.com",
   projectId: "jyotish2-dd398",
   storageBucket: "jyotish2-dd398.firebasestorage.app",
-  messagingSenderId: "225163383908", // From google-services.json
-  appId: "1:225163383908:android:401cf7f0a622281f083b71", // From google-services.json - User App
+  messagingSenderId: "225163383908",
+  appId: "1:225163383908:android:401cf7f0a622281f083b71"
 };
 
-// For Expo managed workflow, we don't need to initialize Firebase manually
-// Expo handles Firebase initialization through the google-services.json file
-// and the Firebase plugins in app.json
+// Note: measurementId is optional for Firebase JS SDK in React Native
+// Analytics will work without it for mobile apps
 
-// Export configuration for use in FCM service
+// Export configuration for use in analytics and other services
 export { firebaseConfig };
 
 // Helper function to check if Firebase is configured
 export const isFirebaseConfigured = () => {
   return (
+    firebaseConfig.apiKey && 
+    firebaseConfig.projectId &&
     firebaseConfig.apiKey !== "your-api-key-here" &&
     firebaseConfig.projectId !== "your-project-id"
   );
 };
 
-// Note: For Expo managed workflow, we use expo-notifications for push notifications
-// instead of @react-native-firebase/messaging
-// The FCMService.js handles the Expo-specific implementation
+// Validate Firebase configuration
+export const validateFirebaseConfig = () => {
+  const requiredFields = ['apiKey', 'projectId', 'messagingSenderId', 'appId'];
+  const missingFields = requiredFields.filter(field => !firebaseConfig[field]);
+  
+  if (missingFields.length > 0) {
+    console.error('🔥 [FIREBASE] Missing required Firebase config fields:', missingFields);
+    return false;
+  }
+  
+  console.log('🔥 [FIREBASE] ✅ Firebase configuration is valid');
+  return true;
+};
 
 // Get Firebase project info
 export const getFirebaseProjectInfo = () => {
@@ -38,8 +49,12 @@ export const getFirebaseProjectInfo = () => {
     projectId: firebaseConfig.projectId,
     messagingSenderId: firebaseConfig.messagingSenderId,
     isConfigured: isFirebaseConfigured(),
+    isValid: validateFirebaseConfig(),
+    platform: Platform.OS
   };
 };
 
-// No default export needed for Expo managed workflow
-// Firebase is handled automatically by Expo
+// Log Firebase configuration status
+console.log('🔥 [FIREBASE] Configuration loaded for project:', firebaseConfig.projectId);
+console.log('🔥 [FIREBASE] Platform:', Platform.OS);
+console.log('🔥 [FIREBASE] Configuration valid:', validateFirebaseConfig());

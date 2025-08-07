@@ -10,22 +10,25 @@ const AnalyticsTestButton = () => {
       const testResults = await analyticsService.testAnalytics();
       
       // Show results in an alert
-      const resultMessage = `Analytics Test Results:
+      const resultMessage = `Firebase Analytics Test Results:
       
 ✅ Initialized: ${testResults.initialized}
 ✅ Supported: ${testResults.supported}  
 ✅ Has Analytics: ${testResults.hasAnalytics}
 ✅ Has Firebase App: ${testResults.hasFirebaseApp}
+✅ Platform: ${testResults.platform}
 
 Check console logs for detailed information.
 
-If all are true, events should appear in Firebase Console within 24 hours.`;
+If all are true, events should appear in Firebase Console within 24 hours.
+
+A test event 'analytics_test_event' has been sent!`;
 
       Alert.alert('Analytics Test Complete', resultMessage);
       
     } catch (error) {
       console.error('🧪 [TEST ERROR]:', error);
-      Alert.alert('Analytics Test Failed', `Error: ${error.message}`);
+      Alert.alert('Analytics Test Failed', `Error: ${error.message}\n\nCheck console logs for details.`);
     }
   };
 

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo, memo } from 'react';
 import {
   StyleSheet,
   View,
@@ -17,15 +17,22 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../context/AuthContext';
 import { useSocket } from '../../context/SocketContext';
+import useMessagePersistence from '../../hooks/useMessagePersistence';
 
+// API Configuration
 const API_BASE_URL = 'https://jyotishcallbackend-2uxrv.ondigitalocean.app/api/v1';
 
 /**
  * FixedFreeChatScreen - Production-Ready Free Chat Implementation
  */
-const FixedFreeChatScreen = ({ route, navigation }) => {
+const FixedFreeChatScreen = memo(({ route, navigation }) => {
   console.log('🚀 FixedFreeChatScreen: Component mounting with params:', route.params);
   console.log('🔍 [DEBUG] Raw route.params:', JSON.stringify(route.params, null, 2));
+  
+  // Memoize route parameters to prevent continuous re-mounting
+  const stableParams = useMemo(() => {
+    return route.params || {};
+  }, [route.params?.freeChatId, route.params?.sessionId, route.params?.astrologerId]);
   
   const {
     freeChatId,
@@ -37,13 +44,35 @@ const FixedFreeChatScreen = ({ route, navigation }) => {
     isFreeChat = true, // Default to true for this screen
     sessionDuration = 180, // 3 minutes default for free chat
     consultationType = 'chat', // Default to 'chat' for free chat sessions
-  } = route.params || {};
+  } = stableParams;
   
   console.log('🔍 [DEBUG] Extracted parameters:');
   console.log('🔍 [DEBUG] freeChatId:', freeChatId);
   console.log('🔍 [DEBUG] sessionId:', sessionId);
   console.log('🔍 [DEBUG] astrologerId:', astrologerId);
   console.log('🔍 [DEBUG] isFreeChat:', isFreeChat);
+  
+  // Validate that we have either freeChatId or sessionId
+  const effectiveFreeChatId = freeChatId || sessionId;
+  if (!effectiveFreeChatId) {
+    console.error('❌ [FREE_CHAT_INIT] Missing both freeChatId and sessionId:', { freeChatId, sessionId });
+    console.error('❌ [FREE_CHAT_INIT] Full route params:', route.params);
+    
+    // Navigate back with error message
+    Alert.alert(
+      'Session Error',
+      'Unable to join free chat session. Missing session information.',
+      [
+        {
+          text: 'OK',
+          onPress: () => navigation.goBack()
+        }
+      ]
+    );
+    return null;
+  }
+  
+  console.log('✅ [FREE_CHAT_INIT] Using effective freeChatId:', effectiveFreeChatId);
   
   // Create fallback booking details for free chat if not provided
   const effectiveBookingDetails = bookingDetails || {
@@ -60,6 +89,15 @@ const FixedFreeChatScreen = ({ route, navigation }) => {
   };
   
   const { user: authUser, refreshToken, getValidToken } = useAuth();
+  
+  // ===== MESSAGE PERSISTENCE HOOK =====
+  const {
+    messages: persistedMessages,
+    isLoaded: persistenceLoaded,
+    addMessage: addPersistedMessage,
+    mergeBackendMessages: mergePersisted,
+    getMessages: getPersistedMessages
+  } = useMessagePersistence(effectiveFreeChatId);
 
   // ===== STATE =====
   const [loading, setLoading] = useState(true);
@@ -275,13 +313,54 @@ const FixedFreeChatScreen = ({ route, navigation }) => {
   syncTimerFromSessionRef.current = syncTimerFromSession;
   
   // ===== TIMER EXPIRY MONITORING =====
+  // Use a ref to track timer expiry to prevent continuous re-mounting
+  const timerExpiryHandledRef = useRef(false);
+  
   useEffect(() => {
-    // Monitor timer data for expiry
-    if (timerData.timeRemaining <= 0 && timerData.isActive && sessionActive && !sessionEnded) {
+    // Monitor timer data for expiry - only trigger once when timer expires
+    if (timerData.timeRemaining <= 0 && timerData.isActive && sessionActive && !sessionEnded && !timerExpiryHandledRef.current) {
       console.log('⏰ [FREE_CHAT_TIMER] Timer expired - triggering session end');
-      handleTimerExpiry();
+      timerExpiryHandledRef.current = true;
+      
+      // Call handleSessionEnd directly to avoid unstable dependency chain
+      console.log('⏰ [FREE_CHAT_TIMER] Timer expired - ending session');
+      
+      // Update session end state directly
+      if (mountedRef.current) {
+        setSessionEnded(true);
+        setSessionEndReason('timer_expired');
+        setSessionActive(false);
+        
+        // Stop any running timers
+        if (timerIntervalRef.current) {
+          clearInterval(timerIntervalRef.current);
+          timerIntervalRef.current = null;
+        }
+        
+        // Show timer expiry message and navigate back
+        setTimeout(() => {
+          if (mountedRef.current) {
+            Alert.alert(
+              'Time Up!',
+              'Your free 3-minute chat session has ended. Thank you for using our service!',
+              [
+                {
+                  text: 'OK',
+                  onPress: () => navigation.goBack()
+                }
+              ],
+              { cancelable: false }
+            );
+          }
+        }, 500);
+      }
     }
-  }, [timerData.timeRemaining, timerData.isActive, sessionActive, sessionEnded, handleTimerExpiry]);
+    
+    // Reset the flag if timer becomes active again (for potential reconnection scenarios)
+    if (timerData.timeRemaining > 0 && timerExpiryHandledRef.current) {
+      timerExpiryHandledRef.current = false;
+    }
+  }, [timerData, sessionActive, sessionEnded]); // Removed handleTimerExpiry dependency
 
   // Get socket from context
   const { socket: contextSocket, isConnected: socketConnected } = useSocket();
@@ -367,17 +446,44 @@ const FixedFreeChatScreen = ({ route, navigation }) => {
       }
       
       if (response.ok) {
-        const freeChatData = await response.json();
-        console.log('🔍 [FREE_CHAT_RECONNECT] Session status check result:', freeChatData.status);
+        const statusResponse = await response.json();
+        console.log('🔍 [FREE_CHAT_RECONNECT] Session status check result:', statusResponse);
         
-        if (freeChatData.status === 'completed' || freeChatData.status === 'expired') {
-          console.log('❌ [FREE_CHAT_RECONNECT] Session already ended, navigating back');
-          Alert.alert(
-            'Free Chat Ended',
-            'Your free chat session has ended while the app was in background.',
-            [{ text: 'OK', onPress: () => navigation.goBack() }]
-          );
-          return;
+        if (statusResponse.success && statusResponse.data) {
+          const freeChatData = statusResponse.data;
+          console.log('📊 [FREE_CHAT_RECONNECT] Free chat status:', freeChatData.status, 'Session status:', freeChatData.sessionStatus);
+          
+          // Check if session is still active
+          if (freeChatData.status === 'completed' || freeChatData.status === 'expired' || 
+              freeChatData.sessionStatus === 'completed' || freeChatData.sessionStatus === 'expired') {
+            console.log('❌ [FREE_CHAT_RECONNECT] Session already ended, navigating back');
+            Alert.alert(
+              'Free Chat Ended',
+              'Your free chat session has ended while the app was in background.',
+              [{ text: 'OK', onPress: () => navigation.goBack() }]
+            );
+            return;
+          }
+          
+          // If session is still active, sync timer data
+          if (freeChatData.isActive && freeChatData.remainingTime !== null) {
+            console.log('⏰ [FREE_CHAT_RECONNECT] Syncing timer - remaining time:', freeChatData.remainingTime);
+            safeSetState(setTimerData, {
+              elapsed: freeChatData.duration - freeChatData.remainingTime,
+              duration: freeChatData.duration,
+              timeRemaining: freeChatData.remainingTime,
+              isActive: true,
+              startTime: freeChatData.startTime
+            });
+            
+            // Save session state for timer sync
+            if (freeChatData.startTime) {
+              sessionStartTimeRef.current = new Date(freeChatData.startTime).getTime();
+              sessionDurationRef.current = freeChatData.duration;
+            }
+          }
+        } else {
+          console.log('⚠️ [FREE_CHAT_RECONNECT] Invalid status response format, proceeding with reconnection');
         }
       } else if (response.status === 401) {
         console.log('🔑 [FREE_CHAT_RECONNECT] Token still expired after refresh attempt - proceeding with socket reconnection (socket auth may still work)');
@@ -441,9 +547,14 @@ const FixedFreeChatScreen = ({ route, navigation }) => {
       // Sync timer from session state
       syncTimerFromSession();
       
-      // Note: No need to manually request missed messages anymore
-      // Backend automatically sends missed messages via 'missed_messages_recovery' event when rejoining room
-      console.log('📨 [RECONNECT] Skipping manual missed message request - backend handles this automatically');
+      // Request missed messages after rejoining room
+      // Wait a bit for room join to complete, then request message history
+      setTimeout(() => {
+        if (mountedRef.current && socketRef.current?.connected) {
+          console.log('📨 [RECONNECT] Requesting missed messages after rejoin');
+          requestMissedMessages();
+        }
+      }, 1000);
       
       console.log('✅ [FREE_CHAT_RECONNECT] Successfully reconnected and synced');
       safeSetState(setConnected, true);
@@ -494,43 +605,120 @@ const FixedFreeChatScreen = ({ route, navigation }) => {
       return;
     }
 
-    console.log('📨 [FREE_CHAT_MESSAGES] Requesting missed messages since:', lastMessageTimestampRef.current);
+    console.log('📨 [FREE_CHAT_MESSAGES] Requesting ALL message history for freeChatId:', freeChatId);
+    console.log('📨 [FREE_CHAT_MESSAGES] SessionId:', sessionId);
+    console.log('📨 [FREE_CHAT_MESSAGES] UserId:', authUser?.id);
+    console.log('📨 [FREE_CHAT_MESSAGES] Current messages count:', messages.length);
+    console.log('📨 [FREE_CHAT_MESSAGES] Last message timestamp:', lastMessageTimestampRef.current);
+    console.log('📨 [FREE_CHAT_MESSAGES] Socket connected:', socket.connected);
+    console.log('📨 [FREE_CHAT_MESSAGES] Socket ID:', socket.id);
     
     return new Promise((resolve) => {
       const timeout = setTimeout(() => {
-        console.log('⚠️ [FREE_CHAT_MESSAGES] Socket timeout for missed messages');
+        console.log('⚠️ [FREE_CHAT_MESSAGES] Socket timeout for missed messages - no response from backend');
+        console.log('⚠️ [FREE_CHAT_MESSAGES] This might indicate a backend issue or socket connection problem');
+        console.log('⚠️ [FREE_CHAT_MESSAGES] Socket still connected:', socket?.connected);
         resolve();
-      }, 5000);
+      }, 10000); // Increased timeout to 10 seconds
       
-      socket.emit('get_free_chat_message_history', {
+      // Request ALL messages, not just since last timestamp (for rejoin scenarios)
+      const requestPayload = {
         freeChatId,
         sessionId,
-        since: lastMessageTimestampRef.current
-      }, (response) => {
+        since: null, // Request all messages for rejoin
+        userId: authUser?.id
+      };
+      
+      console.log('📨 [FREE_CHAT_MESSAGES] Emitting get_free_chat_message_history with payload:', requestPayload);
+      
+      socket.emit('get_free_chat_message_history', requestPayload, (response) => {
         clearTimeout(timeout);
-        console.log('📨 [FREE_CHAT_MESSAGES] Missed messages response:', response);
+        console.log('📨 [FREE_CHAT_MESSAGES] Message history response:', response);
         
-        if (response?.messages && Array.isArray(response.messages)) {
-          const newMessages = response.messages.filter(msg => 
-            !messages.find(existing => existing.id === msg.id)
-          );
+        if (response?.success && response?.messages && Array.isArray(response.messages)) {
+          console.log(`📨 [FREE_CHAT_MESSAGES] Received ${response.messages.length} messages from history`);
+          console.log('📨 [FREE_CHAT_MESSAGES] Sample message structure:', response.messages[0]);
+          console.log('📨 [FREE_CHAT_MESSAGES] Current messages in state:', messages.length);
+          
+          // Normalize message structure to ensure compatibility
+          const normalizedMessages = response.messages.map(msg => ({
+            id: msg.id || msg._id || generateMessageId(),
+            text: msg.content || msg.text || msg.message || '',
+            content: msg.content || msg.text || msg.message || '',
+            sender: msg.senderType || msg.sender || (msg.senderId === authUser?.id ? 'user' : 'astrologer'),
+            senderId: msg.senderId || msg.sender,
+            senderType: msg.senderType || (msg.senderId === authUser?.id ? 'user' : 'astrologer'),
+            timestamp: msg.timestamp || msg.createdAt || new Date().toISOString(),
+            status: msg.status || 'delivered'
+          }));
+          
+          console.log('📨 [FREE_CHAT_MESSAGES] Normalized messages:', normalizedMessages.length);
+          console.log('📨 [FREE_CHAT_MESSAGES] Sample normalized message:', normalizedMessages[0]);
+          
+          // Special case: If we have no messages (rejoin scenario), load all messages
+          let newMessages;
+          if (messages.length === 0) {
+            console.log('📨 [FREE_CHAT_MESSAGES] No existing messages - loading all messages from history (rejoin scenario)');
+            newMessages = normalizedMessages;
+          } else {
+            // Filter out messages we already have - use more robust comparison
+            newMessages = normalizedMessages.filter(msg => {
+              const exists = messages.find(existing => {
+                // Check by ID first, then by content and sender
+                const sameId = existing.id === msg.id;
+                const sameContent = existing.content === msg.content || existing.text === msg.text;
+                const sameSender = existing.senderId === msg.senderId || existing.sender === msg.sender;
+                const sameTimestamp = Math.abs(new Date(existing.timestamp).getTime() - new Date(msg.timestamp).getTime()) < 1000; // Within 1 second
+                
+                return sameId || (sameContent && sameSender && sameTimestamp);
+              });
+              return !exists;
+            });
+          }
+          
+          console.log(`📨 [FREE_CHAT_MESSAGES] After deduplication: ${newMessages.length} new messages to add`);
           
           if (newMessages.length > 0) {
-            console.log(`📨 [FREE_CHAT_MESSAGES] Adding ${newMessages.length} missed messages`);
+            console.log(`📨 [FREE_CHAT_MESSAGES] Adding ${newMessages.length} new messages from history`);
+            console.log('📨 [FREE_CHAT_MESSAGES] New messages to add:', newMessages.map(m => ({ id: m.id, content: m.content, sender: m.sender })));
+            
             safeSetState(setMessages, prev => {
               const combined = [...prev, ...newMessages];
-              return combined.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+              const sorted = combined.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+              console.log(`📨 [FREE_CHAT_MESSAGES] Total messages after history load: ${sorted.length}`);
+              console.log('📨 [FREE_CHAT_MESSAGES] Final message list:', sorted.map(m => ({ id: m.id, content: m.content || m.text, sender: m.sender })));
+              return sorted;
             });
             
             // Update last message timestamp
-            const latestTimestamp = Math.max(...newMessages.map(msg => new Date(msg.timestamp).getTime()));
-            lastMessageTimestampRef.current = latestTimestamp;
+            const latestTimestamp = Math.max(...normalizedMessages.map(msg => new Date(msg.timestamp).getTime()));
+            if (latestTimestamp > lastMessageTimestampRef.current) {
+              lastMessageTimestampRef.current = latestTimestamp;
+              console.log('📨 [FREE_CHAT_MESSAGES] Updated last message timestamp to:', new Date(latestTimestamp));
+            }
+            
+            // Scroll to bottom after loading history
+            setTimeout(() => {
+              flatListRef.current?.scrollToEnd({ animated: true });
+            }, 100);
+          } else {
+            console.log('📨 [FREE_CHAT_MESSAGES] No new messages to add (all already present)');
+            console.log('📨 [FREE_CHAT_MESSAGES] Existing messages:', messages.map(m => ({ id: m.id, content: m.content || m.text, sender: m.sender })));
+            console.log('📨 [FREE_CHAT_MESSAGES] Received messages:', normalizedMessages.map(m => ({ id: m.id, content: m.content, sender: m.sender })));
           }
+        } else {
+          console.log('📨 [FREE_CHAT_MESSAGES] Invalid or empty response:', response);
+          console.log('📨 [FREE_CHAT_MESSAGES] Response structure:', {
+            success: response?.success,
+            hasMessages: !!response?.messages,
+            isArray: Array.isArray(response?.messages),
+            messageCount: response?.messages?.length || 0
+          });
         }
         resolve();
       });
     });
-  }, [freeChatId, sessionId, messages, safeSetState]);
+  }, [freeChatId, sessionId, messages, safeSetState, authUser?.id]);
   
   // Update ref to current function
   requestMissedMessagesRef.current = requestMissedMessages;
@@ -821,7 +1009,12 @@ const FixedFreeChatScreen = ({ route, navigation }) => {
       isActive: timeRemaining > 0
     });
     
+    // CRITICAL FIX: If we're receiving timer updates, the socket must be connected
+    // Update connection state to ensure UI shows correct status
+    safeSetState(setConnected, true);
     safeSetState(setSessionActive, true);
+    
+    console.log('🔗 [FREE_CHAT_TIMER] Connection state synchronized - connected: true, sessionActive: true');
   }, [freeChatId, sessionDuration, safeSetState]);
 
   const handleSessionEnded = useCallback((data) => {
@@ -864,6 +1057,57 @@ const FixedFreeChatScreen = ({ route, navigation }) => {
     }
   }, [freeChatId, sessionDuration, formatTime, handleSessionEnd, handleTimerExpiry, handleAstrologerEndSession, navigation]);
 
+  const handleSessionResumed = useCallback((data) => {
+    console.log('🔄 [FREE_CHAT_RESUMPTION] Session resumed event received:', data);
+    
+    // Validate this resumption event is for current free chat session
+    if (data.freeChatId && data.freeChatId !== freeChatId) {
+      console.log('⚠️ [FREE_CHAT_RESUMPTION] Ignoring session resumption for different free chat:', data.freeChatId);
+      return;
+    }
+    
+    // Update session state
+    safeSetState(setSessionActive, true);
+    safeSetState(setConnected, true);
+    
+    // Update timer with resumed state
+    const timeRemaining = data.timeRemaining || 0;
+    const elapsed = data.elapsedSeconds || 0;
+    const duration = data.duration || sessionDuration;
+    const startTime = data.startTime || Date.now();
+    
+    console.log('🔄 [FREE_CHAT_RESUMPTION] Resuming timer with:', {
+      timeRemaining,
+      elapsed,
+      duration,
+      startTime
+    });
+    
+    // Save session state for future reconnections
+    saveSessionState(startTime, duration);
+    
+    // Update timer data
+    safeSetState(setTimerData, {
+      elapsed: Math.max(0, elapsed),
+      duration: duration,
+      timeRemaining: Math.max(0, timeRemaining),
+      isActive: timeRemaining > 0,
+      startTime: startTime
+    });
+    
+    // Start local timer with existing start time to maintain continuity
+    if (timeRemaining > 0) {
+      startLocalTimer(duration, startTime);
+    }
+    
+    // Request message history for any missed messages
+    setTimeout(() => {
+      requestMissedMessages();
+    }, 500);
+    
+    console.log('✅ [FREE_CHAT_RESUMPTION] Session successfully resumed');
+  }, [freeChatId, sessionDuration, safeSetState, saveSessionState, startLocalTimer, requestMissedMessages]);
+
   const joinFreeChatRoom = useCallback(() => {
     const currentSocket = socketRef.current;
     if (!currentSocket?.connected) {
@@ -897,6 +1141,33 @@ const FixedFreeChatScreen = ({ route, navigation }) => {
           loadingStateSetRef.current = true;
           safeSetState(setLoading, false);
         }
+        
+        // Request message history after successful room join (for rejoin scenarios)
+        // Use shorter delay and add fallback
+        setTimeout(() => {
+          if (mountedRef.current && socketRef.current?.connected) {
+            console.log('📨 [ROOM_JOIN] Requesting message history after room join');
+            console.log('📨 [ROOM_JOIN] Current messages count before request:', messages.length);
+            requestMissedMessages();
+          }
+        }, 100);
+        
+        // Fallback: Request messages again after a longer delay to ensure we don't miss them
+        setTimeout(() => {
+          if (mountedRef.current && socketRef.current?.connected && messages.length === 0) {
+            console.log('📨 [ROOM_JOIN] Fallback: Requesting message history again (no messages loaded yet)');
+            requestMissedMessages();
+          }
+        }, 1500);
+        
+        // Additional aggressive fallback for rejoin scenarios
+        setTimeout(() => {
+          if (mountedRef.current && socketRef.current?.connected) {
+            console.log('📨 [ROOM_JOIN] Final fallback: Requesting message history one more time');
+            console.log('📨 [ROOM_JOIN] Current messages count before final request:', messages.length);
+            requestMissedMessages();
+          }
+        }, 3000);
       } else {
         console.error('❌ [FREE_CHAT_ROOM] Failed to join room:', response?.error);
         Alert.alert('Connection Error', 'Failed to join free chat session. Please try again.');
@@ -994,6 +1265,9 @@ const FixedFreeChatScreen = ({ route, navigation }) => {
     socket.on('session_started', handleSessionStarted);
     socket.on('session_timer', handleTimerUpdate);
     socket.on('session_end', handleSessionEnded); // Fixed: backend emits 'session_end', not 'session_ended'
+    
+    // Handle free chat session resumption (for rejoining)
+    socket.on('free_chat_session_resumed', handleSessionResumed);
     
     // Handle free chat message history recovery
     socket.on('get_free_chat_message_history', (data) => {
@@ -1335,11 +1609,23 @@ const FixedFreeChatScreen = ({ route, navigation }) => {
       return;
     }
     
+    // Additional check to prevent multiple instances
+    if (initializationCompleteRef.current) {
+      console.log('⚠️ [INIT] Initialization already complete, skipping:', instanceId.current);
+      return;
+    }
+    
     console.log('🚀 [FREE_CHAT_INIT] Starting component initialization for:', instanceId.current);
     console.log('🚀 [FREE_CHAT_INIT] FreeChatId:', freeChatId, 'SessionId:', sessionId);
     console.log('🚀 [FREE_CHAT_INIT] AstrologerId:', astrologerId);
     console.log('🚀 [FREE_CHAT_INIT] AuthUser:', !!authUser?.id);
     console.log('🚀 [FREE_CHAT_INIT] ContextSocket available:', !!contextSocket);
+    
+    // ===== MESSAGE PERSISTENCE =====
+    // Log persistence status (non-blocking)
+    if (persistenceLoaded && persistedMessages.length > 0) {
+      console.log(`📦 [PERSISTENCE] Found ${persistedMessages.length} persisted messages for session:`, effectiveFreeChatId);
+    }
     
     if (!freeChatId) {
       console.error('❌ [FREE_CHAT_INIT] Missing freeChatId:', freeChatId);
@@ -1377,6 +1663,14 @@ const FixedFreeChatScreen = ({ route, navigation }) => {
             if (mountedRef.current) {
               console.log('🚀 [FREE_CHAT_INIT] Joining free chat room');
               joinFreeChatRoom();
+              
+              // Also request message history immediately for rejoin scenarios
+              setTimeout(() => {
+                if (mountedRef.current && socketRef.current?.connected) {
+                  console.log('📨 [INIT] Requesting message history immediately after room join for rejoin scenario');
+                  requestMissedMessages();
+                }
+              }, 1000);
             }
           }, 500);
           
@@ -1435,7 +1729,7 @@ const FixedFreeChatScreen = ({ route, navigation }) => {
         typingTimeoutRef.current = null;
       }
     };
-  }, []); // Empty dependency array to prevent remounting
+  }, [freeChatId, sessionId, astrologerId]); // Use stable route parameters only
 
   // ===== RENDER =====
   const renderMessage = useCallback(({ item }) => {
@@ -1607,7 +1901,7 @@ const FixedFreeChatScreen = ({ route, navigation }) => {
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
-};
+});
 
 const styles = StyleSheet.create({
   safeArea: {
@@ -1869,21 +2163,4 @@ const styles = StyleSheet.create({
   },
 });
 
-// Wrap component in React.memo to prevent unnecessary remounts
-const MemoizedFixedFreeChatScreen = React.memo(FixedFreeChatScreen, (prevProps, nextProps) => {
-  // Only re-render if essential route params change
-  const prevParams = prevProps.route?.params || {};
-  const nextParams = nextProps.route?.params || {};
-  
-  const isEqual = (
-    prevParams.freeChatId === nextParams.freeChatId &&
-    prevParams.sessionId === nextParams.sessionId &&
-    prevParams.astrologerId === nextParams.astrologerId
-  );
-  
-  console.log('🔍 [MEMO] Props comparison result:', isEqual ? 'EQUAL (no re-render)' : 'DIFFERENT (re-render)');
-  
-  return isEqual;
-});
-
-export default MemoizedFixedFreeChatScreen;
+export default FixedFreeChatScreen;

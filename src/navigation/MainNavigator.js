@@ -21,6 +21,7 @@ import PendingConsultationsScreen from '../screens/main/PendingConsultationsScre
 import ChatScreen from '../screens/session/ChatScreen';
 import FixedChatScreen from '../screens/session/FixedChatScreen';
 import FixedFreeChatScreen from '../screens/session/FixedFreeChatScreen';
+import EnhancedFixedFreeChatScreen from '../screens/session/EnhancedFixedFreeChatScreen';
 import PreChatForm from '../screens/session/PreChatForm';
 import TransactionHistoryScreen from '../screens/main/TransactionHistoryScreen';
 import TransactionDetailScreen from '../screens/main/TransactionDetailScreen';
@@ -313,6 +314,11 @@ const MainNavigator = () => {
         <Stack.Screen 
           name="FixedFreeChatScreen" 
           component={FixedFreeChatScreen} 
+          options={{ headerShown: false }}
+        />
+        <Stack.Screen 
+          name="EnhancedFixedFreeChatScreen" 
+          component={EnhancedFixedFreeChatScreen} 
           options={{ headerShown: false }}
         />
         <Stack.Screen 

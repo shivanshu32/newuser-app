@@ -1,535 +1,405 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
 import { initializeApp } from 'firebase/app';
-import { getAnalytics, logEvent, setUserId, setUserProperties, isSupported } from 'firebase/analytics';
+import { getAnalytics, logEvent, setUserId, setUserProperties } from 'firebase/analytics';
 import { firebaseConfig } from '../config/firebase';
 
-// Firebase Analytics setup for React Native
-let analytics = null;
-let firebaseApp = null;
-let analyticsSupported = false;
-
-// Suppress Firebase Analytics DOM-related errors in React Native
-const suppressFirebaseAnalyticsErrors = () => {
-  const originalConsoleError = console.error;
-  console.error = (...args) => {
-    // Suppress specific Firebase Analytics DOM errors that don't affect functionality
-    const message = args[0];
-    if (typeof message === 'string' && 
-        (message.includes('@firebase/analytics') && 
-         (message.includes('getElementsByTagName') || 
-          message.includes('Cannot read property') ||
-          message.includes('document is not defined')))) {
-      // Suppress these specific errors as they don't affect React Native functionality
-      return;
-    }
-    // Allow all other errors to be logged normally
-    originalConsoleError.apply(console, args);
-  };
-};
-
-// Initialize Firebase Analytics with React Native compatibility
-const initializeFirebaseAnalytics = async () => {
-  try {
-    // Suppress DOM-related errors before initializing
-    suppressFirebaseAnalyticsErrors();
-    
-    // Initialize Firebase app
-    firebaseApp = initializeApp(firebaseConfig);
-    
-    // For React Native, initialize analytics directly (isSupported() doesn't work properly in RN)
-    if (Platform.OS === 'android' || Platform.OS === 'ios') {
-      try {
-        // Initialize analytics directly for React Native
-        analytics = getAnalytics(firebaseApp);
-        analyticsSupported = true;
-        console.log('🔥 [ANALYTICS] Firebase Analytics initialized successfully for React Native');
-        console.log('🔥 [ANALYTICS] DOM-related errors suppressed for React Native compatibility');
-      } catch (error) {
-        console.error('🔥 [ANALYTICS] Failed to initialize analytics in React Native:', error);
-        analyticsSupported = false;
-      }
-    } else {
-      // For web/other environments
-      try {
-        analyticsSupported = await isSupported();
-        if (analyticsSupported) {
-          analytics = getAnalytics(firebaseApp);
-          console.log('🔥 [ANALYTICS] Firebase Analytics initialized successfully for web');
-        } else {
-          console.log('🔥 [ANALYTICS] Firebase Analytics not supported in this environment');
-        }
-      } catch (error) {
-        console.error('🔥 [ANALYTICS] Failed to initialize analytics:', error);
-        analyticsSupported = false;
-      }
-    }
-  } catch (error) {
-    console.error('🔥 [ANALYTICS] Failed to initialize Firebase Analytics:', error);
-    analyticsSupported = false;
+// Expo-compatible Firebase Analytics implementation
+class ExpoFirebaseAnalytics {
+  constructor() {
+    this.app = null;
+    this.analytics = null;
+    this.isInitialized = false;
+    this.isSupported = false;
+    this.initializationPromise = null;
   }
-};
 
-// Analytics wrapper to maintain compatibility with existing code
-const AnalyticsWrapper = {
-  isAvailableAsync: () => Promise.resolve(true),
-  setAnalyticsCollectionEnabledAsync: async (enabled) => {
-    try {
-      // Store preference in AsyncStorage since Firebase JS SDK doesn't have this method
-      await AsyncStorage.setItem('analytics_enabled', enabled.toString());
-      console.log(`🔥 [ANALYTICS] Analytics collection ${enabled ? 'enabled' : 'disabled'}`);
-    } catch (error) {
-      console.error('🔥 [ANALYTICS] Failed to set analytics collection:', error);
+  // Initialize Firebase Analytics for Expo managed workflow
+  async initialize() {
+    if (this.initializationPromise) {
+      return this.initializationPromise;
     }
-  },
-  logEvent: async (name, parameters) => {
+
+    this.initializationPromise = this._doInitialize();
+    return this.initializationPromise;
+  }
+
+  async _doInitialize() {
     try {
-      console.log(`🔥 [ANALYTICS] DEBUG - Attempting to log event: ${name}`);
-      console.log(`🔥 [ANALYTICS] DEBUG - analyticsSupported: ${analyticsSupported}`);
-      console.log(`🔥 [ANALYTICS] DEBUG - analytics instance exists: ${!!analytics}`);
+      console.log('🔥 [ANALYTICS] Initializing Firebase Analytics for Expo...');
       
-      if (analyticsSupported && analytics) {
-        logEvent(analytics, name, parameters);
-        console.log(`🔥 [ANALYTICS] ✅ Event successfully logged: ${name}`, parameters);
-        console.log(`🔥 [ANALYTICS] ✅ Event sent to Firebase Analytics - should appear in console within 24 hours`);
-      } else {
-        console.log(`🔥 [ANALYTICS] ❌ [FALLBACK] Analytics not available - Event: ${name}`, parameters);
-        console.log(`🔥 [ANALYTICS] ❌ This event will NOT be sent to Firebase`);
-      }
-    } catch (error) {
-      console.error(`🔥 [ANALYTICS] ❌ Failed to log event ${name}:`, error);
-    }
-  },
-  setUserProperties: async (properties) => {
-    try {
-      if (analyticsSupported && analytics) {
-        setUserProperties(analytics, properties);
-        console.log('🔥 [ANALYTICS] User properties set:', properties);
-      } else {
-        console.log('🔥 [ANALYTICS] [FALLBACK] User properties:', properties);
-      }
-    } catch (error) {
-      console.error('🔥 [ANALYTICS] Failed to set user properties:', error);
-    }
-  },
-  setUserId: async (userId) => {
-    try {
-      if (analyticsSupported && analytics) {
-        setUserId(analytics, userId);
-        console.log('🔥 [ANALYTICS] User ID set:', userId);
-      } else {
-        console.log('🔥 [ANALYTICS] [FALLBACK] User ID:', userId);
-      }
-    } catch (error) {
-      console.error('🔥 [ANALYTICS] Failed to set user ID:', error);
-    }
-  },
-  setCurrentScreen: async (screenName, screenClass) => {
-    try {
-      if (analyticsSupported && analytics) {
-        // Use logEvent for screen tracking since setCurrentScreen is not available in Firebase v9
-        logEvent(analytics, 'screen_view', {
-          screen_name: screenName,
-          screen_class: screenClass || screenName,
+      // Initialize Firebase app
+      this.app = initializeApp(firebaseConfig);
+      console.log('🔥 [ANALYTICS] Firebase app initialized');
+      
+      // For React Native/Expo, we can initialize analytics directly
+      if (Platform.OS === 'android' || Platform.OS === 'ios') {
+        this.analytics = getAnalytics(this.app);
+        this.isSupported = true;
+        this.isInitialized = true;
+        console.log('🔥 [ANALYTICS] ✅ Firebase Analytics initialized successfully for mobile');
+        console.log('🔥 [ANALYTICS] ✅ Analytics events will be sent to Firebase Console');
+        
+        // Test the connection with a simple event
+        await this.logEvent('analytics_initialized', {
+          platform: Platform.OS,
+          timestamp: new Date().toISOString()
         });
-        console.log('🔥 [ANALYTICS] Screen tracked:', screenName);
+        
+        return true;
       } else {
-        console.log('🔥 [ANALYTICS] [FALLBACK] Screen:', screenName);
+        console.log('🔥 [ANALYTICS] ⚠️ Platform not supported for analytics:', Platform.OS);
+        return false;
       }
     } catch (error) {
-      console.error('🔥 [ANALYTICS] Failed to track screen:', error);
+      console.error('🔥 [ANALYTICS] ❌ Failed to initialize Firebase Analytics:', error);
+      this.isInitialized = false;
+      this.isSupported = false;
+      return false;
     }
-  },
-  setDefaultEventParameters: async (parameters) => {
-    try {
-      // Firebase JS SDK v9 doesn't have setDefaultEventParameters
-      // Store in AsyncStorage for future use
-      await AsyncStorage.setItem('default_analytics_parameters', JSON.stringify(parameters));
-      console.log('🔥 [ANALYTICS] Default parameters stored:', parameters);
-    } catch (error) {
-      console.error('🔥 [ANALYTICS] Failed to set default parameters:', error);
-    }
-  },
-  resetAnalyticsData: async () => {
-    try {
-      // Firebase JS SDK doesn't have resetAnalyticsData method
-      // Clear local storage
-      await AsyncStorage.removeItem('analytics_enabled');
-      await AsyncStorage.removeItem('default_analytics_parameters');
-      console.log('🔥 [ANALYTICS] Analytics data reset (local storage cleared)');
-    } catch (error) {
-      console.error('🔥 [ANALYTICS] Failed to reset analytics data:', error);
-    }
-  },
-};
+  }
 
-// Initialize analytics when module loads
-initializeFirebaseAnalytics();
+  // Clean parameters to ensure Firebase compatibility
+  _cleanParameters(parameters) {
+    const cleaned = {};
+    for (const [key, value] of Object.entries(parameters)) {
+      // Firebase parameter names must be <= 40 characters and alphanumeric + underscore
+      const cleanKey = key.substring(0, 40).replace(/[^a-zA-Z0-9_]/g, '_');
+      
+      // Firebase parameter values must be strings or numbers
+      if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
+        cleaned[cleanKey] = value;
+      } else if (value !== null && value !== undefined) {
+        cleaned[cleanKey] = String(value);
+      }
+    }
+    return cleaned;
+  }
 
+  // Log custom events
+  async logEvent(eventName, parameters = {}) {
+    try {
+      // Ensure analytics is initialized
+      if (!this.isInitialized) {
+        await this.initialize();
+      }
+
+      if (this.isSupported && this.analytics) {
+        // Clean parameters to ensure they're Firebase-compatible
+        const cleanParams = this._cleanParameters(parameters);
+        
+        logEvent(this.analytics, eventName, cleanParams);
+        console.log(`🔥 [ANALYTICS] ✅ Event logged: ${eventName}`, cleanParams);
+        console.log(`🔥 [ANALYTICS] ✅ Event will appear in Firebase Console within 24 hours`);
+        return true;
+      } else {
+        console.log(`🔥 [ANALYTICS] ❌ Analytics not available - Event: ${eventName}`, parameters);
+        return false;
+      }
+    } catch (error) {
+      console.error(`🔥 [ANALYTICS] ❌ Failed to log event ${eventName}:`, error);
+      return false;
+    }
+  }
+
+  // Set user properties
+  async setUserProperties(properties = {}) {
+    try {
+      if (!this.isInitialized) {
+        await this.initialize();
+      }
+
+      if (this.isSupported && this.analytics) {
+        const cleanProps = this._cleanParameters(properties);
+        setUserProperties(this.analytics, cleanProps);
+        console.log(`🔥 [ANALYTICS] ✅ User properties set:`, cleanProps);
+        return true;
+      } else {
+        console.log(`🔥 [ANALYTICS] ❌ Analytics not available - User properties:`, properties);
+        return false;
+      }
+    } catch (error) {
+      console.error('🔥 [ANALYTICS] ❌ Failed to set user properties:', error);
+      return false;
+    }
+  }
+
+  // Set user ID
+  async setUserId(userId) {
+    try {
+      if (!this.isInitialized) {
+        await this.initialize();
+      }
+
+      if (this.isSupported && this.analytics) {
+        setUserId(this.analytics, userId);
+        console.log(`🔥 [ANALYTICS] ✅ User ID set: ${userId}`);
+        return true;
+      } else {
+        console.log(`🔥 [ANALYTICS] ❌ Analytics not available - User ID: ${userId}`);
+        return false;
+      }
+    } catch (error) {
+      console.error('🔥 [ANALYTICS] ❌ Failed to set user ID:', error);
+      return false;
+    }
+  }
+
+  // Log screen view
+  async logScreenView(screenName, screenClass) {
+    try {
+      await this.logEvent('screen_view', {
+        screen_name: screenName,
+        screen_class: screenClass || screenName
+      });
+      console.log(`🔥 [ANALYTICS] ✅ Screen view logged: ${screenName}`);
+      return true;
+    } catch (error) {
+      console.error('🔥 [ANALYTICS] ❌ Failed to log screen view:', error);
+      return false;
+    }
+  }
+
+  // Get analytics status
+  getStatus() {
+    return {
+      initialized: this.isInitialized,
+      supported: this.isSupported,
+      hasAnalytics: !!this.analytics,
+      hasFirebaseApp: !!this.app,
+      platform: Platform.OS
+    };
+  }
+}
+
+// Create singleton instance
+const analyticsInstance = new ExpoFirebaseAnalytics();
+
+// Analytics service class with comprehensive functionality
 class AnalyticsService {
   constructor() {
-    this.isInitialized = false;
+    this.analytics = analyticsInstance;
     this.hasTrackedFirstOpen = false;
     this.hasTrackedAppInstall = false;
   }
 
-  /**
-   * Initialize Firebase Analytics
-   * This should be called early in the app lifecycle
-   */
+  // Initialize Firebase Analytics
   async initialize() {
     try {
-      console.log(' [ANALYTICS] Initializing Firebase Analytics...');
+      console.log('🔥 [ANALYTICS] AnalyticsService initializing...');
       
-      // Check if analytics is available
-      const isAvailable = await AnalyticsWrapper.isAvailableAsync();
-      if (!isAvailable) {
-        console.warn(' [ANALYTICS] Firebase Analytics is not available');
+      const success = await this.analytics.initialize();
+      
+      if (success) {
+        console.log('🔥 [ANALYTICS] ✅ AnalyticsService initialized successfully');
+        
+        // Track app open events
+        await this.trackAppOpenEvents();
+        
+        return true;
+      } else {
+        console.log('🔥 [ANALYTICS] ❌ AnalyticsService initialization failed');
         return false;
       }
-
-      // Enable analytics collection
-      await AnalyticsWrapper.setAnalyticsCollectionEnabledAsync(true);
-      
-      // Set default parameters
-      await this.setDefaultParameters();
-      
-      this.isInitialized = true;
-      console.log(' [ANALYTICS] Firebase Analytics initialized successfully');
-      console.log('🔥 [ANALYTICS] Firebase Analytics initialized successfully');
-      
-      // Track app open events
-      await this.trackAppOpenEvents();
-      
-      return true;
     } catch (error) {
-      console.error('🔥 [ANALYTICS] Failed to initialize Firebase Analytics:', error);
+      console.error('🔥 [ANALYTICS] ❌ Failed to initialize AnalyticsService:', error);
       return false;
     }
   }
 
-  /**
-   * Set default parameters that will be sent with every event
-   */
-  async setDefaultParameters() {
-    try {
-      const defaultParams = {
-        app_version: '2.0.0', // Match your app.json version
-        platform: Platform.OS,
-        app_name: 'Jyotish Call User',
-        package_name: 'com.jyotishtalk'
-      };
-
-      // Note: expo-firebase-analytics doesn't support setDefaultEventParametersAsync
-      // We'll include these parameters with each event instead
-      console.log('🔥 [ANALYTICS] Default parameters configured:', defaultParams);
-    } catch (error) {
-      console.error('🔥 [ANALYTICS] Failed to set default parameters:', error);
-    }
-  }
-
-  /**
-   * Track app open events (first_open and app_install)
-   * These are crucial for install attribution
-   */
+  // Track app open events (first_open and app_install)
   async trackAppOpenEvents() {
     try {
-      // Check if this is the first time the app is opened
-      const hasOpenedBefore = await AsyncStorage.getItem('analytics_first_open_tracked');
-      const hasInstalledBefore = await AsyncStorage.getItem('analytics_app_install_tracked');
-
-      if (!hasOpenedBefore) {
-        // Track first_open event
+      const hasTrackedFirstOpen = await AsyncStorage.getItem('analytics_first_open_tracked');
+      const hasTrackedAppInstall = await AsyncStorage.getItem('analytics_app_install_tracked');
+      
+      if (!hasTrackedFirstOpen) {
         await this.logEvent('first_open', {
           timestamp: new Date().toISOString(),
           platform: Platform.OS
         });
-        
         await AsyncStorage.setItem('analytics_first_open_tracked', 'true');
+        console.log('🔥 [ANALYTICS] ✅ first_open event tracked');
         this.hasTrackedFirstOpen = true;
-        console.log('🔥 [ANALYTICS] first_open event tracked');
       }
-
-      if (!hasInstalledBefore) {
-        // Track app_install event
+      
+      if (!hasTrackedAppInstall) {
         await this.logEvent('app_install', {
           timestamp: new Date().toISOString(),
-          platform: Platform.OS,
-          install_source: 'organic' // This will be overridden by Firebase for attributed installs
+          platform: Platform.OS
         });
-        
         await AsyncStorage.setItem('analytics_app_install_tracked', 'true');
+        console.log('🔥 [ANALYTICS] ✅ app_install event tracked');
         this.hasTrackedAppInstall = true;
-        console.log('🔥 [ANALYTICS] app_install event tracked');
       }
-
-      // Always track app_open for session tracking
-      await this.logEvent('app_open', {
-        timestamp: new Date().toISOString(),
-        session_start: true
-      });
-      
     } catch (error) {
-      console.error('🔥 [ANALYTICS] Failed to track app open events:', error);
+      console.error('🔥 [ANALYTICS] ❌ Failed to track app open events:', error);
     }
   }
 
-  /**
-   * Track login success event - crucial for post-install attribution
-   * Call this after successful user authentication
-   */
+  // Track login success event
   async trackLoginSuccess(userId, loginMethod = 'phone') {
     try {
-      if (!this.isInitialized) {
-        console.warn('🔥 [ANALYTICS] Analytics not initialized, cannot track login_success');
-        return;
-      }
-
-      const loginParams = {
-        user_id: userId,
-        login_method: loginMethod,
-        timestamp: new Date().toISOString(),
-        is_first_login: await this.isFirstLogin(userId)
-      };
-
-      await this.logEvent('login_success', loginParams);
+      // Set user ID for better attribution
+      await this.analytics.setUserId(userId);
       
-      // Also track the standard Firebase login event
-      await AnalyticsWrapper.logEvent('login', {
-        method: loginMethod
-      });
-
-      // Set user properties for better segmentation
+      // Set user properties
       await this.setUserProperties(userId, loginMethod);
       
-      console.log('🔥 [ANALYTICS] login_success event tracked:', loginParams);
+      // Check if this is first login
+      const isFirst = await this.isFirstLogin(userId);
       
-      // Mark that user has logged in
-      await AsyncStorage.setItem(`user_${userId}_first_login_tracked`, 'true');
+      // Track login event
+      await this.logEvent('login', {
+        method: loginMethod,
+        user_id: userId,
+        is_first_login: isFirst,
+        timestamp: new Date().toISOString()
+      });
       
+      console.log(`🔥 [ANALYTICS] ✅ Login success tracked for user: ${userId}`);
     } catch (error) {
-      console.error('🔥 [ANALYTICS] Failed to track login success:', error);
+      console.error('🔥 [ANALYTICS] ❌ Failed to track login success:', error);
     }
   }
 
-  /**
-   * Check if this is the user's first login
-   */
+  // Check if this is the user's first login
   async isFirstLogin(userId) {
     try {
-      const hasLoggedInBefore = await AsyncStorage.getItem(`user_${userId}_first_login_tracked`);
-      return !hasLoggedInBefore;
+      const key = `analytics_first_login_${userId}`;
+      const hasLoggedIn = await AsyncStorage.getItem(key);
+      
+      if (!hasLoggedIn) {
+        await AsyncStorage.setItem(key, 'true');
+        return true;
+      }
+      
+      return false;
     } catch (error) {
-      console.error('🔥 [ANALYTICS] Failed to check first login status:', error);
+      console.error('🔥 [ANALYTICS] ❌ Failed to check first login:', error);
       return false;
     }
   }
 
-  /**
-   * Set user properties for better analytics segmentation
-   */
+  // Set user properties for better analytics segmentation
   async setUserProperties(userId, loginMethod) {
     try {
-      await AnalyticsWrapper.setUserId(userId);
-      
-      const userProperties = {
-        user_type: 'customer',
+      const properties = {
+        user_id: userId,
         login_method: loginMethod,
-        registration_date: new Date().toISOString().split('T')[0], // YYYY-MM-DD format
-        platform: Platform.OS
+        platform: Platform.OS,
+        app_version: '5.1.1',
+        last_login: new Date().toISOString()
       };
-
-      await AnalyticsWrapper.setUserProperties(userProperties);
-      console.log('🔥 [ANALYTICS] User properties set:', userProperties);
       
+      await this.analytics.setUserProperties(properties);
+      console.log('🔥 [ANALYTICS] ✅ User properties set:', properties);
     } catch (error) {
-      console.error('🔥 [ANALYTICS] Failed to set user properties:', error);
+      console.error('🔥 [ANALYTICS] ❌ Failed to set user properties:', error);
     }
   }
 
-  /**
-   * Track custom events
-   */
+  // Track custom events
   async logEvent(eventName, parameters = {}) {
     try {
-      if (!this.isInitialized) {
-        console.warn(`🔥 [ANALYTICS] Analytics not initialized, cannot track event: ${eventName}`);
-        return;
-      }
-
-      // Add timestamp to all events
-      const eventParams = {
-        ...parameters,
-        event_timestamp: new Date().toISOString()
-      };
-
-      await AnalyticsWrapper.logEvent(eventName, eventParams);
-      console.log(`🔥 [ANALYTICS] Event tracked: ${eventName}`, eventParams);
-      
+      await this.analytics.logEvent(eventName, parameters);
+      console.log(`🔥 [ANALYTICS] ✅ Custom event logged: ${eventName}`, parameters);
     } catch (error) {
-      console.error(`🔥 [ANALYTICS] Failed to track event ${eventName}:`, error);
+      console.error(`🔥 [ANALYTICS] ❌ Failed to log custom event ${eventName}:`, error);
     }
   }
 
-  /**
-   * TEST METHOD: Comprehensive analytics test
-   * Call this method to test if Firebase Analytics is working
-   */
+  // TEST METHOD: Comprehensive analytics test
   async testAnalytics() {
-    console.log('🧪 [ANALYTICS TEST] Starting comprehensive analytics test...');
-    
-    // Test 1: Check initialization status
-    console.log('🧪 [TEST 1] Initialization Status:');
-    console.log(`   - isInitialized: ${this.isInitialized}`);
-    console.log(`   - analyticsSupported: ${analyticsSupported}`);
-    console.log(`   - analytics instance: ${!!analytics}`);
-    console.log(`   - Firebase app: ${!!firebaseApp}`);
-    
-    // Test 2: Check Firebase config
-    console.log('🧪 [TEST 2] Firebase Configuration:');
-    console.log(`   - Project ID: ${firebaseConfig.projectId}`);
-    console.log(`   - App ID: ${firebaseConfig.appId}`);
-    console.log(`   - API Key: ${firebaseConfig.apiKey ? 'Present' : 'Missing'}`);
-    
-    // Test 3: Try to send a test event
-    console.log('🧪 [TEST 3] Sending test event...');
     try {
-      await this.logEvent('analytics_test', {
+      console.log('🧪 [ANALYTICS TEST] Starting comprehensive Firebase Analytics test...');
+      
+      const testResults = this.analytics.getStatus();
+      
+      console.log('🧪 [ANALYTICS TEST] Test Results:', testResults);
+      
+      // Test event logging
+      await this.logEvent('analytics_test_event', {
         test_timestamp: new Date().toISOString(),
         test_platform: Platform.OS,
-        test_purpose: 'debugging_missing_data'
+        test_version: '1.0.0'
       });
-      console.log('🧪 [TEST 3] ✅ Test event sent successfully');
+      
+      console.log('🧪 [ANALYTICS TEST] ✅ Test completed successfully!');
+      console.log('🧪 [ANALYTICS TEST] ✅ If all values are true, events should appear in Firebase Console within 24 hours');
+      
+      return testResults;
     } catch (error) {
-      console.log('🧪 [TEST 3] ❌ Test event failed:', error);
+      console.error('🧪 [ANALYTICS TEST] ❌ Test failed:', error);
+      throw error;
     }
-    
-    // Test 4: Try direct Firebase Analytics call
-    console.log('🧪 [TEST 4] Direct Firebase Analytics call...');
-    try {
-      if (analytics) {
-        logEvent(analytics, 'direct_test_event', {
-          direct_call: true,
-          timestamp: new Date().toISOString()
-        });
-        console.log('🧪 [TEST 4] ✅ Direct Firebase call successful');
-      } else {
-        console.log('🧪 [TEST 4] ❌ No analytics instance available');
-      }
-    } catch (error) {
-      console.log('🧪 [TEST 4] ❌ Direct Firebase call failed:', error);
-    }
-    
-    // Test 5: Check if this is a debug/development build
-    console.log('🧪 [TEST 5] Build Environment:');
-    console.log(`   - __DEV__: ${__DEV__}`);
-    console.log(`   - Platform: ${Platform.OS}`);
-    
-    console.log('🧪 [ANALYTICS TEST] Test completed. Check logs above for issues.');
-    console.log('🧪 [IMPORTANT] If events show as "successfully logged", data should appear in Firebase Console within 24 hours.');
-    console.log('🧪 [IMPORTANT] For real-time testing, use Firebase Analytics DebugView.');
-    
-    return {
-      initialized: this.isInitialized,
-      supported: analyticsSupported,
-      hasAnalytics: !!analytics,
-      hasFirebaseApp: !!firebaseApp
-    };
   }
 
-  /**
-   * Track consultation-related events for better attribution analysis
-   */
+  // Track consultation-related events
   async trackConsultationEvent(eventType, consultationData = {}) {
     try {
       const eventName = `consultation_${eventType}`;
-      const params = {
-        consultation_type: consultationData.type || 'unknown',
-        astrologer_id: consultationData.astrologerId || null,
-        duration: consultationData.duration || null,
-        amount: consultationData.amount || null,
-        ...consultationData
-      };
-
-      await this.logEvent(eventName, params);
+      await this.logEvent(eventName, {
+        ...consultationData,
+        timestamp: new Date().toISOString()
+      });
+      console.log(`🔥 [ANALYTICS] ✅ Consultation event tracked: ${eventName}`);
     } catch (error) {
-      console.error(`🔥 [ANALYTICS] Failed to track consultation event:`, error);
+      console.error(`🔥 [ANALYTICS] ❌ Failed to track consultation event:`, error);
     }
   }
 
-  /**
-   * Track purchase events for revenue attribution
-   */
+  // Track purchase events
   async trackPurchase(purchaseData) {
     try {
-      await Analytics.logEvent('purchase', {
-        currency: 'INR',
-        value: purchaseData.amount || 0,
-        transaction_id: purchaseData.transactionId || null,
-        item_category: purchaseData.category || 'consultation',
-        payment_method: purchaseData.paymentMethod || 'razorpay'
+      await this.logEvent('purchase', {
+        ...purchaseData,
+        timestamp: new Date().toISOString()
       });
-
-      // Also track custom purchase event
-      await this.logEvent('wallet_recharge', purchaseData);
-      
+      console.log('🔥 [ANALYTICS] ✅ Purchase event tracked:', purchaseData);
     } catch (error) {
-      console.error('🔥 [ANALYTICS] Failed to track purchase:', error);
+      console.error('🔥 [ANALYTICS] ❌ Failed to track purchase:', error);
     }
   }
 
-  /**
-   * Enable/disable analytics collection (for privacy compliance)
-   */
-  async setAnalyticsEnabled(enabled) {
-    try {
-      await Analytics.setAnalyticsCollectionEnabledAsync(enabled);
-      console.log(`🔥 [ANALYTICS] Analytics collection ${enabled ? 'enabled' : 'disabled'}`);
-    } catch (error) {
-      console.error('🔥 [ANALYTICS] Failed to set analytics enabled state:', error);
-    }
-  }
-
-  /**
-   * Reset analytics data (useful for testing)
-   */
+  // Reset analytics data (useful for testing)
   async resetAnalyticsData() {
     try {
+      // Clear local tracking flags
       await AsyncStorage.multiRemove([
         'analytics_first_open_tracked',
         'analytics_app_install_tracked'
       ]);
       
-      // Reset user-specific data
+      // Clear user-specific flags
       const keys = await AsyncStorage.getAllKeys();
-      const userKeys = keys.filter(key => key.startsWith('user_') && key.includes('_first_login_tracked'));
+      const userKeys = keys.filter(key => key.startsWith('analytics_first_login_'));
       if (userKeys.length > 0) {
         await AsyncStorage.multiRemove(userKeys);
       }
       
-      console.log('🔥 [ANALYTICS] Analytics data reset');
+      this.hasTrackedFirstOpen = false;
+      this.hasTrackedAppInstall = false;
+      
+      console.log('🔥 [ANALYTICS] ✅ Analytics data reset completed');
     } catch (error) {
-      console.error('🔥 [ANALYTICS] Failed to reset analytics data:', error);
+      console.error('🔥 [ANALYTICS] ❌ Failed to reset analytics data:', error);
     }
   }
 
-  /**
-   * Get analytics status for debugging
-   */
+  // Get analytics status for debugging
   async getAnalyticsStatus() {
     try {
-      const isAvailable = await Analytics.isAvailableAsync();
-      const hasTrackedFirstOpen = await AsyncStorage.getItem('analytics_first_open_tracked');
-      const hasTrackedAppInstall = await AsyncStorage.getItem('analytics_app_install_tracked');
-      
-      return {
-        isInitialized: this.isInitialized,
-        isAvailable,
-        hasTrackedFirstOpen: !!hasTrackedFirstOpen,
-        hasTrackedAppInstall: !!hasTrackedAppInstall
+      const status = {
+        ...this.analytics.getStatus(),
+        hasTrackedFirstOpen: this.hasTrackedFirstOpen,
+        hasTrackedAppInstall: this.hasTrackedAppInstall
       };
+      
+      console.log('🔥 [ANALYTICS] Current status:', status);
+      return status;
     } catch (error) {
-      console.error('🔥 [ANALYTICS] Failed to get analytics status:', error);
+      console.error('🔥 [ANALYTICS] ❌ Failed to get analytics status:', error);
       return null;
     }
   }
