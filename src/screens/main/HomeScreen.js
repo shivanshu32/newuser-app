@@ -29,7 +29,7 @@ import BlogSection from '../../components/BlogSection';
 import EPoojaHomeSection from '../../components/epooja/EPoojaHomeSection';
 
 // Hardcoded app version - update this when releasing new versions
-const APP_VERSION = '5.1.2';
+const APP_VERSION = '5.1.3';
 
 const HomeScreen = ({ navigation }) => {
   const { user } = useAuth();
@@ -1167,6 +1167,16 @@ const HomeScreen = ({ navigation }) => {
     try {
       console.log('🗑️ [CANCEL_BOOKING] User attempting to cancel booking:', booking);
       
+      if (!socket) {
+        console.error('❌ Cannot cancel booking - no socket connection');
+        Alert.alert(
+          'Connection Error',
+          'Unable to cancel booking. Please check your internet connection and try again.',
+          [{ text: 'OK' }]
+        );
+        return;
+      }
+      
       Alert.alert(
         'Cancel Booking',
         'Are you sure you want to cancel this booking? This action cannot be undone.',
@@ -1180,61 +1190,60 @@ const HomeScreen = ({ navigation }) => {
             style: 'destructive',
             onPress: async () => {
               try {
-                // Show loading state
+                // Extract required data from booking
+                const astrologerId = booking.astrologer?._id || booking.astrologerId || booking.astrologer;
+                const bookingId = booking.bookingId || booking._id;
+                
+                console.log('🗑️ [CANCEL_BOOKING] Cancelling via socket:', {
+                  bookingId,
+                  astrologerId,
+                  bookingStructure: {
+                    hasAstrologer: !!booking.astrologer,
+                    astrologerType: typeof booking.astrologer,
+                    hasAstrologerId: !!booking.astrologerId
+                  }
+                });
+                
+                if (!astrologerId) {
+                  console.error('❌ Cannot cancel booking: astrologerId not found in booking object');
+                  Alert.alert(
+                    'Error',
+                    'Unable to cancel booking. Please try again.',
+                    [{ text: 'OK' }]
+                  );
+                  return;
+                }
+                
+                // Emit cancel booking event to backend via socket
+                socket.emit('cancel_booking', {
+                  bookingId,
+                  astrologerId,
+                  reason: 'Cancelled by user from pending bookings'
+                });
+                
+                // Immediately remove from local state for instant UI feedback
+                setPendingBookings(prevBookings => {
+                  const filteredBookings = prevBookings.filter(b => {
+                    const bId = b.bookingId || b._id;
+                    const targetId = booking.bookingId || booking._id;
+                    return bId !== targetId;
+                  });
+                  
+                  console.log('✅ [CANCEL_BOOKING] Booking removed from local state:', {
+                    before: prevBookings.length,
+                    after: filteredBookings.length
+                  });
+                  
+                  return filteredBookings;
+                });
+                
+                // Show success message
                 Alert.alert(
-                  'Cancelling... 🔄',
-                  'Please wait while we cancel your booking.',
+                  'Booking Cancelled ✅',
+                  'Your booking request has been cancelled successfully. The astrologer has been notified.',
                   [{ text: 'OK' }]
                 );
                 
-                // Make API call to cancel booking
-                const API_BASE_URL = 'https://jyotishcallbackend-2uxrv.ondigitalocean.app';
-                const bookingId = booking.bookingId || booking._id;
-                
-                console.log('🗑️ [CANCEL_BOOKING] Making API call to:', `${API_BASE_URL}/api/v1/bookings/${bookingId}/cancel`);
-                console.log('🗑️ [CANCEL_BOOKING] Using token:', user.token ? 'Token available' : 'No token');
-                
-                const response = await fetch(`${API_BASE_URL}/api/v1/bookings/${bookingId}/cancel`, {
-                  method: 'PUT',
-                  headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${user.token}`
-                  },
-                  body: JSON.stringify({
-                    reason: 'Cancelled by user from pending bookings'
-                  })
-                });
-                
-                console.log('🗑️ [CANCEL_BOOKING] Response status:', response.status);
-                console.log('🗑️ [CANCEL_BOOKING] Response ok:', response.ok);
-                
-                if (response.ok) {
-                  const responseData = await response.json();
-                  console.log('🗑️ [CANCEL_BOOKING] Success response:', responseData);
-                  
-                  // Remove booking from local state immediately
-                  setPendingBookings(prevBookings => 
-                    prevBookings.filter(b => 
-                      (b.bookingId || b._id) !== (booking.bookingId || booking._id)
-                    )
-                  );
-                  
-                  Alert.alert(
-                    'Booking Cancelled ✅',
-                    'Your booking has been successfully cancelled.',
-                    [{ text: 'OK' }]
-                  );
-                } else {
-                  let errorData;
-                  try {
-                    errorData = await response.json();
-                    console.log('🗑️ [CANCEL_BOOKING] Error response:', errorData);
-                  } catch (parseError) {
-                    console.error('🗑️ [CANCEL_BOOKING] Failed to parse error response:', parseError);
-                    errorData = { message: `HTTP ${response.status}: ${response.statusText}` };
-                  }
-                  throw new Error(errorData.message || 'Failed to cancel booking');
-                }
               } catch (error) {
                 console.error('🗑️ [CANCEL_BOOKING] Error cancelling booking:', error);
                 Alert.alert(
@@ -1249,9 +1258,13 @@ const HomeScreen = ({ navigation }) => {
       );
     } catch (error) {
       console.error('🗑️ [CANCEL_BOOKING] Error in handleCancelBooking:', error);
-      Alert.alert('Error', 'Failed to process cancellation. Please try again.');
+      Alert.alert(
+        'Error',
+        'Failed to initiate booking cancellation. Please try again.',
+        [{ text: 'OK' }]
+      );
     }
-  }, [user, setPendingBookings]);
+  }, [socket]);
 
   // Load initial data
   const loadInitialData = useCallback(async () => {

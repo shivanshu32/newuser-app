@@ -350,20 +350,6 @@ const BookingCard = ({ consultation, onJoin, onDismiss, onCancel, onReschedule }
     return `${dateStr} at ${timeStr}`;
   };
   
-  const formatDuration = () => {
-    if (!booking.duration || booking.duration <= 0) return null;
-    
-    const duration = parseInt(booking.duration);
-    // Fix: Duration is already in minutes, so only convert if >= 60 minutes
-    if (duration >= 60) {
-      const hours = Math.floor(duration / 60);
-      const minutes = duration % 60;
-      return minutes > 0 ? `${hours}h ${minutes}m` : `${hours}h`;
-    }
-    return `${duration} min`;
-  };
-  
-
 
   const getMainActionButton = () => {
     if (isExpired) {
@@ -444,13 +430,6 @@ const BookingCard = ({ consultation, onJoin, onDismiss, onCancel, onReschedule }
           <Ionicons name="calendar-outline" size={16} color="#666" />
           <Text style={styles.detailText}>{formatScheduledTime()}</Text>
         </View>
-        
-        {formatDuration() && (
-          <View style={styles.detailRow}>
-            <Ionicons name="hourglass-outline" size={16} color="#666" />
-            <Text style={styles.detailText}>{formatDuration()}</Text>
-          </View>
-        )}
         
         {booking.totalAmount && booking.totalAmount > 0 && (
           <View style={styles.detailRow}>
