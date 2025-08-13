@@ -29,7 +29,7 @@ import BlogSection from '../../components/BlogSection';
 import EPoojaHomeSection from '../../components/epooja/EPoojaHomeSection';
 
 // Hardcoded app version - update this when releasing new versions
-const APP_VERSION = '5.1.3';
+import APP_CONFIG from '../../config/appConfig';
 
 const HomeScreen = ({ navigation }) => {
   const { user } = useAuth();
@@ -277,22 +277,23 @@ const HomeScreen = ({ navigation }) => {
   // Check app version and redirect to update screen if needed
   const checkAppVersion = useCallback(async () => {
     try {
-      console.log('🔄 Checking app version...', APP_VERSION);
-      const response = await versionAPI.checkVersion(APP_VERSION);
+      const currentVersion = APP_CONFIG.getCurrentVersion();
+      console.log('🔄 Checking app version...', currentVersion);
+      const response = await versionAPI.checkVersion(currentVersion);
       console.log('📱 Version check response:', response);
       
       if (response.success) {
         const { latestVersion, updateRequired } = response;
         
         if (updateRequired) {
-          console.log('🚨 Update required! Current:', APP_VERSION, 'Latest:', latestVersion);
+          console.log('🚨 Update required! Current:', currentVersion, 'Latest:', latestVersion);
           // Navigate to update screen and prevent going back
           navigation.reset({
             index: 0,
             routes: [{
               name: 'UpdateScreen',
               params: {
-                currentVersion: APP_VERSION,
+                currentVersion: currentVersion,
                 latestVersion: latestVersion
               }
             }]

@@ -13,6 +13,8 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useEffect } from 'react';
+import APP_CONFIG from '../config/appConfig';
+import versionService from '../services/versionService';
 
 const UpdateScreen = ({ navigation, route }) => {
   const { currentVersion, latestVersion } = route.params || {};
@@ -31,11 +33,7 @@ const UpdateScreen = ({ navigation, route }) => {
     return () => backHandler.remove();
   }, []);
 
-  const handleUpdatePress = () => {
-    // You can customize these URLs based on your app store links
-    const playStoreUrl = 'https://play.google.com/store/apps/details?id=com.jyotishtalk';
-    const appStoreUrl = 'https://apps.apple.com/app/your-app/id123456789';
-    
+  const handleUpdatePress = async () => {
     Alert.alert(
       'Update App',
       'You will be redirected to the app store to update the app.',
@@ -46,13 +44,20 @@ const UpdateScreen = ({ navigation, route }) => {
         },
         {
           text: 'Update',
-          onPress: () => {
-            // Open appropriate store based on platform
-            const url = Platform.OS === 'ios' ? appStoreUrl : playStoreUrl;
-            Linking.openURL(url).catch(err => {
-              console.error('Failed to open store:', err);
-              Alert.alert('Error', 'Could not open app store. Please update manually.');
-            });
+          onPress: async () => {
+            console.log('🔄 Opening store for update...');
+            
+            // Use centralized version service with robust fallback handling
+            // This will try multiple store URLs and provide user-friendly fallbacks
+            const success = await versionService.openStore();
+            
+            if (!success) {
+              console.log('⚠️ All store URLs failed, fallback handling already shown to user');
+              // The versionService.openStore() method already handles all fallbacks
+              // and shows appropriate user prompts, so no additional error handling needed
+            } else {
+              console.log('✅ Successfully opened store for update');
+            }
           },
         },
       ]

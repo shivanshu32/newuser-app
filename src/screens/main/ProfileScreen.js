@@ -10,10 +10,12 @@ import {
   Alert,
   ActivityIndicator,
   SafeAreaView,
+  Linking,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../context/AuthContext';
 import { useNotification } from '../../context/NotificationContext';
+import { APP_CONFIG } from '../../config/appConfig';
 
 const ProfileScreen = ({ navigation }) => {
   const { user, logout } = useAuth();
@@ -59,6 +61,41 @@ const ProfileScreen = ({ navigation }) => {
     // In a real app, you would update user preferences in the backend
   };
 
+  const handleWhatsAppSupport = async () => {
+    const phoneNumber = '919755824884'; // WhatsApp support number
+    const message = 'Hi, I need help with JyotishCall app.'; // Optional pre-filled message
+    
+    try {
+      // Try WhatsApp first
+      const whatsappUrl = `whatsapp://send?phone=${phoneNumber}&text=${encodeURIComponent(message)}`;
+      const canOpenWhatsApp = await Linking.canOpenURL(whatsappUrl);
+      
+      if (canOpenWhatsApp) {
+        await Linking.openURL(whatsappUrl);
+      } else {
+        // Fallback to web WhatsApp if app is not installed
+        const webWhatsappUrl = `https://wa.me/${phoneNumber}?text=${encodeURIComponent(message)}`;
+        await Linking.openURL(webWhatsappUrl);
+      }
+    } catch (error) {
+      console.error('Error opening WhatsApp:', error);
+      Alert.alert(
+        'WhatsApp Support',
+        `Unable to open WhatsApp. Please contact support at: +91 9755824884`,
+        [
+          {
+            text: 'Copy Number',
+            onPress: () => {
+              // Note: Clipboard functionality would require @react-native-clipboard/clipboard
+              Alert.alert('Support Number', '+91 9755824884\n(WhatsApp Only)');
+            }
+          },
+          { text: 'OK' }
+        ]
+      );
+    }
+  };
+
   const menuItems = [
     // {
     //   icon: 'person-outline',
@@ -73,6 +110,13 @@ const ProfileScreen = ({ navigation }) => {
     //   value: notificationsEnabled,
     //   onToggle: toggleNotifications,
     // },
+    {
+      icon: 'logo-whatsapp',
+      title: 'WhatsApp Support',
+      subtitle: '+91 9755824884 (WhatsApp Only)',
+      onPress: handleWhatsAppSupport,
+      whatsapp: true,
+    },
     // {
     //   icon: 'help-circle-outline',
     //   title: 'Help & Support',
@@ -142,16 +186,24 @@ const ProfileScreen = ({ navigation }) => {
               <Ionicons
                 name={item.icon}
                 size={24}
-                color={item.danger ? '#F44336' : '#333'}
+                color={item.danger ? '#F44336' : item.whatsapp ? '#25D366' : '#333'}
               />
-              <Text
-                style={[
-                  styles.menuItemTitle,
-                  item.danger && styles.menuItemTitleDanger,
-                ]}
-              >
-                {item.title}
-              </Text>
+              <View style={styles.menuItemTextContainer}>
+                <Text
+                  style={[
+                    styles.menuItemTitle,
+                    item.danger && styles.menuItemTitleDanger,
+                    item.whatsapp && styles.menuItemTitleWhatsApp,
+                  ]}
+                >
+                  {item.title}
+                </Text>
+                {item.subtitle && (
+                  <Text style={styles.menuItemSubtitle}>
+                    {item.subtitle}
+                  </Text>
+                )}
+              </View>
             </View>
             
             {item.toggle ? (
@@ -168,7 +220,7 @@ const ProfileScreen = ({ navigation }) => {
         ))}
       </View>
       
-      <Text style={styles.versionText}>Version 1.0.0</Text>
+      <Text style={styles.versionText}>Version {APP_CONFIG.getCurrentVersion()}</Text>
       
       {loading && (
         <View style={styles.loadingOverlay}>
@@ -292,13 +344,26 @@ const styles = StyleSheet.create({
   menuItemLeft: {
     flexDirection: 'row',
     alignItems: 'center',
+    flex: 1,
+  },
+  menuItemTextContainer: {
+    flex: 1,
+    marginLeft: 15,
   },
   menuItemTitle: {
     fontSize: 16,
-    marginLeft: 15,
   },
   menuItemTitleDanger: {
     color: '#F44336',
+  },
+  menuItemTitleWhatsApp: {
+    color: '#25D366',
+    fontWeight: '600',
+  },
+  menuItemSubtitle: {
+    fontSize: 12,
+    color: '#666',
+    marginTop: 2,
   },
   versionText: {
     textAlign: 'center',

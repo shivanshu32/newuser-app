@@ -213,7 +213,7 @@ export const bookingsAPI = {
 // Wallet API
 export const walletAPI = {
   getBalance: () => API.get('/wallet/balance'),
-  createOrder: (amount) => API.post('/wallet/create-order', { amount }),
+  createOrder: (amount, selectedPackage = null) => API.post('/wallet/create-order', { amount, selectedPackage }),
   verifyPayment: (paymentData) => API.post('/wallet/verify-payment', paymentData),
   getTransactions: (params) => API.get('/wallet/transactions', { params }),
   getRazorpayConfig: () => API.get('/wallet/razorpay-config'),

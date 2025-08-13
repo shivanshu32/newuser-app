@@ -74,8 +74,8 @@ const WalletTopUpSummaryScreen = () => {
       
       console.log('Razorpay config extracted:', config);
       
-      // Create order on backend with final amount (including GST)
-      const orderResponse = await walletAPI.createOrder(finalAmount);
+      // Create order on backend with final amount (including GST) and selected package
+      const orderResponse = await walletAPI.createOrder(finalAmount, selectedPackage);
       console.log('Order creation response:', orderResponse);
       
       // Handle the response structure - API interceptor returns response.data directly

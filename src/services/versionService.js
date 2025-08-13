@@ -1,268 +1,209 @@
-import { Platform } from 'react-native';
-import Constants from 'expo-constants';
-import * as Application from 'expo-application';
+import { Platform, Linking, Alert } from 'react-native';
+import APP_CONFIG from '../config/appConfig';
 
+/**
+ * Centralized Version Service
+ * Handles version checking, store URL management, and legacy user fallbacks
+ */
 class VersionService {
   constructor() {
-    // Backend URL - update for production
-    this.baseURL = 'https://jyotishcallbackend-2uxrv.ondigitalocean.app/api/v1';
-    this.appType = 'user';
-    this.currentVersion = this.getCurrentVersionFromDevice();
-    this.playStoreUrl = 'https://play.google.com/store/apps/details?id=com.jyotishtalk&hl=en';
+    this.currentVersion = APP_CONFIG.getCurrentVersion();
+    console.log('VersionService initialized with version:', this.currentVersion);
   }
 
   /**
-   * Get current app version using multiple fallback methods
-   * This ensures version retrieval works in both development and production
-   */
-  getCurrentVersionFromDevice() {
-    try {
-      // Method 1: Expo Application (most reliable for production)
-      if (Application.nativeApplicationVersion) {
-        console.log('Version from Application.nativeApplicationVersion:', Application.nativeApplicationVersion);
-        return Application.nativeApplicationVersion;
-      }
-
-      // Method 2: Expo Constants (works in development and some production builds)
-      if (Constants.expoConfig?.version) {
-        console.log('Version from Constants.expoConfig.version:', Constants.expoConfig?.version);
-        return Constants.expoConfig.version;
-      }
-
-      // Method 3: Expo Constants manifest (legacy fallback)
-      if (Constants.manifest?.version) {
-        console.log('Version from Constants.manifest.version:', Constants.manifest.version);
-        return Constants.manifest.version;
-      }
-
-      // Method 4: Expo Constants manifest2 (newer Expo versions)
-      if (Constants.manifest2?.extra?.expoClient?.version) {
-        console.log('Version from Constants.manifest2:', Constants.manifest2.extra.expoClient.version);
-        return Constants.manifest2.extra.expoClient.version;
-      }
-
-      // Final fallback
-      console.warn('Could not retrieve version from any source, using fallback');
-      return '1.0.0';
-    } catch (error) {
-      console.error('Error retrieving app version:', error);
-      return '1.0.0';
-    }
-  }
-
-  /**
-   * Get current app version
+   * Get current app version (delegated to APP_CONFIG)
    */
   getCurrentVersion() {
-    return this.currentVersion;
+    return APP_CONFIG.getCurrentVersion();
   }
 
   /**
-   * Fetch latest version from Play Store
-   */
-  async getPlayStoreVersion() {
-    try {
-      console.log('Fetching latest version from Play Store...');
-      
-      const response = await fetch(this.playStoreUrl, {
-        method: 'GET',
-        headers: {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
-        }
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to fetch Play Store page');
-      }
-
-      const html = await response.text();
-      
-      // Extract version from Play Store HTML
-      // Look for version pattern in the HTML
-      const versionMatch = html.match(/"([0-9]+\.[0-9]+\.[0-9]+)"/g);
-      
-      if (versionMatch && versionMatch.length > 0) {
-        // Get the most likely version string (usually the first one found)
-        const version = versionMatch[0].replace(/"/g, '');
-        console.log('Play Store version found:', version);
-        return version;
-      }
-      
-      // Alternative pattern matching
-      const altVersionMatch = html.match(/Current Version[\s\S]*?([0-9]+\.[0-9]+\.[0-9]+)/i);
-      if (altVersionMatch && altVersionMatch[1]) {
-        console.log('Play Store version found (alt method):', altVersionMatch[1]);
-        return altVersionMatch[1];
-      }
-      
-      throw new Error('Version not found in Play Store page');
-    } catch (error) {
-      console.error('Failed to fetch Play Store version:', error);
-      return null;
-    }
-  }
-
-  /**
-   * Fast version check for app launch - non-blocking approach
-   * Returns immediately with no update required to prevent launch delays
+   * Check for app updates via backend API
+   * Uses centralized configuration and includes proper error handling
    */
   async checkForUpdate() {
     try {
-      console.log('🚀 [VERSION] Fast version check for app launch...');
-      
-      // For first-time app launches, return immediately to prevent delays
-      // This fixes the critical 10-15 second delay issue affecting ad campaigns
-      const fastResult = {
-        updateRequired: false,
-        latestVersion: this.currentVersion,
-        minimumVersion: this.currentVersion,
-        updateMessage: '',
-        forceUpdate: false,
-        playStoreUrl: this.playStoreUrl,
-      };
-      
-      console.log('🚀 [VERSION] Fast check complete - no blocking delays');
-      
-      // Perform actual version check in background (non-blocking)
-      this.performBackgroundVersionCheck();
-      
-      return fastResult;
-    } catch (error) {
-      console.error('🚀 [VERSION] Fast version check failed:', error);
-      
-      // Always return safe defaults to prevent app launch delays
-      return {
-        updateRequired: false,
-        latestVersion: this.currentVersion,
-        minimumVersion: this.currentVersion,
-        updateMessage: '',
-        forceUpdate: false,
-        playStoreUrl: this.playStoreUrl,
-      };
-    }
-  }
+      const currentVersion = this.getCurrentVersion();
+      console.log('Checking for update with version:', currentVersion);
 
-  /**
-   * Background version check - runs after app has launched
-   * This can show update prompts later without blocking initial launch
-   */
-  async performBackgroundVersionCheck() {
-    try {
-      console.log('🔄 [VERSION] Performing background version check...');
-      
-      // Add timeout to prevent hanging
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 second timeout
-      
-      const response = await fetch(`${this.baseURL}/version-check`, {
+      // Import API_BASE_URL from api.js
+      const { API_BASE_URL } = await import('./api');
+
+      const response = await fetch(`${API_BASE_URL}${APP_CONFIG.api.versionCheck.endpoint}`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          appType: 'user',
-          currentVersion: this.currentVersion,
+          currentVersion,
+          appType: APP_CONFIG.appType,
           platform: Platform.OS,
         }),
-        signal: controller.signal,
+        timeout: APP_CONFIG.api.versionCheck.timeout,
       });
-      
-      clearTimeout(timeoutId);
 
-      if (response.ok) {
-        const data = await response.json();
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      console.log('Version check response:', data);
+      
+      return {
+        ...data,
+        // Always include fallback URLs for legacy user support
+        allStoreUrls: APP_CONFIG.getAllStoreUrls(),
+        primaryStoreUrl: APP_CONFIG.getPrimaryStoreUrl()
+      };
+    } catch (error) {
+      console.error('Version check failed:', error);
+      return {
+        success: false,
+        updateRequired: false,
+        error: error.message,
+        // Provide fallback data for offline scenarios
+        latestVersion: this.currentVersion,
+        minimumVersion: this.currentVersion,
+        playStoreUrl: APP_CONFIG.getPrimaryStoreUrl(),
+        allStoreUrls: APP_CONFIG.getAllStoreUrls()
+      };
+    }
+  }
+
+  /**
+   * Open store with robust fallback handling for legacy users
+   * Tries multiple URLs if the primary one fails
+   */
+  async openStore(storeUrl = null) {
+    // Use provided URL or get from backend response or use primary
+    const urlsToTry = storeUrl ? [storeUrl] : APP_CONFIG.getAllStoreUrls();
+    
+    console.log('Attempting to open store with URLs:', urlsToTry);
+
+    for (let i = 0; i < urlsToTry.length; i++) {
+      const url = urlsToTry[i];
+      try {
+        console.log(`Trying store URL ${i + 1}/${urlsToTry.length}:`, url);
         
-        // If update is required, store it for later display
-        if (data.updateRequired) {
-          console.log('🔄 [VERSION] Background check found update required');
-          // You can implement a notification or in-app prompt here
-          // that doesn't block the initial app launch
+        const supported = await Linking.canOpenURL(url);
+        if (supported) {
+          await Linking.openURL(url);
+          console.log('Successfully opened store URL:', url);
+          return true;
         } else {
-          console.log('🔄 [VERSION] Background check - app is up to date');
+          console.warn('URL not supported:', url);
+          continue;
+        }
+      } catch (error) {
+        console.error(`Failed to open store URL ${url}:`, error);
+        // Try next URL if available
+        if (i < urlsToTry.length - 1) {
+          console.log('Trying next fallback URL...');
+          continue;
         }
       }
-    } catch (error) {
-      console.log('🔄 [VERSION] Background version check failed (non-critical):', error.message);
-      // Fail silently - don't impact user experience
     }
+
+    // All URLs failed - show user-friendly fallback
+    console.error('All store URLs failed, showing manual search prompt');
+    this.showManualSearchPrompt();
+    return false;
   }
 
   /**
-   * Compare version strings (semantic versioning)
+   * Show manual search prompt when all store URLs fail
+   * Provides clear instructions for users to manually find the app
    */
-  compareVersions(version1, version2) {
-    const v1Parts = version1.split('.').map(Number);
-    const v2Parts = version2.split('.').map(Number);
+  showManualSearchPrompt() {
+    const appName = APP_CONFIG.appName;
+    const storeName = Platform.OS === 'ios' ? 'App Store' : 'Google Play Store';
     
-    const maxLength = Math.max(v1Parts.length, v2Parts.length);
-    
-    for (let i = 0; i < maxLength; i++) {
-      const v1Part = v1Parts[i] || 0;
-      const v2Part = v2Parts[i] || 0;
-      
-      if (v1Part < v2Part) return -1;
-      if (v1Part > v2Part) return 1;
-    }
-    
-    return 0;
+    Alert.alert(
+      'Update Required',
+      `We couldn't automatically open the ${storeName}. Please manually search for "${appName}" in the ${storeName} to update your app.`,
+      [
+        {
+          text: 'Open Store Manually',
+          onPress: () => this.openStoreManually()
+        },
+        {
+          text: 'Later',
+          style: 'cancel'
+        }
+      ]
+    );
   }
 
   /**
-   * Check if current version is less than minimum required version
+   * Open the store app directly (without specific app URL)
+   * Last resort fallback for legacy users
    */
-  isUpdateRequired(minimumVersion) {
-    return this.compareVersions(this.currentVersion, minimumVersion) < 0;
-  }
-
-  /**
-   * Get default Play Store URL for the app
-   */
-  getDefaultPlayStoreUrl() {
-    if (Platform.OS === 'android') {
-      // Replace with your actual package name
-      return 'https://play.google.com/store/apps/details?id=com.jyotishtalk';
-    } else if (Platform.OS === 'ios') {
-      // Replace with your actual App Store ID
-      return 'https://apps.apple.com/app/id1234567890';
-    }
-    return 'https://play.google.com/store/apps/details?id=com.jyotishtalk';
-  }
-
-  /**
-   * Open Play Store/App Store for update
-   */
-  async openStore() {
-    const { Linking } = require('react-native');
-    const storeUrl = this.getDefaultPlayStoreUrl();
-    
+  async openStoreManually() {
     try {
+      const storeUrl = Platform.OS === 'ios' 
+        ? 'itms-apps://itunes.apple.com/'
+        : 'market://search?q=' + encodeURIComponent(APP_CONFIG.appName);
+      
       const supported = await Linking.canOpenURL(storeUrl);
       if (supported) {
         await Linking.openURL(storeUrl);
       } else {
-        console.error('Cannot open store URL:', storeUrl);
+        // Final fallback - open browser to store
+        const browserUrl = Platform.OS === 'ios'
+          ? 'https://apps.apple.com/search?term=' + encodeURIComponent(APP_CONFIG.appName)
+          : 'https://play.google.com/store/search?q=' + encodeURIComponent(APP_CONFIG.appName);
+        
+        await Linking.openURL(browserUrl);
       }
     } catch (error) {
-      console.error('Failed to open store:', error);
+      console.error('Failed to open store manually:', error);
+      Alert.alert(
+        'Unable to Open Store',
+        `Please manually open the ${Platform.OS === 'ios' ? 'App Store' : 'Google Play Store'} and search for "${APP_CONFIG.appName}" to update.`,
+        [{ text: 'OK' }]
+      );
     }
   }
 
   /**
-   * Mock version check for testing (remove in production)
+   * Mock data for testing - uses centralized config
    */
-  async mockVersionCheck(forceUpdate = false) {
-    return new Promise((resolve) => {
-      setTimeout(() => {
-        resolve({
-          updateRequired: forceUpdate,
-          latestVersion: '1.1.0',
-          minimumVersion: forceUpdate ? '1.1.0' : '1.0.0',
-          updateMessage: 'A new version with exciting features is available! Please update to continue using the app.',
-          forceUpdate: forceUpdate,
-          playStoreUrl: this.getDefaultPlayStoreUrl(),
-        });
-      }, 1000);
-    });
+  getMockVersionCheckData() {
+    return {
+      success: true,
+      updateRequired: true,
+      latestVersion: '5.2.0',
+      minimumVersion: '5.0.0',
+      forceUpdate: false,
+      updateMessage: 'A new version is available with bug fixes and improvements.',
+      playStoreUrl: APP_CONFIG.getPrimaryStoreUrl(),
+      appStoreUrl: APP_CONFIG.storeUrls.ios.primary,
+      allStoreUrls: APP_CONFIG.getAllStoreUrls(),
+      primaryStoreUrl: APP_CONFIG.getPrimaryStoreUrl()
+    };
+  }
+
+  /**
+   * Test all store URLs to verify they work
+   * Useful for debugging store URL issues
+   */
+  async testAllStoreUrls() {
+    const urls = APP_CONFIG.getAllStoreUrls();
+    const results = [];
+
+    for (const url of urls) {
+      try {
+        const supported = await Linking.canOpenURL(url);
+        results.push({ url, supported, error: null });
+        console.log(`Store URL test - ${url}: ${supported ? 'SUPPORTED' : 'NOT SUPPORTED'}`);
+      } catch (error) {
+        results.push({ url, supported: false, error: error.message });
+        console.error(`Store URL test - ${url}: ERROR -`, error.message);
+      }
+    }
+
+    return results;
   }
 }
 

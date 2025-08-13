@@ -156,30 +156,8 @@ const FreeChatCard = ({ navigation }) => {
   };
 
   const handleStartFreeChat = async () => {
-    if (!socket) {
-      Alert.alert('Connection Error', 'Please check your internet connection and try again.');
-      return;
-    }
-
-    try {
-      setRequesting(true);
-      
-      // Emit socket event to request free chat
-      socket.emit('request_free_chat', {
-        userId: user.id,
-        userProfile: {
-          name: user.name,
-          birthDate: user.birthDate,
-          birthTime: user.birthTime,
-          birthLocation: user.birthLocation
-        }
-      });
-
-    } catch (error) {
-      console.error('Error starting free chat:', error);
-      setRequesting(false);
-      Alert.alert('Error', 'Failed to start free chat. Please try again.');
-    }
+    // Navigate to the pre-chat form for free chat
+    navigation.navigate('FreeChatPreForm');
   };
 
   const handleCancelWaiting = () => {

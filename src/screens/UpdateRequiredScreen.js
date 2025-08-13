@@ -12,6 +12,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 import versionService from '../services/versionService';
+import { APP_CONFIG } from '../config/appConfig';
 
 const UpdateRequiredScreen = ({ route }) => {
   const {
@@ -68,7 +69,7 @@ const UpdateRequiredScreen = ({ route }) => {
         <View style={styles.versionContainer}>
           <View style={styles.versionRow}>
             <Text style={styles.versionLabel}>Current Version:</Text>
-            <Text style={styles.versionValue}>{currentVersion || '1.0.0'}</Text>
+            <Text style={styles.versionValue}>{currentVersion || APP_CONFIG.getCurrentVersion()}</Text>
           </View>
           <View style={styles.versionRow}>
             <Text style={styles.versionLabel}>Latest Version:</Text>
