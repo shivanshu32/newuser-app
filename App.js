@@ -31,7 +31,12 @@ import { NotificationProvider } from './src/context/NotificationContext';
 import { SocketProvider } from './src/context/SocketContext';
 import { FreeChatProvider } from './src/context/FreeChatContext';
 
-// Import analytics service
+// Import error boundary and edge-to-edge handler
+import ErrorBoundary from './src/components/ErrorBoundary';
+import ContextErrorBoundary from './src/components/ContextErrorBoundary';
+import EdgeToEdgeHandler from './src/components/EdgeToEdgeHandler';
+
+// Analytics service import (no-op implementation)
 import analyticsService from './src/services/analyticsService';
 
 // Import version check hook
@@ -44,80 +49,69 @@ function AppContent() {
   const [updateRequired, setUpdateRequired] = useState(null);
   const [versionCheckComplete, setVersionCheckComplete] = useState(false);
   
-  // Initialize Firebase Analytics on app launch (non-blocking)
+  // Analytics and crash tracking initialization (completely non-blocking)
   useEffect(() => {
-    const initializeAnalytics = async () => {
+    console.log('📊 [APP] Analytics disabled - skipping initialization');
+    
+    // Minimal crash-safe initialization tracking
+    const trackAppInitialization = () => {
       try {
-        console.log('🔥 [APP] Initializing Firebase Analytics...');
-        
-        // Add timeout to prevent hanging
-        const timeoutPromise = new Promise((_, reject) => {
-          setTimeout(() => reject(new Error('Analytics initialization timeout')), 5000); // 5 second timeout
-        });
-        
-        await Promise.race([
-          analyticsService.initialize(),
-          timeoutPromise
-        ]);
-        
-        console.log('🔥 [APP] Firebase Analytics initialized successfully');
+        console.log('📊 [APP] App initialization started - version 5.2.1');
+        console.log('📊 [APP] Platform: android');
+        console.log('📊 [APP] Timestamp:', new Date().toISOString());
       } catch (error) {
-        console.error('🔥 [APP] Failed to initialize Firebase Analytics:', error);
-        // Don't crash the app if analytics fails - it's not critical for core functionality
-        console.log('🔥 [APP] Continuing app startup without analytics');
+        // Silent fail - don't crash the app
       }
     };
-
-    // Initialize analytics in background, don't block app startup
-    initializeAnalytics();
+    
+    // Immediate execution - no async operations
+    trackAppInitialization();
   }, []);
 
-  // Check for updates on app launch (non-blocking)
+  // Check for updates on app launch (completely non-blocking and crash-safe)
   useEffect(() => {
-    const performVersionCheck = async () => {
-      try {
-        console.log('Performing version check on app launch...');
-        
-        // Add timeout to prevent hanging
-        const timeoutPromise = new Promise((_, reject) => {
-          setTimeout(() => reject(new Error('Version check timeout')), 5000); // 5 second timeout
-        });
-        
-        const updateData = await Promise.race([
-          checkForUpdatesOnLaunch(),
-          timeoutPromise
-        ]);
-        
-        if (updateData && updateData.updateRequired) {
-          console.log('Update required, setting update data:', updateData);
-          setUpdateRequired(updateData);
-        } else {
-          console.log('No update required');
-        }
-      } catch (error) {
-        console.error('Version check failed:', error);
-        // Don't block app startup on version check failure
-        console.log('Continuing app startup despite version check failure');
-      }
-    };
-
-    // Allow app to start immediately - don't wait for version check
+    // Allow app to start immediately - no version check blocking
     setVersionCheckComplete(true);
     
-    // Perform version check in background without blocking UI
+    // Minimal version check in background (crash-safe)
+    const performVersionCheck = () => {
+      try {
+        console.log('📱 [App] Skipping version check to prevent crashes');
+        console.log('📱 [App] App will start immediately');
+        
+        // Optional: Perform version check after app is fully loaded
+        setTimeout(() => {
+          if (checkForUpdatesOnLaunch && typeof checkForUpdatesOnLaunch === 'function') {
+            checkForUpdatesOnLaunch()
+              .then(updateData => {
+                if (updateData?.updateRequired) {
+                  console.log('📱 [App] Update available (background check):', updateData);
+                  // Could show update prompt here if needed
+                }
+              })
+              .catch(error => {
+                console.warn('📱 [App] Background version check failed:', error);
+              });
+          }
+        }, 3000); // Check after 3 seconds when app is stable
+        
+      } catch (error) {
+        console.error('📱 [App] Version check setup failed:', error);
+        // Continue anyway - don't crash
+      }
+    };
+    
     performVersionCheck();
   }, []);
   
-  // Show loading during initial auth check or version check
-  if (initialLoading || !versionCheckComplete) {
+  // Show loading only during initial auth check - remove version check dependency
+  if (initialLoading) {
     return (
       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
         <ActivityIndicator size="large" color="#F97316" />
-        {!versionCheckComplete && (
-          <View style={{ marginTop: 16, alignItems: 'center' }}>
-            <Text style={{ color: '#6B7280', fontSize: 16 }}>Checking for updates...</Text>
-          </View>
-        )}
+        <View style={{ marginTop: 16, alignItems: 'center' }}>
+          <Text style={{ color: '#6B7280', fontSize: 16 }}>Loading...</Text>
+        </View>
       </View>
     );
   }
@@ -144,19 +138,48 @@ function AppContent() {
 
 export default function App() {
   return (
-    <SafeAreaProvider>
-      <AuthProvider>
-        <NotificationProvider>
-          <SocketProvider>
-            <FreeChatProvider>
-              <NavigationContainer>
-                <AppContent />
-              </NavigationContainer>
-            </FreeChatProvider>
-          </SocketProvider>
-        </NotificationProvider>
-      </AuthProvider>
-      <StatusBar style="auto" />
-    </SafeAreaProvider>
+    <ErrorBoundary>
+      <SafeAreaProvider>
+        {/* Temporarily disable EdgeToEdgeHandler to prevent production crashes */}
+        {/* <EdgeToEdgeHandler> */}
+          <ContextErrorBoundary 
+            contextName="Auth" 
+            fallbackMessage="Authentication service failed. App will continue with limited functionality."
+            onError={(error) => console.error('Auth context crashed:', error)}
+          >
+            <AuthProvider>
+              <ContextErrorBoundary 
+                contextName="Notifications" 
+                fallbackMessage="Notification service failed. You may not receive push notifications."
+                onError={(error) => console.error('Notification context crashed:', error)}
+              >
+                <NotificationProvider>
+                  <ContextErrorBoundary 
+                    contextName="Socket" 
+                    fallbackMessage="Real-time connection failed. Some features may not work properly."
+                    onError={(error) => console.error('Socket context crashed:', error)}
+                  >
+                    <SocketProvider>
+                      <ContextErrorBoundary 
+                        contextName="FreeChat" 
+                        fallbackMessage="Free chat service failed. Free chat features may be unavailable."
+                        onError={(error) => console.error('FreeChat context crashed:', error)}
+                      >
+                        <FreeChatProvider>
+                          <NavigationContainer>
+                            <AppContent />
+                          </NavigationContainer>
+                        </FreeChatProvider>
+                      </ContextErrorBoundary>
+                    </SocketProvider>
+                  </ContextErrorBoundary>
+                </NotificationProvider>
+              </ContextErrorBoundary>
+            </AuthProvider>
+          </ContextErrorBoundary>
+          <StatusBar style="auto" />
+        {/* </EdgeToEdgeHandler> */}
+      </SafeAreaProvider>
+    </ErrorBoundary>
   );
 }

@@ -42,11 +42,32 @@ const useVersionCheck = () => {
   };
 
   const checkForUpdatesOnLaunch = async () => {
-    const updateData = await checkForUpdates(false);
-    
-    if (updateData.updateRequired) {
-      console.log('Update required, showing update screen');
-      return updateData;
+    try {
+      const updateData = await checkForUpdates(false);
+      
+      // Safely check for update requirement with null safety
+      if (updateData && typeof updateData.updateRequired === 'boolean' && updateData.updateRequired) {
+        console.log('Update required, showing update screen');
+        return updateData;
+      }
+      
+      // Return safe response for no update required
+      return {
+        ...updateData,
+        updateRequired: false,
+        success: true
+      };
+    } catch (error) {
+      console.error('Version check on launch failed:', error);
+      
+      // Return safe defaults to prevent crashes
+      return {
+        updateRequired: false,
+        success: false,
+        error: error.message || 'Network request failed',
+        latestVersion: versionService.getCurrentVersion(),
+        minimumVersion: versionService.getCurrentVersion()
+      };
     }
     
     return null;

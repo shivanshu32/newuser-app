@@ -18,16 +18,15 @@
     "@react-navigation/native": "^6.1.9",
     "@react-navigation/native-stack": "^6.9.17",
     "axios": "^1.6.2",
-    "expo": "~53.0.0",
+    "expo": "53.0.20",
     "expo-av": "~15.1.7",
     "expo-constants": "~17.1.7",
     "expo-dev-client": "~5.2.4",
     "expo-device": "~7.1.4",
     "expo-linear-gradient": "^14.1.5",
-    "expo-notifications": "~0.31.3",
+    "expo-notifications": "~0.31.4",
     "expo-status-bar": "~2.2.3",
-    "expo-updates": "~0.28.16",
-    "firebase": "^12.0.0",
+    "expo-updates": "~0.28.17",
     "moment": "^2.30.1",
     "react": "19.0.0",
     "react-native": "0.79.5",
@@ -41,7 +40,8 @@
     "react-native-screens": "~4.11.1",
     "react-native-toast-message": "^2.3.3",
     "react-native-webview": "13.13.5",
-    "socket.io-client": "^4.7.2"
+    "socket.io-client": "^4.7.2",
+    "expo-system-ui": "~5.0.10"
   },
   "devDependencies": {
     "@babel/core": "^7.20.0",
@@ -58,7 +58,8 @@
           "react-native-webrtc",
           "react-native-audio-record",
           "socket.io-client"
-        ]
+        ],
+        "listUnknownPackages": false
       }
     }
   }

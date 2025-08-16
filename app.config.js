@@ -4,7 +4,7 @@ module.exports = ({ config }) => ({
   jsEngine: "hermes",
   name: "Jyotish Call",
   slug: "jyotishcall-user-app",
-  version: "5.1.4",
+  version: "5.2.2",
   orientation: "portrait",
   icon: "./assets/icon-square.png",
   userInterfaceStyle: "light",
@@ -34,7 +34,7 @@ module.exports = ({ config }) => ({
       backgroundColor: "#ffffff"
     },
     package: "com.jyotishtalk",
-    versionCode: 40,
+    versionCode: 47,
     minSdkVersion: 24,
     compileSdkVersion: 35,
     targetSdkVersion: 35,
@@ -57,7 +57,17 @@ module.exports = ({ config }) => ({
         }
       ]
     },
-    ndkVersion: "26.1.10909125"
+    ndkVersion: "26.1.10909125",
+    // Android 16+ large screen support - remove orientation restrictions
+    supportsTablet: true,
+    // Enable resizable activities for foldables and tablets
+    resizeableActivity: true,
+    // Disable edge-to-edge to prevent production crashes
+    edgeToEdgeEnabled: false,
+    // Additional crash prevention settings
+    allowBackup: false,
+    // Prevent crashes on low-end devices
+    largeHeap: true
   },
   web: {
     favicon: "./assets/splash.png"

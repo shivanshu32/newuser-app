@@ -156,27 +156,32 @@ export const SocketProvider = ({ children }) => {
       });
       
       newSocket.on('connect_error', (error) => {
-        console.error('❌ [SOCKET] Connection error:', error);
-        console.log('🔥 [DEBUG] Connection error details:', {
-          errorType: error.type,
-          errorMessage: error.message,
-          errorDescription: error.description,
-          errorContext: error.context,
-          userId: userId,
-          hasToken: !!token,
-          serverUrl: SOCKET_SERVER_URL
-        });
-        setIsConnecting(false);
-        setConnectionStatus('disconnected');
-        setConnectionAttempts(prev => prev + 1);
-        isInitializingRef.current = false;
-        
-        if (reconnectAttempts.current < MAX_RECONNECT_ATTEMPTS) {
-          console.log(`🔄 [SOCKET] Scheduling reconnection attempt ${reconnectAttempts.current + 1}/${MAX_RECONNECT_ATTEMPTS}`);
-          scheduleReconnect();
-        } else {
-          console.error('❌ [SOCKET] Max reconnection attempts reached');
-          setConnectionStatus('failed');
+        try {
+          console.error('❌ [SOCKET] Connection error:', error);
+          console.log('🔥 [DEBUG] Connection error details:', {
+            errorType: error?.type,
+            errorMessage: error?.message,
+            errorDescription: error?.description,
+            errorContext: error?.context,
+            userId: userId,
+            hasToken: !!token,
+            serverUrl: SOCKET_SERVER_URL
+          });
+          
+          setIsConnecting(false);
+          setConnectionStatus('disconnected');
+          setConnectionAttempts(prev => prev + 1);
+          isInitializingRef.current = false;
+          
+          if (reconnectAttempts.current < MAX_RECONNECT_ATTEMPTS) {
+            console.log(`🔄 [SOCKET] Scheduling reconnection attempt ${reconnectAttempts.current + 1}/${MAX_RECONNECT_ATTEMPTS}`);
+            scheduleReconnect();
+          } else {
+            console.error('❌ [SOCKET] Max reconnection attempts reached');
+            setConnectionStatus('failed');
+          }
+        } catch (handlerError) {
+          console.error('❌ [SOCKET] Error in connect_error handler:', handlerError);
         }
       });
       
@@ -216,27 +221,40 @@ export const SocketProvider = ({ children }) => {
       });
       
       newSocket.on('error', (error) => {
-        console.error('SocketContext: Socket error:', error);
-        console.log('🔥 [DEBUG] Socket error details:', {
-          errorType: error.type,
-          errorMessage: error.message,
-          errorCode: error.code,
-          userId: userId,
-          socketId: newSocket.id,
-          connected: newSocket.connected
-        });
+        try {
+          console.error('❌ [SOCKET] Socket error:', error);
+          console.log('🔥 [DEBUG] Socket error details:', {
+            errorType: error?.type,
+            errorMessage: error?.message,
+            errorCode: error?.code,
+            userId: userId,
+            socketId: newSocket?.id,
+            connected: newSocket?.connected
+          });
+        } catch (handlerError) {
+          console.error('❌ [SOCKET] Error in error handler:', handlerError);
+        }
       });
       
-      // Add authentication error handler
-      newSocket.on('connect_error', (error) => {
-        if (error.message && error.message.includes('Authentication')) {
-          console.error('❌ [AUTH_ERROR] Socket authentication failed:', error.message);
+      // Add authentication error handler with crash safety
+      newSocket.on('auth_error', (error) => {
+        try {
+          console.error('❌ [AUTH_ERROR] Socket authentication failed:', error?.message || error);
           console.log('🔥 [DEBUG] Auth failure details:', {
             userId: userId,
             hasToken: !!token,
             tokenLength: token ? token.length : 0,
-            role: 'user'
+            role: 'user',
+            error: error
           });
+          
+          // Clear invalid credentials and stop reconnection attempts
+          userIdRef.current = null;
+          tokenRef.current = null;
+          setConnectionStatus('auth_failed');
+          
+        } catch (handlerError) {
+          console.error('❌ [SOCKET] Error in auth_error handler:', handlerError);
         }
       });
       
@@ -366,9 +384,17 @@ export const SocketProvider = ({ children }) => {
         heartbeatTimeoutRef.current = null;
       }
       
-      // Remove all listeners to prevent memory leaks
-      socketToClean.removeAllListeners();
+      // Disconnect first, then remove listeners to prevent race conditions
       socketToClean.disconnect();
+      
+      // Add small delay to ensure disconnect completes before removing listeners
+      setTimeout(() => {
+        try {
+          socketToClean.removeAllListeners();
+        } catch (error) {
+          console.warn('🧹 [CLEANUP] Error removing listeners (socket already cleaned):', error.message);
+        }
+      }, 100);
       
       // Reset state
       setSocket(null);

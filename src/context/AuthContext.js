@@ -25,33 +25,140 @@ export const AuthProvider = ({ children }) => {
   const [initialLoading, setInitialLoading] = useState(true); // For initial auth check
   const [error, setError] = useState(null);
 
-  // Check if user is logged in on app start
+  // Check if user is logged in on app start (crash-safe)
   useEffect(() => {
     const loadStoredData = async () => {
       try {
-        const storedToken = await AsyncStorage.getItem('userToken');
-        const storedUser = await AsyncStorage.getItem('userData');
+        console.log('🔐 [AuthContext] Loading stored authentication data...');
+        
+        // Wrap AsyncStorage calls in try-catch to prevent crashes
+        let storedToken, storedUser;
+        try {
+          storedToken = await AsyncStorage.getItem('userToken');
+          storedUser = await AsyncStorage.getItem('userData');
+        } catch (storageError) {
+          console.error('🚨 [AuthContext] AsyncStorage read failed:', storageError);
+          // Continue with null values - don't crash
+          storedToken = null;
+          storedUser = null;
+        }
         
         if (storedToken && storedUser) {
-          const parsedUser = JSON.parse(storedUser);
+          // Validate and parse user data safely
+          let parsedUser;
+          try {
+            parsedUser = JSON.parse(storedUser);
+            
+            // Validate user data structure
+            if (!parsedUser || typeof parsedUser !== 'object') {
+              throw new Error('Invalid user data structure');
+            }
+            
+            // Validate required user fields
+            if (!parsedUser._id && !parsedUser.id) {
+              throw new Error('User data missing required ID field');
+            }
+            
+          } catch (parseError) {
+            console.error('🚨 [AuthContext] Corrupted user data detected:', parseError);
+            console.log('🧹 [AuthContext] Clearing corrupted storage data...');
+            
+            // Clear corrupted data safely
+            try {
+              await AsyncStorage.multiRemove(['userToken', 'userData']);
+              console.log('✅ [AuthContext] Corrupted data cleared successfully');
+            } catch (clearError) {
+              console.error('❌ [AuthContext] Failed to clear corrupted data:', clearError);
+              // Try individual removal as fallback
+              try {
+                await AsyncStorage.removeItem('userToken');
+                await AsyncStorage.removeItem('userData');
+              } catch (individualError) {
+                console.error('❌ [AuthContext] Individual clear failed:', individualError);
+                // Continue anyway - don't crash the app
+              }
+            }
+            
+            // Don't proceed with corrupted data
+            return;
+          }
+          
+          // Validate token format (basic check)
+          if (typeof storedToken !== 'string' || storedToken.length < 10) {
+            console.error('🚨 [AuthContext] Invalid token format detected');
+            try {
+              await AsyncStorage.multiRemove(['userToken', 'userData']);
+            } catch (clearError) {
+              console.error('❌ [AuthContext] Failed to clear invalid token:', clearError);
+            }
+            return;
+          }
+          
+          console.log('✅ [AuthContext] Valid auth data found, restoring session...');
+          
           setToken(storedToken);
           setUser(parsedUser);
           
-          // Identify user with LogRocket
-          identifyUserToLogRocket(parsedUser);
+          // Identify user with LogRocket (crash-safe)
+          try {
+            identifyUserToLogRocket(parsedUser);
+          } catch (logRocketError) {
+            console.warn('LogRocket identification failed:', logRocketError);
+          }
           
-          // Set axios default header
-          axios.defaults.headers.common['Authorization'] = `Bearer ${storedToken}`;
+          // Set axios default header safely
+          try {
+            axios.defaults.headers.common['Authorization'] = `Bearer ${storedToken}`;
+          } catch (axiosError) {
+            console.error('Axios header setup failed:', axiosError);
+          }
+          
+          console.log('✅ [AuthContext] User session restored successfully');
+        } else {
+          console.log('ℹ️ [AuthContext] No stored auth data found - fresh start');
         }
       } catch (error) {
-        console.log('Error loading stored auth data:', error);
+        console.error('🚨 [AuthContext] Critical error loading auth data:', error);
+        
+        // Attempt to clear potentially corrupted data (with additional safety)
+        try {
+          console.log('🧹 [AuthContext] Attempting to clear all auth data due to critical error...');
+          await AsyncStorage.multiRemove(['userToken', 'userData']);
+          console.log('✅ [AuthContext] Auth data cleared after critical error');
+        } catch (clearError) {
+          console.error('❌ [AuthContext] Failed to clear auth data after critical error:', clearError);
+          // Try individual removal as fallback
+          try {
+            await AsyncStorage.removeItem('userToken');
+            await AsyncStorage.removeItem('userData');
+            console.log('✅ [AuthContext] Auth data cleared individually after multiRemove failed');
+          } catch (individualClearError) {
+            console.error('❌ [AuthContext] Individual clear also failed:', individualClearError);
+            // Continue anyway - don't crash the app
+          }
+        }
+        
+        // Reset axios headers to prevent issues (crash-safe)
+        try {
+          delete axios.defaults.headers.common['Authorization'];
+        } catch (axiosError) {
+          console.error('Axios header cleanup failed:', axiosError);
+        }
+        
       } finally {
         // Always set initialLoading to false when done
+        console.log('✅ [AuthContext] Auth initialization complete');
         setInitialLoading(false);
       }
     };
 
-    loadStoredData();
+    // Execute with additional crash protection
+    try {
+      loadStoredData();
+    } catch (syncError) {
+      console.error('🚨 [AuthContext] Synchronous error in loadStoredData setup:', syncError);
+      setInitialLoading(false);
+    }
   }, []);
 
   // Identify user to LogRocket safely

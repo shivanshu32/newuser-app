@@ -158,7 +158,7 @@ class FCMService {
 
       // Get Expo push token
       const tokenData = await Notifications.getExpoPushTokenAsync({
-        projectId: process.env.EXPO_PROJECT_ID || 'your-expo-project-id',
+        projectId: '19ce1c4d-7c68-407f-96a0-d41bedaa3d55', // Actual project ID
       });
 
       const token = tokenData.data;

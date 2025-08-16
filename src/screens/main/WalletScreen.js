@@ -420,8 +420,8 @@ const WalletScreen = () => {
       
       console.log('⚙️ Razorpay config extracted:', config);
       
-      // Create payment order with total payable amount (including GST)
-      const orderResponse = await walletAPI.createOrder(totalPayableAmount);
+      // Create payment order with total payable amount (including GST) and selected package
+      const orderResponse = await walletAPI.createOrder(totalPayableAmount, selectedPackage);
       console.log('📦 Order creation response:', orderResponse);
       
       // Handle the response structure - API interceptor returns response.data directly

@@ -48,17 +48,23 @@ const OtpVerificationScreen = ({ route, navigation }) => {
     };
   }, []);
 
-  // Timer effect with proper cleanup
+  // Timer effect with proper cleanup - optimized to prevent flickering
   useEffect(() => {
     if (timer > 0 && !canResend && isMountedRef.current) {
       timerRef.current = setInterval(() => {
         if (isMountedRef.current) {
           setTimer((prevTimer) => {
-            if (prevTimer <= 1) {
-              setCanResend(true);
+            const newTimer = prevTimer - 1;
+            if (newTimer <= 0) {
+              // Use a single state update to prevent flickering
+              setTimeout(() => {
+                if (isMountedRef.current) {
+                  setCanResend(true);
+                }
+              }, 0);
               return 0;
             }
-            return prevTimer - 1;
+            return newTimer;
           });
         }
       }, 1000);
@@ -69,9 +75,9 @@ const OtpVerificationScreen = ({ route, navigation }) => {
         }
       };
     }
-  }, [timer, canResend]);
+  }, [timer > 0 && !canResend]); // Optimized dependency to reduce re-renders
 
-  // Enhanced OTP change handler with auto-fill support
+  // Enhanced OTP change handler with auto-fill support - optimized to prevent flickering
   const handleOtpChange = useCallback((text, index) => {
     // Check if the input contains multiple digits (auto-fill scenario)
     if (text.length > 1) {
@@ -79,37 +85,49 @@ const OtpVerificationScreen = ({ route, navigation }) => {
       const digits = text.replace(/\D/g, '');
       
       if (digits.length >= 4) {
-        // Auto-fill all 4 digits
-        const newOtp = digits.slice(0, 4).split('');
+        // Auto-fill all 4 digits with single state update
+        const newOtp = digits.slice(0, 4).split('').concat(['', '', '', '']).slice(0, 4);
         setOtp(newOtp);
         
-        // Focus the last input after auto-fill
-        setTimeout(() => {
+        // Focus the last input after auto-fill with reduced delay
+        requestAnimationFrame(() => {
           inputRefs.current[3]?.focus();
-        }, 100);
+        });
         
         console.log('🔢 Auto-filled OTP from SMS:', newOtp.join(''));
         return;
       }
     }
     
-    // Handle single digit input (manual typing)
-    const newOtp = [...otp];
-    newOtp[index] = text.replace(/\D/g, ''); // Only allow digits
-    setOtp(newOtp);
-
-    // Auto-focus next input if current input is filled
-    if (text && index < 3) {
-      inputRefs.current[index + 1]?.focus();
-    }
-  }, [otp]);
+    // Handle single digit input (manual typing) - batch state update
+    setOtp(prevOtp => {
+      const newOtp = [...prevOtp];
+      newOtp[index] = text.replace(/\D/g, ''); // Only allow digits
+      
+      // Auto-focus next input if current input is filled
+      if (text && index < 3) {
+        requestAnimationFrame(() => {
+          inputRefs.current[index + 1]?.focus();
+        });
+      }
+      
+      return newOtp;
+    });
+  }, []); // Removed otp dependency to prevent unnecessary re-renders
 
   const handleKeyPress = useCallback((e, index) => {
-    // Handle backspace to move to previous input
-    if (e.nativeEvent.key === 'Backspace' && !otp[index] && index > 0) {
-      inputRefs.current[index - 1]?.focus();
+    // Handle backspace to move to previous input - optimized to prevent flickering
+    if (e.nativeEvent.key === 'Backspace' && index > 0) {
+      setOtp(prevOtp => {
+        if (!prevOtp[index]) {
+          requestAnimationFrame(() => {
+            inputRefs.current[index - 1]?.focus();
+          });
+        }
+        return prevOtp;
+      });
     }
-  }, [otp]);
+  }, []); // Removed otp dependency to prevent unnecessary re-renders
 
 
 
@@ -241,13 +259,15 @@ const OtpVerificationScreen = ({ route, navigation }) => {
 
           <View style={styles.resendContainer}>
             <Text style={styles.resendText}>Didn't receive the code? </Text>
-            {canResend ? (
-              <TouchableOpacity onPress={handleResendOtp} disabled={loading}>
-                <Text style={styles.resendButton}>Resend OTP</Text>
-              </TouchableOpacity>
-            ) : (
-              <Text style={styles.timer}>Resend in {timer}s</Text>
-            )}
+            <View style={styles.resendActionContainer}>
+              {canResend ? (
+                <TouchableOpacity onPress={handleResendOtp} disabled={loading}>
+                  <Text style={styles.resendButton}>Resend OTP</Text>
+                </TouchableOpacity>
+              ) : (
+                <Text style={styles.timer}>Resend in {timer}s</Text>
+              )}
+            </View>
           </View>
         </View>
       </KeyboardAvoidingView>
@@ -360,6 +380,10 @@ const styles = StyleSheet.create({
   resendContainer: {
     flexDirection: 'row',
     justifyContent: 'center',
+    alignItems: 'center',
+  },
+  resendActionContainer: {
+    minWidth: 80,
     alignItems: 'center',
   },
   resendText: {

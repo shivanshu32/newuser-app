@@ -48,9 +48,15 @@ const createSessionState = (freeChatId) => ({
   persistenceLoaded: false
 });
 
-// Reducer
+// Reducer with crash safety
 function freeChatReducer(state, action) {
-  switch (action.type) {
+  try {
+    if (!action || !action.type) {
+      console.error('❌ [FREE_CHAT_REDUCER] Invalid action received:', action);
+      return state;
+    }
+    
+    switch (action.type) {
     case ACTIONS.INITIALIZE_SESSION: {
       const { freeChatId } = action.payload;
       return {
@@ -218,7 +224,12 @@ function freeChatReducer(state, action) {
     }
 
     default:
+      console.warn('⚠️ [FREE_CHAT_REDUCER] Unknown action type:', action.type);
       return state;
+    }
+  } catch (error) {
+    console.error('❌ [FREE_CHAT_REDUCER] Critical error in reducer:', error);
+    return state;
   }
 }
 
@@ -245,71 +256,104 @@ export function FreeChatProvider({ children }) {
     return () => clearTimeout(timer);
   }, [state.sessions]);
 
-  // Initialize session
+  // Initialize session with crash safety
   const initializeSession = useCallback(async (freeChatId) => {
-    console.log('🏗️ [FREE_CHAT_CONTEXT] Initializing session:', freeChatId);
-    
-    dispatch({ type: ACTIONS.INITIALIZE_SESSION, payload: { freeChatId } });
-    
-    // Load persisted messages
     try {
-      const persistedMessages = await persistenceRef.current.loadMessages(freeChatId);
-      if (persistedMessages.length > 0) {
-        console.log(`🏗️ [FREE_CHAT_CONTEXT] Loaded ${persistedMessages.length} persisted messages for ${freeChatId}`);
-        dispatch({ 
-          type: ACTIONS.SET_MESSAGES, 
-          payload: { freeChatId, messages: persistedMessages } 
-        });
-      } else {
-        // Mark as loaded even if no messages
+      console.log('🏗️ [FREE_CHAT_CONTEXT] Initializing session:', freeChatId);
+      
+      if (!freeChatId) {
+        console.error('❌ [FREE_CHAT_CONTEXT] Cannot initialize session: freeChatId is null/undefined');
+        return;
+      }
+      
+      dispatch({ type: ACTIONS.INITIALIZE_SESSION, payload: { freeChatId } });
+      
+      // Load persisted messages with error handling
+      try {
+        const persistedMessages = await persistenceRef.current.loadMessages(freeChatId);
+        if (persistedMessages && persistedMessages.length > 0) {
+          console.log(`🏗️ [FREE_CHAT_CONTEXT] Loaded ${persistedMessages.length} persisted messages for ${freeChatId}`);
+          dispatch({ 
+            type: ACTIONS.SET_MESSAGES, 
+            payload: { freeChatId, messages: persistedMessages } 
+          });
+        } else {
+          // Mark as loaded even if no messages
+          dispatch({ 
+            type: ACTIONS.SET_SESSION_STATUS, 
+            payload: { freeChatId, updates: { persistenceLoaded: true } } 
+          });
+        }
+      } catch (error) {
+        console.error('❌ [FREE_CHAT_CONTEXT] Error loading persisted messages:', error);
         dispatch({ 
           type: ACTIONS.SET_SESSION_STATUS, 
           payload: { freeChatId, updates: { persistenceLoaded: true } } 
         });
       }
     } catch (error) {
-      console.error('🏗️ [FREE_CHAT_CONTEXT] Error loading persisted messages:', error);
-      dispatch({ 
-        type: ACTIONS.SET_SESSION_STATUS, 
-        payload: { freeChatId, updates: { persistenceLoaded: true } } 
-      });
+      console.error('❌ [FREE_CHAT_CONTEXT] Critical error in initializeSession:', error);
     }
   }, []);
 
-  // Add message
+  // Add message with crash safety
   const addMessage = useCallback(async (freeChatId, message) => {
-    console.log('💬 [FREE_CHAT_CONTEXT] Adding message to context:', message.id);
-    
-    dispatch({ type: ACTIONS.ADD_MESSAGE, payload: { freeChatId, message } });
-    
-    // Also save to persistence immediately for new messages
     try {
-      await persistenceRef.current.addMessage(freeChatId, message);
+      if (!freeChatId || !message) {
+        console.error('❌ [FREE_CHAT_CONTEXT] Cannot add message: freeChatId or message is null/undefined');
+        return;
+      }
+      
+      console.log('💬 [FREE_CHAT_CONTEXT] Adding message to context:', message.id);
+      
+      dispatch({ type: ACTIONS.ADD_MESSAGE, payload: { freeChatId, message } });
+      
+      // Also save to persistence immediately for new messages
+      try {
+        await persistenceRef.current.addMessage(freeChatId, message);
+      } catch (error) {
+        console.error('❌ [FREE_CHAT_CONTEXT] Error persisting new message:', error);
+      }
     } catch (error) {
-      console.error('💬 [FREE_CHAT_CONTEXT] Error persisting new message:', error);
+      console.error('❌ [FREE_CHAT_CONTEXT] Critical error in addMessage:', error);
     }
   }, []);
 
-  // Merge backend messages
+  // Merge backend messages with crash safety
   const mergeBackendMessages = useCallback(async (freeChatId, backendMessages) => {
-    console.log(`🔄 [FREE_CHAT_CONTEXT] Merging ${backendMessages.length} backend messages for ${freeChatId}`);
-    
-    // Use persistence service to merge intelligently
     try {
-      const mergedMessages = await persistenceRef.current.mergeMessages(freeChatId, backendMessages);
-      dispatch({ 
-        type: ACTIONS.SET_MESSAGES, 
-        payload: { freeChatId, messages: mergedMessages } 
-      });
-      return mergedMessages;
+      if (!freeChatId) {
+        console.error('❌ [FREE_CHAT_CONTEXT] Cannot merge messages: freeChatId is null/undefined');
+        return [];
+      }
+      
+      if (!Array.isArray(backendMessages)) {
+        console.error('❌ [FREE_CHAT_CONTEXT] Cannot merge messages: backendMessages is not an array');
+        return [];
+      }
+      
+      console.log(`🔄 [FREE_CHAT_CONTEXT] Merging ${backendMessages.length} backend messages for ${freeChatId}`);
+      
+      // Use persistence service to merge intelligently
+      try {
+        const mergedMessages = await persistenceRef.current.mergeMessages(freeChatId, backendMessages);
+        dispatch({ 
+          type: ACTIONS.SET_MESSAGES, 
+          payload: { freeChatId, messages: mergedMessages } 
+        });
+        return mergedMessages;
+      } catch (error) {
+        console.error('❌ [FREE_CHAT_CONTEXT] Error merging backend messages:', error);
+        // Fallback to simple merge
+        dispatch({ 
+          type: ACTIONS.MERGE_BACKEND_MESSAGES, 
+          payload: { freeChatId, backendMessages } 
+        });
+        return backendMessages;
+      }
     } catch (error) {
-      console.error('🔄 [FREE_CHAT_CONTEXT] Error merging backend messages:', error);
-      // Fallback to simple merge
-      dispatch({ 
-        type: ACTIONS.MERGE_BACKEND_MESSAGES, 
-        payload: { freeChatId, backendMessages } 
-      });
-      return backendMessages;
+      console.error('❌ [FREE_CHAT_CONTEXT] Critical error in mergeBackendMessages:', error);
+      return [];
     }
   }, []);
 
@@ -328,17 +372,26 @@ export function FreeChatProvider({ children }) {
     dispatch({ type: ACTIONS.SET_TIMER_DATA, payload: { freeChatId, timerData } });
   }, []);
 
-  // Clear session
+  // Clear session with crash safety
   const clearSession = useCallback(async (freeChatId) => {
-    console.log('🗑️ [FREE_CHAT_CONTEXT] Clearing session:', freeChatId);
-    
-    dispatch({ type: ACTIONS.CLEAR_SESSION, payload: { freeChatId } });
-    
-    // Also clear from persistence
     try {
-      await persistenceRef.current.clearMessages(freeChatId);
+      if (!freeChatId) {
+        console.error('❌ [FREE_CHAT_CONTEXT] Cannot clear session: freeChatId is null/undefined');
+        return;
+      }
+      
+      console.log('🗑️ [FREE_CHAT_CONTEXT] Clearing session:', freeChatId);
+      
+      dispatch({ type: ACTIONS.CLEAR_SESSION, payload: { freeChatId } });
+      
+      // Also clear from persistence
+      try {
+        await persistenceRef.current.clearMessages(freeChatId);
+      } catch (error) {
+        console.error('❌ [FREE_CHAT_CONTEXT] Error clearing persisted messages:', error);
+      }
     } catch (error) {
-      console.error('🗑️ [FREE_CHAT_CONTEXT] Error clearing persisted messages:', error);
+      console.error('❌ [FREE_CHAT_CONTEXT] Critical error in clearSession:', error);
     }
   }, []);
 

@@ -92,8 +92,8 @@ android {
         applicationId 'com.jyotishtalk'
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 40
-        versionName "5.1.4"
+        versionCode 46
+        versionName "5.2.1"
     }
     signingConfigs {
         debug {

@@ -35,7 +35,7 @@ const API_BASE = `${API_URL}/api/v1`;
 
 console.log('API Configuration:', { API_URL, isDev: __DEV__, appOwnership: Constants.appOwnership });
 
-// Create axios instance
+// Create axios instance with enhanced configuration
 const API = axios.create({
   baseURL: API_BASE,
   timeout: 30000, // 30 second timeout
@@ -44,117 +44,218 @@ const API = axios.create({
     'User-Agent': 'JyotishCall-UserApp/1.0.0',
     'Accept': 'application/json',
   },
+  // Add retry configuration
+  retry: 3,
+  retryDelay: 1000,
+  // Validate status codes
+  validateStatus: function (status) {
+    return status >= 200 && status < 300;
+  }
 });
 
-// Add authorization header to every request if token exists
+// Add authorization header to every request if token exists with crash safety
 API.interceptors.request.use(
   async (config) => {
-    const token = await AsyncStorage.getItem('userToken');
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
-      console.log(' [API] Request with auth token:', config.method?.toUpperCase(), config.url);
-    } else {
-      console.log(' [API] Request without auth token:', config.method?.toUpperCase(), config.url);
+    try {
+      const token = await AsyncStorage.getItem('userToken');
+      if (token) {
+        config.headers.Authorization = `Bearer ${token}`;
+        console.log('🔑 [API] Request with auth token:', config.method?.toUpperCase(), config.url);
+      } else {
+        console.log('🔓 [API] Request without auth token:', config.method?.toUpperCase(), config.url);
+      }
+      
+      console.log('📤 [API] Request config:', {
+        method: config.method,
+        url: config.url,
+        baseURL: config.baseURL,
+        data: config.data ? 'present' : 'none',
+        hasAuth: !!config.headers.Authorization
+      });
+      
+      return config;
+    } catch (error) {
+      console.error('❌ [API] Error in request interceptor:', error);
+      // Return config without token if AsyncStorage fails
+      return config;
     }
-    
-    console.log(' [API] Request config:', {
-      method: config.method,
-      url: config.url,
-      baseURL: config.baseURL,
-      data: config.data,
-      headers: config.headers
-    });
-    
-    return config;
   },
   (error) => {
-    console.error(' [API] Request error:', error);
+    console.error('❌ [API] Request interceptor error:', error);
     return Promise.reject(error);
   }
 );
 
-// Add response interceptor for better error handling and token refresh
+// Add response interceptor for better error handling and token refresh with crash safety
 API.interceptors.response.use(
   (response) => {
-    console.log(' [API] Response success:', response.status, response.config.url);
-    return response.data; // Return only the data part
+    try {
+      console.log('✅ [API] Response success:', response.status, response.config?.url);
+      return response.data; // Return only the data part
+    } catch (error) {
+      console.error('❌ [API] Error processing successful response:', error);
+      return response; // Fallback to full response
+    }
   },
   async (error) => {
-    const originalRequest = error.config;
-    
-    // Enhanced error logging for network debugging
-    console.error(' [API] Response error:', {
-      url: error.config?.url,
-      method: error.config?.method?.toUpperCase(),
-      status: error.response?.status,
-      statusText: error.response?.statusText,
-      data: error.response?.data,
-      message: error.message,
-      code: error.code,
-      isNetworkError: error.message === 'Network Error',
-      isTimeout: error.code === 'ECONNABORTED'
-    });
-    
-    // Handle 401 Unauthorized - attempt token refresh
-    if (error.response?.status === 401 && !originalRequest._retry) {
-      originalRequest._retry = true;
+    try {
+      const originalRequest = error.config;
       
-      console.log('🔑 [API] 401 Unauthorized - attempting token refresh...');
+      // Enhanced error logging for network debugging
+      console.error('❌ [API] Response error:', {
+        url: error.config?.url,
+        method: error.config?.method?.toUpperCase(),
+        status: error.response?.status,
+        statusText: error.response?.statusText,
+        data: error.response?.data,
+        message: error.message,
+        code: error.code,
+        isNetworkError: error.message === 'Network Error',
+        isTimeout: error.code === 'ECONNABORTED',
+        stack: error.stack
+      });
       
-      try {
-        // Get current token from AsyncStorage
-        const currentToken = await AsyncStorage.getItem('userToken');
-        
-        if (currentToken) {
-          // Attempt to refresh token
-          const refreshResponse = await axios.post(`${API_BASE}/auth/refresh-token`, {}, {
-            headers: {
-              'Authorization': `Bearer ${currentToken}`
+      // Handle network connectivity issues
+      if (error.message === 'Network Error' || error.code === 'NETWORK_ERROR') {
+        console.error('🌐 [API] Network connectivity issue detected');
+        return Promise.reject({
+          ...error,
+          isNetworkError: true,
+          userMessage: 'Network connection failed. Please check your internet connection and try again.'
+        });
+      }
+      
+      // Handle timeout errors
+      if (error.code === 'ECONNABORTED') {
+        console.error('⏰ [API] Request timeout detected');
+        return Promise.reject({
+          ...error,
+          isTimeout: true,
+          userMessage: 'Request timed out. Please try again.'
+        });
+      }
+      
+      // Handle 401 Unauthorized - attempt token refresh
+      if (error.response?.status === 401 && !originalRequest?._retry) {
+        originalRequest._retry = true;
+      
+        try {
+          console.log('🔄 [API] Attempting token refresh for 401 error');
+          
+          // Get refresh token with error handling
+          const refreshToken = await AsyncStorage.getItem('refreshToken');
+          if (!refreshToken) {
+            console.log('🚪 [API] No refresh token available, redirecting to login');
+            // Clear all stored tokens safely
+            try {
+              await AsyncStorage.multiRemove(['userToken', 'refreshToken', 'userData']);
+            } catch (clearError) {
+              console.error('❌ [API] Error clearing tokens:', clearError);
             }
+            throw new Error('No refresh token available');
+          }
+          
+          // Attempt to refresh token
+          const refreshResponse = await axios.post(`${API_BASE}/auth/refresh`, {
+            refreshToken
           });
           
-          if (refreshResponse.data.success) {
-            const newToken = refreshResponse.data.data.token;
-            const updatedUser = refreshResponse.data.data.user;
+          if (refreshResponse.data?.success) {
+            const { token: newToken, refreshToken: newRefreshToken } = refreshResponse.data.data || {};
             
-            // Update stored token and user data
-            await AsyncStorage.setItem('userToken', newToken);
-            if (updatedUser) {
-              await AsyncStorage.setItem('userData', JSON.stringify(updatedUser));
+            if (!newToken) {
+              throw new Error('No new token received from refresh');
+            }
+            
+            // Store new tokens safely
+            try {
+              await AsyncStorage.setItem('userToken', newToken);
+              if (newRefreshToken) {
+                await AsyncStorage.setItem('refreshToken', newRefreshToken);
+              }
+            } catch (storageError) {
+              console.error('❌ [API] Error storing new tokens:', storageError);
+              throw storageError;
             }
             
             // Update the original request with new token
             originalRequest.headers.Authorization = `Bearer ${newToken}`;
             
             console.log('✅ [API] Token refreshed successfully, retrying original request');
-            
-            // Retry the original request with new token
             return API(originalRequest);
+          } else {
+            throw new Error('Token refresh failed - invalid response');
           }
+        } catch (refreshError) {
+          console.error('❌ [API] Token refresh failed:', refreshError);
+          
+          // Clear all stored tokens safely
+          try {
+            await AsyncStorage.multiRemove(['userToken', 'refreshToken', 'userData']);
+          } catch (clearError) {
+            console.error('❌ [API] Error clearing tokens after refresh failure:', clearError);
+          }
+          
+          // Emit logout event if global event emitter is available
+          if (global.eventEmitter) {
+            try {
+              global.eventEmitter.emit('LOGOUT_REQUIRED', { reason: 'token_refresh_failed' });
+            } catch (emitError) {
+              console.error('❌ [API] Error emitting logout event:', emitError);
+            }
+          }
+          
+          return Promise.reject({
+            ...refreshError,
+            isAuthError: true,
+            userMessage: 'Session expired. Please log in again.'
+          });
         }
-      } catch (refreshError) {
-        console.error('❌ [API] Token refresh failed:', refreshError.message);
-        
-        // If refresh fails, clear stored auth data
-        await AsyncStorage.removeItem('userToken');
-        await AsyncStorage.removeItem('userData');
-        
-        // Note: We don't automatically navigate to login here as this is a service layer
-        // The UI components should handle this by checking auth state
       }
+      
+      // Add specific handling for common network issues
+      if (error.message === 'Network Error') {
+        console.error(' [API] Network Error - Check internet connection and backend availability');
+      } else if (error.code === 'ECONNABORTED') {
+        console.error(' [API] Request Timeout - Backend took too long to respond');
+      }
+      
+      // For other errors, enhance with user-friendly messages
+      const enhancedError = {
+        ...error,
+        userMessage: getUserFriendlyErrorMessage(error)
+      };
+      
+      return Promise.reject(enhancedError);
+    } catch (interceptorError) {
+      console.error('❌ [API] Critical error in response interceptor:', interceptorError);
+      return Promise.reject(error); // Return original error if interceptor fails
     }
-    
-    // Add specific handling for common network issues
-    if (error.message === 'Network Error') {
-      console.error(' [API] Network Error - Check internet connection and backend availability');
-    } else if (error.code === 'ECONNABORTED') {
-      console.error(' [API] Request Timeout - Backend took too long to respond');
-    }
-    
-    // Return a rejected promise with the error
-    return Promise.reject(error);
   }
 );
+
+// Helper function to get user-friendly error messages
+const getUserFriendlyErrorMessage = (error) => {
+  if (error.response?.status === 400) {
+    return error.response.data?.message || 'Invalid request. Please check your input and try again.';
+  }
+  if (error.response?.status === 403) {
+    return 'Access denied. You do not have permission to perform this action.';
+  }
+  if (error.response?.status === 404) {
+    return 'The requested resource was not found.';
+  }
+  if (error.response?.status === 500) {
+    return 'Server error. Please try again later.';
+  }
+  if (error.message === 'Network Error') {
+    return 'Network connection failed. Please check your internet connection.';
+  }
+  if (error.code === 'ECONNABORTED') {
+    return 'Request timed out. Please try again.';
+  }
+  return error.response?.data?.message || 'An unexpected error occurred. Please try again.';
+};
 
 // Auth API
 export const authAPI = {
@@ -259,7 +360,7 @@ export const chatHistoryAPI = {
 
 // Version API
 export const versionAPI = {
-  checkVersion: (currentVersion) => API.post(`/version/check`, { currentVersion }),
+  checkVersion: (versionData) => API.post(`/version/check`, versionData),
 };
 
 // Ledger API

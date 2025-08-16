@@ -27,27 +27,17 @@ class VersionService {
       const currentVersion = this.getCurrentVersion();
       console.log('Checking for update with version:', currentVersion);
 
-      // Import API_BASE_URL from api.js
-      const { API_BASE_URL } = await import('./api');
+      // Import versionAPI from api.js (uses proper axios instance with auth)
+      const { versionAPI } = await import('./api');
 
-      const response = await fetch(`${API_BASE_URL}${APP_CONFIG.api.versionCheck.endpoint}`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          currentVersion,
-          appType: APP_CONFIG.appType,
-          platform: Platform.OS,
-        }),
-        timeout: APP_CONFIG.api.versionCheck.timeout,
+      // Use the existing versionAPI with proper payload
+      const response = await versionAPI.checkVersion({
+        currentVersion,
+        appType: APP_CONFIG.appType,
+        platform: Platform.OS,
       });
 
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-
-      const data = await response.json();
+      const data = response;
       console.log('Version check response:', data);
       
       return {

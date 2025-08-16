@@ -34,118 +34,186 @@ export const setSharedSocket = (socketInstance) => {
 };
 
 /**
- * Set up global socket event listeners
+ * Set up global socket event listeners with crash safety
  * @param {Object} socketInstance - Socket instance to set up listeners on
  */
 const setupGlobalListeners = (socketInstance) => {
-  console.log('🔧 [socketService] Setting up global socket listeners');
-  
-  // Remove any existing booking_status_update listeners to avoid duplicates
-  socketInstance.removeAllListeners('booking_status_update');
-  
-  // Add global listener for booking_status_update events
-  socketInstance.on('booking_status_update', (data) => {
-    console.log('🔔 [socketService] Global booking status update received:', {
-      status: data.status,
-      bookingId: data.bookingId,
-      sessionId: data.sessionId,
-      socketId: socketInstance.id
-    });
-    console.log('🔔 [socketService] Full booking status data:', JSON.stringify(data, null, 2));
+  try {
+    console.log('🔧 [socketService] Setting up global socket listeners');
     
-    // Handle booking acceptance with popup (global handler for all screens)
-    if (data.status === 'accepted') {
-      console.log('🎯 [socketService] Booking accepted - triggering global popup');
-      console.log('🎯 [socketService] Global eventEmitter available:', !!global.eventEmitter);
-      
-      // Emit event to show booking accepted popup globally
-      if (global.eventEmitter) {
-        const popupData = {
-          bookingId: data.bookingId,
-          sessionId: data.sessionId,
-          roomId: data.roomId,
-          astrologerId: data.astrologerId,
-          astrologerName: data.astrologerDisplayName || data.astrologerName,
-          astrologerImageUrl: data.astrologerImageUrl,
-          bookingType: data.consultationType || 'chat',
-          rate: data.rate,
-          message: data.message
-        };
-        
-        console.log('📡 [socketService] Emitting showBookingAcceptedPopup with data:', JSON.stringify(popupData, null, 2));
-        global.eventEmitter.emit('showBookingAcceptedPopup', popupData);
-      } else {
-        console.warn('⚠️ [socketService] Global eventEmitter not available for booking acceptance!');
-        
-        // Fallback: Show alert if eventEmitter not available
-        Alert.alert(
-          'Booking Accepted!',
-          `Your consultation with ${data.astrologerName || 'the astrologer'} has been accepted.`,
-          [
-            {
-              text: 'Join Session',
-              onPress: () => {
-                console.log('🎯 [socketService] User wants to join session:', data.bookingId);
-                // Note: Navigation would need to be handled by the calling screen
-              }
-            },
-            {
-              text: 'Later',
-              style: 'cancel'
-            }
-          ]
-        );
-      }
-    } else if (data.status === 'rejected') {
-      console.log('🔴 [socketService] Booking rejected - showing notification');
-      
-      try {
-        // Use the message from backend if available, otherwise use fallback
-        const rejectionMessage = data.message || 'Your booking request was declined.';
-        
-        Alert.alert(
-          'Booking Declined',
-          rejectionMessage,
-          [{ text: 'OK' }]
-        );
-      } catch (err) {
-        console.error('Error showing rejection alert:', err);
-      }
+    if (!socketInstance) {
+      console.warn('⚠️ [socketService] No socket instance provided to setupGlobalListeners');
+      return;
     }
-  });
-  
-  console.log('✅ [socketService] Global booking_status_update listener set up successfully');
+    
+    // Remove any existing booking_status_update listeners to avoid duplicates
+    try {
+      socketInstance.removeAllListeners('booking_status_update');
+    } catch (error) {
+      console.warn('⚠️ [socketService] Error removing existing listeners:', error.message);
+    }
+    
+    // Add global listener for booking_status_update events with error handling
+    socketInstance.on('booking_status_update', (data) => {
+      try {
+        console.log('🔔 [socketService] Global booking status update received:', {
+          status: data?.status,
+          bookingId: data?.bookingId,
+          sessionId: data?.sessionId,
+          socketId: socketInstance.id
+        });
+        
+        if (!data) {
+          console.warn('⚠️ [socketService] Received null/undefined booking status data');
+          return;
+        }
+        
+        console.log('🔔 [socketService] Full booking status data:', JSON.stringify(data, null, 2));
+        
+        // Handle booking acceptance with popup (global handler for all screens)
+        if (data.status === 'accepted') {
+          console.log('🎯 [socketService] Booking accepted - triggering global popup');
+          console.log('🎯 [socketService] Global eventEmitter available:', !!global.eventEmitter);
+          
+          // Emit event to show booking accepted popup globally
+          if (global.eventEmitter) {
+            const popupData = {
+              bookingId: data.bookingId,
+              sessionId: data.sessionId,
+              roomId: data.roomId,
+              astrologerId: data.astrologerId,
+              astrologerName: data.astrologerDisplayName || data.astrologerName,
+              astrologerImageUrl: data.astrologerImageUrl,
+              bookingType: data.consultationType || 'chat',
+              rate: data.rate,
+              message: data.message
+            };
+            
+            console.log('📡 [socketService] Emitting showBookingAcceptedPopup with data:', JSON.stringify(popupData, null, 2));
+            
+            try {
+              global.eventEmitter.emit('showBookingAcceptedPopup', popupData);
+            } catch (emitError) {
+              console.error('❌ [socketService] Error emitting showBookingAcceptedPopup:', emitError);
+              // Fallback to alert
+              showBookingAcceptedAlert(data);
+            }
+          } else {
+            console.warn('⚠️ [socketService] Global eventEmitter not available for booking acceptance!');
+            showBookingAcceptedAlert(data);
+          }
+        } else if (data.status === 'rejected') {
+          console.log('🔴 [socketService] Booking rejected - showing notification');
+          handleBookingRejection(data);
+        }
+      } catch (error) {
+        console.error('❌ [socketService] Error handling booking_status_update:', error);
+      }
+    });
+    
+    // Add error handler for socket errors
+    socketInstance.on('error', (error) => {
+      console.error('❌ [socketService] Socket error in global listeners:', error);
+    });
+    
+    console.log('✅ [socketService] Global socket listeners setup complete');
+  } catch (error) {
+    console.error('❌ [socketService] Critical error setting up global listeners:', error);
+  }
 };
 
 /**
- * Initialize socket connection
+ * Show booking accepted alert as fallback
+ * @param {Object} data - Booking data
+ */
+const showBookingAcceptedAlert = (data) => {
+  try {
+    Alert.alert(
+      'Booking Accepted!',
+      `Your consultation with ${data?.astrologerName || 'the astrologer'} has been accepted.`,
+      [
+        {
+          text: 'Join Session',
+          onPress: () => {
+            console.log('🎯 [socketService] User wants to join session:', data?.bookingId);
+            // Note: Navigation would need to be handled by the calling screen
+          }
+        },
+        {
+          text: 'Later',
+          style: 'cancel'
+        }
+      ]
+    );
+  } catch (error) {
+    console.error('❌ [socketService] Error showing booking accepted alert:', error);
+  }
+};
+
+/**
+ * Handle booking rejection with crash safety
+ * @param {Object} data - Booking data
+ */
+const handleBookingRejection = (data) => {
+  try {
+    if (global.eventEmitter) {
+      global.eventEmitter.emit('showBookingRejectedNotification', data);
+    } else {
+      Alert.alert(
+        'Booking Declined',
+        `Your consultation request was declined. ${data?.message || 'Please try booking with another astrologer.'}`,
+        [{ text: 'OK' }]
+      );
+    }
+  } catch (error) {
+    console.error('❌ [socketService] Error handling booking rejection:', error);
+  }
+};
+
+/**
+ * Initialize socket connection with crash safety
  * @returns {Promise<Object>} - Socket instance
  */
 export const initSocket = async () => {
   try {
-    // Get user token from AsyncStorage
-    const token = await AsyncStorage.getItem('userToken');
+    // Get user token from AsyncStorage with error handling
+    let token = null;
+    let userId = null;
+    
+    try {
+      token = await AsyncStorage.getItem('userToken');
+    } catch (error) {
+      console.error('❌ [socketService] Error getting token from AsyncStorage:', error);
+      return null;
+    }
     
     // Always get userId from userData to ensure we have the latest user ID
-    let userId = null;
-    const userData = await AsyncStorage.getItem('userData');
-    if (userData) {
-      const parsedUserData = JSON.parse(userData);
-      userId = parsedUserData._id || parsedUserData.id;
+    try {
+      const userData = await AsyncStorage.getItem('userData');
+      if (userData) {
+        const parsedUserData = JSON.parse(userData);
+        userId = parsedUserData._id || parsedUserData.id;
+      }
+    } catch (error) {
+      console.warn('⚠️ [socketService] Error parsing userData from AsyncStorage:', error);
     }
     
     // Fallback to direct userId storage if userData is not available
     if (!userId) {
-      userId = await AsyncStorage.getItem('userId');
+      try {
+        userId = await AsyncStorage.getItem('userId');
+      } catch (error) {
+        console.error('❌ [socketService] Error getting userId from AsyncStorage:', error);
+      }
     }
     
-    console.log(' [socketService] Authentication data - token exists:', !!token, 'userId:', userId);
-    console.log(' [socketService] Token preview:', token ? token.substring(0, 20) + '...' : 'null');
-    console.log(' [socketService] Connecting to:', API_URL);
+    console.log('🔍 [socketService] Authentication data - token exists:', !!token, 'userId:', userId);
+    console.log('🔍 [socketService] Token preview:', token ? token.substring(0, 20) + '...' : 'null');
+    console.log('🔍 [socketService] Connecting to:', API_URL);
     
     if (!token || !userId) {
-      console.error(' [socketService] Token or userId not found. Cannot initialize socket.');
-      console.error(' [socketService] Token:', !!token, 'UserId:', !!userId);
+      console.error('❌ [socketService] Token or userId not found. Cannot initialize socket.');
+      console.error('❌ [socketService] Token:', !!token, 'UserId:', !!userId);
       return null;
     }
     

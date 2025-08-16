@@ -216,16 +216,18 @@ const EnhancedChatScreen = ({ route, navigation }) => {
     setSessionActive(false);
     setTimerData(prev => ({ ...prev, isActive: false }));
     
-    // Emit end session event to backend
-    if (connectionManagerRef.current?.socket) {
+    // Emit end session event to backend with null safety
+    if (connectionManagerRef.current?.socket?.connected) {
       console.log('📡 [USER-APP] Emitting end_session event to backend');
       connectionManagerRef.current.socket.emit('end_session', {
-        bookingId: bookingId,
-        sessionId: sessionId,
-        userId: authUser?.id,
-        reason: reason,
-        finalTimerData: timerData
+        bookingId: bookingId || null,
+        sessionId: sessionId || null,
+        userId: authUser?.id || null,
+        reason: reason || 'unknown',
+        finalTimerData: timerData || {}
       });
+    } else {
+      console.warn('⚠️ [USER-APP] Cannot emit end_session - socket not connected');
     }
     
     // Show session end confirmation

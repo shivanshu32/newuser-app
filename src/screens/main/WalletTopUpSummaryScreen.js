@@ -52,10 +52,14 @@ const WalletTopUpSummaryScreen = () => {
     try {
       console.log('🔄 Starting payment process for amount:', finalAmount);
       console.log('📦 Selected package:', selectedPackage);
+      console.log('📦 Selected package details:', JSON.stringify(selectedPackage, null, 2));
+      console.log('📦 Has selected package:', !!selectedPackage);
+      console.log('📦 Selected package type:', typeof selectedPackage);
       console.log('💰 Base amount:', baseAmount);
       console.log('🎁 Bonus amount:', bonusAmount);
       console.log('💳 Final amount (with GST):', finalAmount);
       console.log('🏷️ Is first time user:', isFirstTimeUser);
+      console.log('🚀 About to call walletAPI.createOrder with:', { finalAmount, selectedPackage });
       
       // Get Razorpay config
       const configResponse = await walletAPI.getRazorpayConfig();

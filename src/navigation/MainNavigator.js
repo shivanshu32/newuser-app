@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
+import { Alert } from 'react-native';
+import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { View, Alert } from 'react-native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import { useNavigation, CommonActions } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 
 // Import screens
@@ -49,8 +51,6 @@ import { BookingPopupProvider, useBookingPopup } from '../context/BookingPopupCo
 import eventEmitter from '../utils/eventEmitter';
 import { joinConsultationRoom } from '../services/socketService';
 
-// Import navigation hook
-import { useNavigation } from '@react-navigation/native';
 
 const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
@@ -155,67 +155,49 @@ const BookingPopupWrapper = () => {
 
   const handleJoinSession = async (bookingData) => {
     try {
-      console.log(' [BookingPopupWrapper] Starting handleJoinSession with data:', JSON.stringify(bookingData, null, 2));
+      console.log(' [BookingPopupWrapper] Attempting to join session:', bookingData);
       
-      // Validate required parameters
-      if (!bookingData || !bookingData.bookingId) {
-        console.error(' [BookingPopupWrapper] Missing bookingId in bookingData:', bookingData);
-        Alert.alert('Error', 'Missing booking information. Please try again.');
+      // Validate booking data
+      if (!bookingData?.bookingId || !bookingData?.sessionId) {
+        console.error(' [BookingPopupWrapper] Invalid booking data for session join:', bookingData);
+        Alert.alert('Error', 'Invalid session data. Please try again.');
         return;
       }
-      
-      console.log(' [BookingPopupWrapper] Validation passed, joining consultation room...');
-      
-      // Join the consultation room via socket
-      const joinResult = await joinConsultationRoom({
-        bookingId: bookingData.bookingId,
-        sessionId: bookingData.sessionId,
-        roomId: bookingData.roomId,
-        astrologerId: bookingData.astrologerId,
-        consultationType: bookingData.bookingType || bookingData.type
+
+      // Prevent rapid navigation calls that could cause stack overflow
+      if (navigation.isFocused && !navigation.isFocused()) {
+        console.warn(' [BookingPopupWrapper] Navigation not focused, preventing duplicate navigation');
+        return;
+      }
+
+      // Get consultation type from booking data or default to 'chat'
+      const consultationType = bookingData.consultationType || 'chat';
+      console.log(' [BookingPopupWrapper] Consultation type:', consultationType);
+
+      // Hide the popup before navigation to prevent double-taps
+      hideBookingAcceptedPopup();
+
+      // Navigate based on consultation type with reset action to prevent stack overflow
+      const resetAction = CommonActions.reset({
+        index: 1,
+        routes: [
+          { name: 'Main' },
+          {
+            name: consultationType === 'voice' ? 'VoiceCallScreen' :
+                  consultationType === 'video' ? 'VideoCallScreen' : 'FixedChatScreen',
+            params: {
+              bookingId: bookingData.bookingId,
+              sessionId: bookingData.sessionId,
+              roomId: bookingData.roomId,
+              astrologerId: bookingData.astrologerId,
+              consultationType: consultationType === 'voice' || consultationType === 'video' ? consultationType : 'chat'
+            }
+          }
+        ]
       });
-      
-      console.log(' [BookingPopupWrapper] Successfully joined consultation room:', joinResult);
-      
-      // Prepare navigation parameters
-      const navigationParams = {
-        bookingId: bookingData.bookingId,
-        sessionId: bookingData.sessionId,
-        roomId: bookingData.roomId,
-        astrologerId: bookingData.astrologerId,
-        consultationType: bookingData.bookingType || bookingData.type
-      };
-      
-      console.log(' [BookingPopupWrapper] Navigation params prepared:', JSON.stringify(navigationParams, null, 2));
-      
-      // Navigate to appropriate session screen after successful join
-      const consultationType = bookingData.bookingType || bookingData.type;
-      console.log(' [BookingPopupWrapper] Using consultation type:', consultationType);
-      
-      if (consultationType === 'video') {
-        console.log(' [BookingPopupWrapper] Video calls are no longer supported');
-        // Video calls are no longer supported
-      } else if (consultationType === 'voice') {
-        console.log(' [BookingPopupWrapper] Voice call handled by Exotel - no navigation needed');
-        // Voice calls are now handled by Exotel - no navigation needed
-      } else if (consultationType === 'chat') {
-        console.log(' [BookingPopupWrapper] Navigating to FixedChatScreen screen');
-        navigation.navigate('FixedChatScreen', {
-          bookingId: bookingData.bookingId,
-          sessionId: bookingData.sessionId,
-          roomId: bookingData.roomId,
-          astrologerId: bookingData.astrologerId,
-          consultationType: consultationType
-        });
-        console.log(' [BookingPopupWrapper] FixedChatScreen navigation completed');
-      } else {
-        console.error(' [BookingPopupWrapper] Unknown consultation type:', consultationType);
-        console.error(' [BookingPopupWrapper] Available booking data:', JSON.stringify(bookingData, null, 2));
-        Alert.alert('Error', `Unknown consultation type: ${consultationType}`);
-        return;
-      }
-      
-      console.log(' [BookingPopupWrapper] handleJoinSession completed successfully');
+
+      console.log(` [BookingPopupWrapper] Navigating to ${consultationType} session with reset action`);
+      navigation.dispatch(resetAction);
       
     } catch (error) {
       console.error(' [BookingPopupWrapper] Error in handleJoinSession:', error);

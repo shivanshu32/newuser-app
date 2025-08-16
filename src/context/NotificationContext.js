@@ -15,10 +15,15 @@ export const NotificationProvider = ({ children }) => {
   const appStateRef = useRef(AppState.currentState);
   const { token, user } = useAuth();
 
-  // Initialize FCM service when user is authenticated
+  // Initialize FCM service when user is authenticated (non-blocking)
   useEffect(() => {
     if (token && user && !isInitialized) {
-      initializeFCMService();
+      // Make FCM initialization completely non-blocking to prevent app crashes
+      initializeFCMService().catch(error => {
+        console.error('❌ [NotificationContext] FCM initialization failed, continuing without notifications:', error);
+        // Set initialized to true even on failure to prevent retry loops
+        setIsInitialized(true);
+      });
     }
   }, [token, user, isInitialized]);
 
@@ -47,13 +52,19 @@ export const NotificationProvider = ({ children }) => {
   }, []);
 
   /**
-   * Initialize FCM service
+   * Initialize FCM service (with comprehensive error handling)
    */
   const initializeFCMService = async () => {
     try {
       console.log('🚀 [NotificationContext] Initializing FCM service...');
       
-      const success = await FCMService.initialize();
+      // Add timeout to prevent hanging
+      const timeoutPromise = new Promise((_, reject) => {
+        setTimeout(() => reject(new Error('FCM initialization timeout')), 10000);
+      });
+      
+      const initPromise = FCMService.initialize();
+      const success = await Promise.race([initPromise, timeoutPromise]);
       
       if (success) {
         const token = await FCMService.getToken();
@@ -63,13 +74,19 @@ export const NotificationProvider = ({ children }) => {
         }
         setIsInitialized(true);
         
-        // Load initial unread count
-        await updateUnreadCount();
+        // Load initial unread count (non-blocking)
+        updateUnreadCount().catch(error => {
+          console.warn('❌ [NotificationContext] Failed to load unread count:', error);
+        });
       } else {
         console.error('❌ [NotificationContext] Failed to initialize FCM service');
+        setIsInitialized(true); // Set to true to prevent retry loops
       }
     } catch (error) {
       console.error('❌ [NotificationContext] FCM initialization error:', error);
+      setIsInitialized(true); // Set to true even on error to prevent retry loops
+      
+      // Don't throw error - let app continue without notifications
     }
   };
 
