@@ -2095,7 +2095,7 @@ const HomeScreen = ({ navigation }) => {
           {/* Specialization Pills */}
           <View style={styles.specializationContainer}>
             <Text style={styles.specializationText} numberOfLines={1}>
-              {astrologer.specialties?.[0] || (Array.isArray(astrologer.specialization) ? astrologer.specialization[0] : '') || 'Vedic Astrology'}
+              {astrologer.specialties?.[0] || astrologer.specialization || 'Vedic Astrology'}
             </Text>
           </View>
           
@@ -2207,7 +2207,7 @@ const HomeScreen = ({ navigation }) => {
             </View>
             
             <Text style={styles.astrologerSpecialty} numberOfLines={2}>
-              {item.specialties?.join(', ') || item.specializations?.join(', ') || 'Vedic Astrology, Numerology'}
+              {item.specialties?.join(', ') || item.specialization || 'Vedic Astrology, Numerology'}
             </Text>
             
             {/* Enhanced Rating Section */}
@@ -2620,7 +2620,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#f8f9fa',
   },
   flatListContent: {
-    flexGrow: 1,
+    paddingBottom: 20,
   },
   header: {
     backgroundColor: '#fff',

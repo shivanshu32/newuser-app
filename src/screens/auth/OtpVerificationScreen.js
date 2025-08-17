@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import {
   StyleSheet,
   View,
@@ -36,8 +36,6 @@ const OtpVerificationScreen = ({ route, navigation }) => {
     }
   }, [token, hasVerified]);
 
-
-
   // Cleanup on unmount
   useEffect(() => {
     return () => {
@@ -48,94 +46,81 @@ const OtpVerificationScreen = ({ route, navigation }) => {
     };
   }, []);
 
-  // Timer effect with proper cleanup - optimized to prevent flickering
+  // Timer effect with proper cleanup - completely fixed to prevent flickering
   useEffect(() => {
+    // Clear any existing timer first
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+      timerRef.current = null;
+    }
+    
+    // Only start timer if conditions are met
     if (timer > 0 && !canResend && isMountedRef.current) {
       timerRef.current = setInterval(() => {
-        if (isMountedRef.current) {
-          setTimer((prevTimer) => {
-            const newTimer = prevTimer - 1;
-            if (newTimer <= 0) {
-              // Use a single state update to prevent flickering
-              setTimeout(() => {
-                if (isMountedRef.current) {
-                  setCanResend(true);
-                }
-              }, 0);
-              return 0;
-            }
-            return newTimer;
-          });
-        }
+        setTimer((prevTimer) => {
+          if (prevTimer <= 1) {
+            // Timer reached zero - update canResend in next tick to prevent race condition
+            setTimeout(() => setCanResend(true), 0);
+            return 0;
+          }
+          return prevTimer - 1;
+        });
       }, 1000);
-      
-      return () => {
-        if (timerRef.current) {
-          clearInterval(timerRef.current);
-        }
-      };
     }
-  }, [timer > 0 && !canResend]); // Optimized dependency to reduce re-renders
+    
+    return () => {
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
+        timerRef.current = null;
+      }
+    };
+  }, [timer > 0 && !canResend]); // Optimized dependency to prevent unnecessary re-renders
 
-  // Enhanced OTP change handler with auto-fill support - optimized to prevent flickering
+  // Enhanced OTP change handler with auto-fill support - completely optimized
   const handleOtpChange = useCallback((text, index) => {
     // Check if the input contains multiple digits (auto-fill scenario)
     if (text.length > 1) {
-      // Extract only digits from the text
       const digits = text.replace(/\D/g, '');
-      
       if (digits.length >= 4) {
-        // Auto-fill all 4 digits with single state update
-        const newOtp = digits.slice(0, 4).split('').concat(['', '', '', '']).slice(0, 4);
+        const newOtp = digits.slice(0, 4).split('');
         setOtp(newOtp);
-        
-        // Focus the last input after auto-fill with reduced delay
-        requestAnimationFrame(() => {
-          inputRefs.current[3]?.focus();
-        });
-        
-        console.log('🔢 Auto-filled OTP from SMS:', newOtp.join(''));
+        setTimeout(() => inputRefs.current[3]?.focus(), 100);
         return;
       }
     }
     
-    // Handle single digit input (manual typing) - batch state update
+    // Handle single digit input - only update if different
+    const cleanText = text.replace(/\D/g, '');
     setOtp(prevOtp => {
-      const newOtp = [...prevOtp];
-      newOtp[index] = text.replace(/\D/g, ''); // Only allow digits
+      if (prevOtp[index] === cleanText) return prevOtp; // Prevent unnecessary re-render
       
-      // Auto-focus next input if current input is filled
-      if (text && index < 3) {
-        requestAnimationFrame(() => {
-          inputRefs.current[index + 1]?.focus();
-        });
+      const newOtp = [...prevOtp];
+      newOtp[index] = cleanText;
+      
+      // Auto-focus next input
+      if (cleanText && index < 3) {
+        setTimeout(() => inputRefs.current[index + 1]?.focus(), 100);
       }
       
       return newOtp;
     });
-  }, []); // Removed otp dependency to prevent unnecessary re-renders
+  }, []); // Removed otp dependency to prevent re-renders
 
   const handleKeyPress = useCallback((e, index) => {
-    // Handle backspace to move to previous input - optimized to prevent flickering
     if (e.nativeEvent.key === 'Backspace' && index > 0) {
       setOtp(prevOtp => {
         if (!prevOtp[index]) {
-          requestAnimationFrame(() => {
-            inputRefs.current[index - 1]?.focus();
-          });
+          setTimeout(() => inputRefs.current[index - 1]?.focus(), 100);
         }
-        return prevOtp;
+        return prevOtp; // Don't change state, just handle focus
       });
     }
-  }, []); // Removed otp dependency to prevent unnecessary re-renders
+  }, []); // Removed otp dependency
 
 
 
   const handleVerifyOtp = useCallback(async () => {
-    // Prevent multiple verification attempts
-    if (isVerifying || localLoading || loading) {
-      return;
-    }
+    if (isVerifying || localLoading || loading) return;
 
     const otpString = otp.join('');
     if (otpString.length !== 4) {
@@ -151,40 +136,36 @@ const OtpVerificationScreen = ({ route, navigation }) => {
       
       if (result.success) {
         setHasVerified(true);
-        console.log('OTP verification successful');
-        // Navigation will be handled by App.js when token is set
       } else {
         Alert.alert('Error', result.message || 'Invalid OTP. Please try again.');
-        // Clear OTP inputs on error
         setOtp(['', '', '', '']);
-        inputRefs.current[0]?.focus();
+        setTimeout(() => inputRefs.current[0]?.focus(), 100);
       }
     } catch (error) {
-      console.error('OTP verification error:', error);
       Alert.alert('Error', 'Failed to verify OTP. Please try again.');
       setOtp(['', '', '', '']);
-      inputRefs.current[0]?.focus();
+      setTimeout(() => inputRefs.current[0]?.focus(), 100);
     } finally {
-      if (isMountedRef.current) {
-        setIsVerifying(false);
-        setLocalLoading(false);
-      }
+      setIsVerifying(false);
+      setLocalLoading(false);
     }
-  }, [otp, isVerifying, localLoading, loading, phoneNumber, verifyOtp]);
+  }, [otp, phoneNumber, verifyOtp, isVerifying, localLoading, loading]);
 
   const handleResendOtp = useCallback(async () => {
     if (!canResend || loading) return;
 
     setLocalLoading(true);
-    const result = await requestOtp(phoneNumber, 'user');
-    setLocalLoading(false);
-
-    if (result.success) {
-      setTimer(30);
-      setCanResend(false);
-      Alert.alert('Success', 'OTP sent successfully');
-    } else {
-      Alert.alert('Error', result.message || 'Failed to resend OTP');
+    try {
+      const result = await requestOtp(phoneNumber);
+      if (result.success) {
+        setTimer(30);
+        setCanResend(false);
+        Alert.alert('Success', 'OTP sent successfully');
+      } else {
+        Alert.alert('Error', result.message || 'Failed to resend OTP');
+      }
+    } finally {
+      setLocalLoading(false);
     }
   }, [canResend, loading, phoneNumber, requestOtp]);
 
@@ -220,26 +201,24 @@ const OtpVerificationScreen = ({ route, navigation }) => {
           </View>
 
           <View style={styles.otpContainer}>
-            {[0, 1, 2, 3].map((index) => (
+            {otp.map((digit, index) => (
               <TextInput
-                key={index}
+                key={`otp-${index}`}
                 ref={(ref) => (inputRefs.current[index] = ref)}
                 style={styles.otpInput}
                 keyboardType="number-pad"
-                maxLength={index === 0 ? 4 : 1} // Allow first input to accept full OTP
-                value={otp[index]}
+                maxLength={index === 0 ? 4 : 1}
+                value={digit}
                 onChangeText={(text) => handleOtpChange(text, index)}
                 onKeyPress={(e) => handleKeyPress(e, index)}
                 placeholderTextColor="#9CA3AF"
                 autoFocus={index === 0}
-                // Android SMS auto-read properties
                 textContentType={Platform.OS === 'ios' ? 'oneTimeCode' : undefined}
                 autoComplete={Platform.OS === 'android' ? 'sms-otp' : 'one-time-code'}
-                importantForAutofill="yes"
-                // Additional properties for better auto-fill support
                 selectTextOnFocus={true}
                 blurOnSubmit={false}
                 returnKeyType="next"
+                editable={!loading && !localLoading}
               />
             ))}
           </View>

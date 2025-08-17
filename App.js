@@ -41,6 +41,23 @@ import analyticsService from './src/services/analyticsService';
 
 // Import version check hook
 import useVersionCheck from './src/hooks/useVersionCheck';
+import * as Sentry from '@sentry/react-native';
+
+Sentry.init({
+  dsn: 'https://d1f4441d45237d6cbf1bf0a140a565cb@o4509860442406912.ingest.de.sentry.io/4509860448436304',
+
+  // Adds more context data to events (IP address, cookies, user, etc.)
+  // For more information, visit: https://docs.sentry.io/platforms/react-native/data-management/data-collected/
+  sendDefaultPii: true,
+
+  // Configure Session Replay
+  replaysSessionSampleRate: 0.1,
+  replaysOnErrorSampleRate: 1,
+  integrations: [Sentry.mobileReplayIntegration()],
+
+  // uncomment the line below to enable Spotlight (https://spotlightjs.com)
+  // spotlight: __DEV__,
+});
 
 // Create a wrapper component that uses the AuthContext
 function AppContent() {
@@ -136,12 +153,11 @@ function AppContent() {
   return token ? <MainNavigator /> : <AuthNavigator />;
 }
 
-export default function App() {
+export default Sentry.wrap(function App() {
   return (
     <ErrorBoundary>
       <SafeAreaProvider>
-        {/* Temporarily disable EdgeToEdgeHandler to prevent production crashes */}
-        {/* <EdgeToEdgeHandler> */}
+        <EdgeToEdgeHandler>
           <ContextErrorBoundary 
             contextName="Auth" 
             fallbackMessage="Authentication service failed. App will continue with limited functionality."
@@ -178,8 +194,8 @@ export default function App() {
             </AuthProvider>
           </ContextErrorBoundary>
           <StatusBar style="auto" />
-        {/* </EdgeToEdgeHandler> */}
+        </EdgeToEdgeHandler>
       </SafeAreaProvider>
     </ErrorBoundary>
   );
-}
+});

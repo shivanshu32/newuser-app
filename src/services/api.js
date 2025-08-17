@@ -351,6 +351,9 @@ export const freeChatAPI = {
 // Ratings API
 export const ratingsAPI = {
   submit: (bookingId, rating, comment) => API.post(`/ratings/submit`, { bookingId, rating, comment }),
+  getAstrologerReviews: (astrologerId, params = {}) => API.get(`/ratings/astrologer/${astrologerId}`, { params }),
+  getUserReviews: () => API.get(`/ratings/user`),
+  updateReview: (reviewId, rating, comment) => API.put(`/ratings/${reviewId}`, { rating, comment }),
 };
 
 // Chat History API

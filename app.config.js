@@ -5,7 +5,8 @@ module.exports = ({ config }) => ({
   name: "Jyotish Call",
   slug: "jyotishcall-user-app",
   version: "5.2.2",
-  orientation: "portrait",
+  // Remove global orientation restriction for Android 16+ large screen support
+  // orientation: "portrait", // Commented out for large screen compatibility
   icon: "./assets/icon-square.png",
   userInterfaceStyle: "light",
   splash: {
@@ -58,16 +59,31 @@ module.exports = ({ config }) => ({
       ]
     },
     ndkVersion: "26.1.10909125",
-    // Android 16+ large screen support - remove orientation restrictions
+    // Android 15+ Edge-to-Edge Display Support
+    edgeToEdge: {
+      enabled: true,
+      statusBarStyle: "auto",
+      navigationBarStyle: "auto"
+    },
+    // Android 16+ Large Screen Device Support
     supportsTablet: true,
-    // Enable resizable activities for foldables and tablets
+    // Remove orientation restrictions for foldables and tablets
+    screenOrientation: "unspecified",
+    // Enable resizable activities for all form factors
     resizeableActivity: true,
-    // Disable edge-to-edge to prevent production crashes
-    edgeToEdgeEnabled: false,
-    // Additional crash prevention settings
+    // Support multi-window mode
+    supportsPictureInPicture: false,
+    // Additional Android 15 compatibility settings
     allowBackup: false,
-    // Prevent crashes on low-end devices
-    largeHeap: true
+    largeHeap: true,
+    // Window configuration for edge-to-edge
+    windowSoftInputMode: "adjustResize",
+    // Support for different screen densities and sizes
+    anyDensity: true,
+    smallScreens: true,
+    normalScreens: true,
+    largeScreens: true,
+    xlargeScreens: true
   },
   web: {
     favicon: "./assets/splash.png"
@@ -83,7 +99,15 @@ module.exports = ({ config }) => ({
         ]
       }
     ],
-    "expo-dev-client"
+    "expo-dev-client",
+    [
+      "@sentry/react-native/expo",
+      {
+        "url": "https://sentry.io/",
+        "project": "jyotishcalluser",
+        "organization": "jyotishcall-nl"
+      }
+    ]
   ],
   updates: {
     url: "https://u.expo.dev/19ce1c4d-7c68-407f-96a0-d41bedaa3d55"

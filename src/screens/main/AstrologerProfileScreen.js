@@ -16,7 +16,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSocket } from '../../context/SocketContext';
-import { astrologersAPI, walletAPI } from '../../services/api';
+import { astrologersAPI, walletAPI, ratingsAPI } from '../../services/api';
 import { initiateRealTimeBooking, listenForBookingStatusUpdates } from '../../services/socketService';
 import { addPendingConsultation, getPendingConsultations } from '../../utils/pendingConsultationsStore';
 
@@ -27,6 +27,15 @@ const AstrologerProfileScreen = ({ route, navigation }) => {
   const [error, setError] = useState(null);
   const [bookingStatus, setBookingStatus] = useState(null); // null, 'pending', 'accepted', 'rejected'
   const [currentBookingId, setCurrentBookingId] = useState(null);
+  
+  // Reviews state
+  const [reviews, setReviews] = useState([]);
+  const [reviewsLoading, setReviewsLoading] = useState(false);
+  const [reviewsError, setReviewsError] = useState(null);
+  const [loadingMoreReviews, setLoadingMoreReviews] = useState(false);
+  const [hasMoreReviews, setHasMoreReviews] = useState(true);
+  const [reviewsPage, setReviewsPage] = useState(1);
+  const [totalReviews, setTotalReviews] = useState(0);
   
   // Use refs for values that need to persist across renders and be immune to stale closures
   const currentBookingIdRef = useRef(null);
@@ -83,6 +92,23 @@ const AstrologerProfileScreen = ({ route, navigation }) => {
       }
     };
   }, [socket, handleAstrologerAvailabilityUpdate]);
+
+  // Fetch reviews when astrologer is loaded
+  useEffect(() => {
+    if (astrologer && actualAstrologerId) {
+      console.log('🔄 [USER-APP] AstrologerProfileScreen: Triggering reviews fetch for astrologer:', {
+        astrologerId: actualAstrologerId,
+        astrologerName: astrologer.name || astrologer.displayName,
+        astrologerData: astrologer
+      });
+      fetchAstrologerReviews();
+    } else {
+      console.log('⏳ [USER-APP] AstrologerProfileScreen: Not fetching reviews yet - missing data:', {
+        hasAstrologer: !!astrologer,
+        astrologerId: actualAstrologerId
+      });
+    }
+  }, [astrologer, actualAstrologerId]);
   
   // Add timeout for booking requests
   useEffect(() => {
@@ -495,23 +521,11 @@ const AstrologerProfileScreen = ({ route, navigation }) => {
       setLoading(true);
       setError(null);
       
-      // If astrologer object is already passed, use it directly
-      if (passedAstrologer && (passedAstrologer._id || passedAstrologer.id)) {
-        console.log('✅ [USER-APP] AstrologerProfileScreen: Using passed astrologer object');
-        setAstrologer(passedAstrologer);
-        setLoading(false);
-        return;
-      }
+      console.log('📡 [USER-APP] AstrologerProfileScreen: Fetching astrologer details for ID:', actualAstrologerId);
       
-      // Otherwise, fetch from API using the extracted ID
-      if (!actualAstrologerId) {
-        throw new Error('No astrologer ID available');
-      }
-      
-      console.log('🔄 [USER-APP] AstrologerProfileScreen: Fetching astrologer details for ID:', actualAstrologerId);
-      // Use the astrologersAPI service for consistent API handling
       const response = await astrologersAPI.getById(actualAstrologerId);
       
+      console.log('✅ [USER-APP] AstrologerProfileScreen: Successfully fetched astrologer details:', response.data);
       // Extract the actual astrologer data from the nested response structure
       let astrologerData = null;
       
@@ -535,6 +549,103 @@ const AstrologerProfileScreen = ({ route, navigation }) => {
       setError('Failed to load astrologer details. Please try again.');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchAstrologerReviews = async (page = 1, limit = 5) => {
+    try {
+      if (page === 1) {
+        setReviewsLoading(true);
+        setReviewsError(null);
+        setReviews([]);
+        setReviewsPage(1);
+        setHasMoreReviews(true);
+      } else {
+        setLoadingMoreReviews(true);
+      }
+      
+      console.log('📡 [USER-APP] AstrologerProfileScreen: Fetching reviews for astrologer ID:', actualAstrologerId, 'Page:', page, 'Limit:', limit);
+      
+      const response = await ratingsAPI.getAstrologerReviews(actualAstrologerId, { page, limit });
+      
+      console.log('✅ [USER-APP] AstrologerProfileScreen: Raw API response:', response);
+      console.log('✅ [USER-APP] AstrologerProfileScreen: Response data:', response.data);
+      
+      // Handle different response structures
+      let reviewsData = [];
+      let total = 0;
+      
+      console.log('🔍 [USER-APP] Response structure check:', {
+        hasResponseData: !!response.data,
+        responseDataKeys: response.data ? Object.keys(response.data) : [],
+        responseDataDataIsArray: response.data ? Array.isArray(response.data.data) : false,
+        responseDataIsArray: Array.isArray(response.data),
+        responseIsArray: Array.isArray(response)
+      });
+      
+      if (response.data && Array.isArray(response.data.data)) {
+        reviewsData = response.data.data;
+        total = response.data.total || response.data.count || reviewsData.length;
+        console.log('🔍 [USER-APP] Using response.data.data structure, total:', total);
+      } else if (response.data && Array.isArray(response.data)) {
+        reviewsData = response.data;
+        total = reviewsData.length;
+        console.log('🔍 [USER-APP] Using response.data structure, total:', total);
+      } else if (Array.isArray(response)) {
+        reviewsData = response;
+        total = reviewsData.length;
+        console.log('🔍 [USER-APP] Using response structure, total:', total);
+      }
+      
+      console.log('🔍 [USER-APP] Final values:', { reviewsData: reviewsData.length, total });
+      
+      console.log('✅ [USER-APP] AstrologerProfileScreen: Setting reviews state with:', reviewsData);
+      console.log('✅ [USER-APP] AstrologerProfileScreen: Reviews count:', reviewsData.length, 'Total:', total);
+      
+      if (page === 1) {
+        setReviews(reviewsData);
+        setTotalReviews(total);
+      } else {
+        setReviews(prevReviews => [...prevReviews, ...reviewsData]);
+      }
+      
+      // Check if there are more reviews to load
+      const currentTotal = page === 1 ? reviewsData.length : reviews.length + reviewsData.length;
+      // Show load more if we have more reviews than currently displayed OR if we got a full page of results
+      const hasMore = total > currentTotal || (reviewsData.length === limit && total > limit);
+      
+      console.log('🔍 [USER-APP] AstrologerProfileScreen: Pagination check:', {
+        currentTotal,
+        total,
+        reviewsDataLength: reviewsData.length,
+        limit,
+        hasMore,
+        page,
+        condition1: total > currentTotal,
+        condition2: reviewsData.length === limit && total > limit
+      });
+      
+      setHasMoreReviews(hasMore);
+      
+      if (page > 1) {
+        setReviewsPage(page);
+      }
+      
+    } catch (error) {
+      console.error('❌ [USER-APP] AstrologerProfileScreen: Error fetching reviews:', error);
+      console.error('❌ [USER-APP] AstrologerProfileScreen: Error response:', error.response);
+      setReviewsError('Failed to load reviews');
+    } finally {
+      setReviewsLoading(false);
+      setLoadingMoreReviews(false);
+    }
+  };
+
+  const loadMoreReviews = async () => {
+    if (!loadingMoreReviews && hasMoreReviews) {
+      const nextPage = reviewsPage + 1;
+      console.log('📡 [USER-APP] AstrologerProfileScreen: Loading more reviews - Page:', nextPage);
+      await fetchAstrologerReviews(nextPage, 5);
     }
   };
 
@@ -994,9 +1105,9 @@ const AstrologerProfileScreen = ({ route, navigation }) => {
             
             <View style={styles.ratingContainer}>
               <Ionicons name="star" size={16} color="#FFD700" />
-              <Text style={styles.rating}>5.0</Text>
+              <Text style={styles.rating}>{ratingText}</Text>
               {ratingCount > 0 && (
-                <Text style={styles.ratingCount}>({ratingCount} reviews)</Text>
+                <Text style={styles.ratingCount} numberOfLines={1} ellipsizeMode="tail">({ratingCount} reviews)</Text>
               )}
             </View>
             
@@ -1018,15 +1129,113 @@ const AstrologerProfileScreen = ({ route, navigation }) => {
           <View style={styles.statDivider} />
           
           <View style={styles.statItem}>
-            <Text style={styles.statValue}>5.0</Text>
+            <Text style={styles.statValue}>{ratingText}</Text>
             <Text style={styles.statLabel}>Rating</Text>
           </View>
           
           <View style={styles.statDivider} />
           
           <View style={styles.statItem}>
-            <Text style={styles.statValue}>{astrologer.totalConsultations || '100'}+</Text>
+            <Text style={styles.statValue}>
+              {(() => {
+                console.log('🔍 [DEBUG] Astrologer consultations data:', {
+                  totalConsultations: astrologer.totalConsultations,
+                  consultationsCount: astrologer.consultationsCount,
+                  astrologerObject: astrologer
+                });
+                return astrologer.totalConsultations || astrologer.consultationsCount || '0';
+              })()}+
+            </Text>
             <Text style={styles.statLabel}>Consultations</Text>
+          </View>
+        </View>
+
+        {/* Booking Buttons */}
+        <View style={styles.bookingSection}>
+          <Text style={styles.bookingSectionTitle}>Book a Consultation</Text>
+          {/* <Text style={styles.bookingSubtitle}>
+            {astrologer.status === 'Online' 
+              ? 'Astrologer is available now. Choose a consultation type:' 
+              : 'Astrologer is currently offline. The astrologer will be notified once they come online.'}
+          </Text> */}
+          
+          <View style={styles.bookingButtonsContainer}>
+            {/* Chat Button - Show only if onlineStatus.chat === 1 and consultation price exists */}
+            {(() => {
+              const shouldShowChat = astrologer.onlineStatus?.chat === 1 && astrologer.consultationPrices?.chat;
+              console.log('🔍 [AstrologerProfile] Chat button visibility check:', {
+                onlineStatusChat: astrologer.onlineStatus?.chat,
+                hasConsultationPrice: !!astrologer.consultationPrices?.chat,
+                shouldShow: shouldShowChat
+              });
+              return shouldShowChat;
+            })() && (
+              <TouchableOpacity 
+                style={[styles.bookingButton, styles.chatButton]} 
+                onPress={handleBookChat}
+                accessibilityLabel="Book Chat Consultation"
+              >
+                <Ionicons 
+                  name="chatbubble" 
+                  size={24} 
+                  color="#fff" 
+                />
+                <Text style={styles.bookingButtonText}>
+                  Chat
+                </Text>
+                <Text style={styles.bookingButtonPrice}>
+                  ₹{astrologer.consultationPrices?.chat || '20'}/min
+                </Text>
+              </TouchableOpacity>
+            )}
+            
+            {/* Voice Call Button - Show only if onlineStatus.call === 1 and consultation price exists */}
+            {(() => {
+              const shouldShowCall = astrologer.onlineStatus?.call === 1 && astrologer.consultationPrices?.call;
+              console.log('🔍 [AstrologerProfile] Call button visibility check:', {
+                onlineStatusCall: astrologer.onlineStatus?.call,
+                hasConsultationPrice: !!astrologer.consultationPrices?.call,
+                shouldShow: shouldShowCall
+              });
+              return shouldShowCall;
+            })() && (
+              <TouchableOpacity 
+                style={[styles.bookingButton, styles.voiceButton]} 
+                onPress={handleBookVoiceCall}
+                accessibilityLabel="Book Voice Call Consultation"
+              >
+                <Ionicons 
+                  name="call" 
+                  size={24} 
+                  color="#fff" 
+                />
+                <Text style={styles.bookingButtonText}>
+                  Voice Call
+                </Text>
+                <Text style={styles.bookingButtonPrice}>
+                  ₹{astrologer.consultationPrices?.call || '30'}/min
+                </Text>
+              </TouchableOpacity>
+            )}
+            
+            {/* Video Call booking button temporarily hidden */}
+            {/* <TouchableOpacity 
+              style={[styles.bookingButton, styles.videoButton]} 
+              onPress={handleBookVideoCall}
+              accessibilityLabel="Book Video Call Consultation"
+            >
+              <Ionicons 
+                name="videocam" 
+                size={24} 
+                color="#fff" 
+              />
+              <Text style={styles.bookingButtonText}>
+                Video Call
+              </Text>
+              <Text style={styles.bookingButtonPrice}>
+                ₹{astrologer.consultationPrices?.video || '40'}/min
+              </Text>
+            </TouchableOpacity> */}
           </View>
         </View>
 
@@ -1086,6 +1295,206 @@ const AstrologerProfileScreen = ({ route, navigation }) => {
           </View>
 
           {/* Consultation Charges section removed */}
+        </View>
+
+        {/* Reviews Section */}
+        <View style={styles.reviewsSection}>
+          <View style={styles.reviewsHeader}>
+            <View style={styles.reviewsHeaderTop}>
+              <Text style={styles.sectionTitle}>Reviews & Ratings</Text>
+              {reviews.length > 0 && (
+                <TouchableOpacity style={styles.viewAllButton}>
+                  <Text style={styles.viewAllButtonText}>View All</Text>
+                  <Ionicons name="chevron-forward" size={16} color="#F97316" />
+                </TouchableOpacity>
+              )}
+            </View>
+            
+            {reviews.length > 0 && (
+              <View style={styles.ratingOverview}>
+                <View style={styles.ratingOverviewLeft}>
+                  <Text style={styles.overallRating}>{ratingText}</Text>
+                  <View style={styles.overallStars}>
+                    {[1, 2, 3, 4, 5].map((star) => (
+                      <Ionicons
+                        key={star}
+                        name={star <= (astrologer.rating?.average || 0) ? "star" : "star-outline"}
+                        size={18}
+                        color="#FFD700"
+                      />
+                    ))}
+                  </View>
+                  <Text style={styles.totalReviews}>Based on {reviews.length} reviews</Text>
+                </View>
+                
+                <View style={styles.ratingDistribution}>
+                  {[5, 4, 3, 2, 1].map((rating) => {
+                    const count = reviews.filter(r => r.rating === rating).length;
+                    const percentage = reviews.length > 0 ? (count / reviews.length) * 100 : 0;
+                    return (
+                      <View key={rating} style={styles.ratingBar}>
+                        <Text style={styles.ratingNumber}>{rating}</Text>
+                        <Ionicons name="star" size={12} color="#FFD700" />
+                        <View style={styles.barContainer}>
+                          <View style={[styles.barFill, { width: `${percentage}%` }]} />
+                        </View>
+                        <Text style={styles.ratingCount}>{count}</Text>
+                      </View>
+                    );
+                  })}
+                </View>
+              </View>
+            )}
+          </View>
+          
+          {(() => {
+            console.log('🎨 [USER-APP] AstrologerProfileScreen: Rendering reviews section with:', {
+              reviewsLoading,
+              reviewsError,
+              reviewsLength: reviews.length,
+              reviews: reviews
+            });
+            return null;
+          })()}
+          
+          {reviewsLoading ? (
+            <View style={styles.reviewsLoading}>
+              <ActivityIndicator size="small" color="#F97316" />
+              <Text style={styles.loadingText}>Loading reviews...</Text>
+            </View>
+          ) : reviewsError ? (
+            <View style={styles.reviewsError}>
+              <Text style={styles.errorText}>{reviewsError}</Text>
+              <TouchableOpacity onPress={fetchAstrologerReviews} style={styles.retryButton}>
+                <Text style={styles.retryButtonText}>Retry</Text>
+              </TouchableOpacity>
+            </View>
+          ) : reviews.length === 0 ? (
+            <View style={styles.noReviews}>
+              <Ionicons name="star-outline" size={48} color="#D1D5DB" />
+              <Text style={styles.noReviewsText}>No reviews yet</Text>
+              <Text style={styles.noReviewsSubtext}>Be the first to review this astrologer</Text>
+            </View>
+          ) : (
+            <View style={styles.reviewsList}>
+              <View style={styles.reviewsListHeader}>
+                <Text style={styles.recentReviewsTitle}>Recent Reviews</Text>
+                <View style={styles.reviewsFilter}>
+                  <Text style={styles.filterText}>Most Recent</Text>
+                  <Ionicons name="chevron-down" size={14} color="#6B7280" />
+                </View>
+              </View>
+              
+              {reviews.map((review, index) => (
+                <View key={review._id} style={[styles.reviewItem, index === reviews.length - 1 && styles.lastReviewItem]}>
+                  <View style={styles.reviewCard}>
+                    <View style={styles.reviewCardHeader}>
+                      <View style={styles.reviewUserSection}>
+                        <View style={styles.reviewAvatar}>
+                          {review.user?.profileImage && review.user.profileImage !== 'default-user.png' ? (
+                            <Image 
+                              source={{ uri: review.user.profileImage }} 
+                              style={styles.reviewAvatarImage}
+                              defaultSource={{ uri: 'https://www.shutterstock.com/image-vector/default-avatar-profile-icon-social-600nw-1677509740.jpg' }}
+                            />
+                          ) : (
+                            <View style={styles.reviewAvatarPlaceholder}>
+                              <Text style={styles.reviewAvatarText}>
+                                {review.user?.name ? review.user.name.charAt(0).toUpperCase() : 'U'}
+                              </Text>
+                            </View>
+                          )}
+                        </View>
+                        <View style={styles.reviewUserInfo}>
+                          <View style={styles.reviewUserNameRow}>
+                            <Text style={styles.reviewUserName}>
+                              {review.user?.name || 'Anonymous User'}
+                            </Text>
+                            <View style={styles.reviewRatingBadge}>
+                              <Ionicons name="star" size={12} color="#FFD700" />
+                              <Text style={styles.reviewRatingBadgeText}>{review.rating}.0</Text>
+                            </View>
+                          </View>
+                          <View style={styles.reviewMetadata}>
+                            <Text style={styles.reviewDate}>
+                              {(() => {
+                                const reviewDate = new Date(review.createdAt);
+                                const now = new Date();
+                                const diffTime = Math.abs(now - reviewDate);
+                                const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                                
+                                if (diffDays === 1) return 'Yesterday';
+                                if (diffDays < 7) return `${diffDays} days ago`;
+                                if (diffDays < 30) return `${Math.ceil(diffDays / 7)} weeks ago`;
+                                if (diffDays < 365) return `${Math.ceil(diffDays / 30)} months ago`;
+                                return `${Math.ceil(diffDays / 365)} years ago`;
+                              })()}
+                            </Text>
+                            <View style={styles.reviewDot} />
+                            <View style={styles.consultationTypeBadge}>
+                              <Ionicons name="chatbubble" size={10} color="#6B7280" />
+                              <Text style={styles.consultationTypeText}>Chat</Text>
+                            </View>
+                          </View>
+                        </View>
+                      </View>
+                    </View>
+                    
+                    {review.comment && review.comment.trim() !== '' ? (
+                      <View style={styles.reviewCommentSection}>
+                        <Text style={styles.reviewComment}>"{review.comment}"</Text>
+                      </View>
+                    ) : (
+                      <View style={styles.reviewCommentSection}>
+                        <Text style={styles.reviewNoComment}>
+                          <Ionicons name="star" size={14} color="#FFD700" />
+                          {' '}Rated {review.rating} stars without written feedback
+                        </Text>
+                      </View>
+                    )}
+                    
+                    <View style={styles.reviewActions}>
+                      <View style={styles.reviewVerified}>
+                        <Ionicons name="shield-checkmark" size={14} color="#10B981" />
+                        <Text style={styles.reviewVerifiedText}>Verified Purchase</Text>
+                      </View>
+                      <View style={styles.reviewHelpful}>
+                        <TouchableOpacity style={styles.helpfulButton}>
+                          <Ionicons name="thumbs-up-outline" size={14} color="#6B7280" />
+                          <Text style={styles.helpfulText}>Helpful</Text>
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+                  </View>
+                </View>
+              ))}
+              
+              {hasMoreReviews && (
+                <TouchableOpacity 
+                  style={styles.loadMoreButton}
+                  onPress={loadMoreReviews}
+                  disabled={loadingMoreReviews}
+                >
+                  {loadingMoreReviews ? (
+                    <View style={styles.loadMoreContent}>
+                      <ActivityIndicator size="small" color="#F97316" />
+                      <Text style={styles.loadMoreText}>Loading more reviews...</Text>
+                    </View>
+                  ) : (
+                    <View style={styles.loadMoreContent}>
+                      <Text style={styles.loadMoreText}>Load more reviews</Text>
+                      <Text style={styles.loadMoreSubtext}>
+                        Showing {reviews.length} of {totalReviews} reviews
+                      </Text>
+                    </View>
+                  )}
+                  {!loadingMoreReviews && (
+                    <Ionicons name="chevron-down" size={20} color="#F97316" />
+                  )}
+                </TouchableOpacity>
+              )}
+            </View>
+          )}
         </View>
 
         {/* Booking Buttons */}
@@ -1395,6 +1804,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     marginBottom: 6,
+    flex: 1,
   },
   rating: {
     fontSize: 16,
@@ -1406,6 +1816,10 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#6B7280',
     marginLeft: 4,
+    flexShrink: 0,
+    borderWidth: 1,
+    borderColor: 'red',
+    backgroundColor: 'rgba(255, 0, 0, 0.1)',
   },
   statusTextContainer: {
     flexDirection: 'row',
@@ -1613,6 +2027,380 @@ const styles = StyleSheet.create({
   },
   disabledButtonText: {
     color: '#9CA3AF',
+  },
+  
+  // Reviews Section Styles
+  reviewsSection: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 24,
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+  },
+  reviewsHeader: {
+    marginBottom: 20,
+  },
+  reviewsHeaderTop: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  viewAllButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    backgroundColor: '#FEF3E2',
+    borderRadius: 20,
+  },
+  viewAllButtonText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#F97316',
+    marginRight: 4,
+  },
+  ratingOverview: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    backgroundColor: '#F9FAFB',
+    borderRadius: 12,
+    padding: 16,
+  },
+  ratingOverviewLeft: {
+    alignItems: 'center',
+    flex: 1,
+  },
+  overallRating: {
+    fontSize: 32,
+    fontWeight: 'bold',
+    color: '#1F2937',
+    marginBottom: 4,
+  },
+  overallStars: {
+    flexDirection: 'row',
+    gap: 3,
+    marginBottom: 8,
+  },
+  totalReviews: {
+    fontSize: 12,
+    color: '#6B7280',
+    fontWeight: '500',
+  },
+  ratingDistribution: {
+    flex: 1.5,
+    marginLeft: 20,
+  },
+  ratingBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 6,
+  },
+  ratingNumber: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#4B5563',
+    width: 12,
+  },
+  barContainer: {
+    flex: 1,
+    height: 6,
+    backgroundColor: '#E5E7EB',
+    borderRadius: 3,
+    marginHorizontal: 8,
+  },
+  barFill: {
+    height: '100%',
+    backgroundColor: '#FFD700',
+    borderRadius: 3,
+  },
+  ratingCount: {
+    fontSize: 12,
+    color: '#6B7280',
+    width: 20,
+    textAlign: 'right',
+  },
+  reviewsLoading: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 20,
+  },
+  loadingText: {
+    marginLeft: 8,
+    fontSize: 14,
+    color: '#6B7280',
+  },
+  reviewsError: {
+    alignItems: 'center',
+    paddingVertical: 20,
+  },
+  errorText: {
+    fontSize: 14,
+    color: '#EF4444',
+    marginBottom: 8,
+  },
+  retryButton: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    backgroundColor: '#F97316',
+    borderRadius: 8,
+  },
+  retryButtonText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  noReviews: {
+    alignItems: 'center',
+    paddingVertical: 32,
+  },
+  noReviewsText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#4B5563',
+    marginTop: 12,
+  },
+  noReviewsSubtext: {
+    fontSize: 14,
+    color: '#9CA3AF',
+    marginTop: 4,
+  },
+  reviewsList: {
+    marginTop: 20,
+  },
+  reviewsListHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+    paddingBottom: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F3F4F6',
+  },
+  recentReviewsTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#1F2937',
+  },
+  reviewsFilter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    backgroundColor: '#F9FAFB',
+    borderRadius: 6,
+  },
+  filterText: {
+    fontSize: 12,
+    color: '#6B7280',
+    marginRight: 4,
+  },
+  reviewItem: {
+    marginBottom: 16,
+  },
+  lastReviewItem: {
+    marginBottom: 0,
+  },
+  reviewCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 20,
+    borderWidth: 1,
+    borderColor: '#F3F4F6',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  reviewCardHeader: {
+    marginBottom: 16,
+  },
+  reviewUserSection: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+  },
+  reviewAvatar: {
+    marginRight: 12,
+  },
+  reviewAvatarImage: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+  },
+  reviewAvatarPlaceholder: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: '#F97316',
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#F97316',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  reviewAvatarText: {
+    color: '#fff',
+    fontSize: 20,
+    fontWeight: '700',
+  },
+  reviewUserInfo: {
+    flex: 1,
+  },
+  reviewUserNameRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 6,
+  },
+  reviewUserName: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#1F2937',
+    flex: 1,
+  },
+  reviewRatingBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FEF3E2',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  reviewRatingBadgeText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#F97316',
+    marginLeft: 2,
+  },
+  reviewMetadata: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  reviewDate: {
+    fontSize: 12,
+    color: '#9CA3AF',
+    fontWeight: '500',
+  },
+  reviewDot: {
+    width: 3,
+    height: 3,
+    borderRadius: 1.5,
+    backgroundColor: '#D1D5DB',
+    marginHorizontal: 8,
+  },
+  consultationTypeBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F0F9FF',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 8,
+  },
+  consultationTypeText: {
+    fontSize: 10,
+    color: '#6B7280',
+    fontWeight: '500',
+    marginLeft: 2,
+  },
+  reviewCommentSection: {
+    marginBottom: 16,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    backgroundColor: '#F9FAFB',
+    borderRadius: 12,
+    borderLeftWidth: 3,
+    borderLeftColor: '#F97316',
+  },
+  reviewComment: {
+    fontSize: 15,
+    color: '#374151',
+    lineHeight: 22,
+    fontStyle: 'italic',
+  },
+  reviewNoComment: {
+    fontSize: 14,
+    color: '#9CA3AF',
+    fontStyle: 'italic',
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  reviewActions: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#F3F4F6',
+  },
+  reviewVerified: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  reviewVerifiedText: {
+    fontSize: 12,
+    color: '#10B981',
+    fontWeight: '500',
+    marginLeft: 4,
+  },
+  reviewHelpful: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  helpfulButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+    backgroundColor: '#F9FAFB',
+  },
+  helpfulText: {
+    fontSize: 12,
+    color: '#6B7280',
+    marginLeft: 4,
+  },
+  loadMoreButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 16,
+    paddingHorizontal: 20,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    marginTop: 16,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 1,
+  },
+  loadMoreContent: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  loadMoreText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#F97316',
+    marginLeft: 8,
+  },
+  loadMoreSubtext: {
+    fontSize: 12,
+    color: '#9CA3AF',
+    fontWeight: '500',
+    marginLeft: 12,
   },
 });
 
