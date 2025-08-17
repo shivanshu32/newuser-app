@@ -9,9 +9,9 @@ import {
   Switch,
   Alert,
   ActivityIndicator,
-  SafeAreaView,
   Linking,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../context/AuthContext';
 import { useNotification } from '../../context/NotificationContext';
@@ -146,7 +146,8 @@ const ProfileScreen = ({ navigation }) => {
   ];
 
   return (
-    <SafeAreaView style={styles.safeArea}>
+    <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
+      <View style={styles.contentWrapper}>
       <View style={styles.headerBar}>
         <TouchableOpacity 
           style={styles.backButton} 
@@ -228,6 +229,7 @@ const ProfileScreen = ({ navigation }) => {
         </View>
       )}
       </ScrollView>
+      </View>
     </SafeAreaView>
   );
 };
@@ -237,8 +239,15 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#f8f8f8',
   },
+  contentWrapper: {
+    flex: 1,
+    maxWidth: 500, // Responsive max width for tablets
+    alignSelf: 'center',
+    width: '100%',
+  },
   headerBar: {
     padding: 16,
+    paddingTop: 8, // SafeAreaView now handles safe area properly
     backgroundColor: '#fff',
     borderBottomWidth: 1,
     borderBottomColor: '#eee',

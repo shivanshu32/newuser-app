@@ -5,12 +5,12 @@ import {
   Text,
   FlatList,
   TouchableOpacity,
-  SafeAreaView,
   Image,
   RefreshControl,
   ActivityIndicator,
   Alert,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 import { useAuth } from '../../context/AuthContext';
 import { useSocket } from '../../context/SocketContext';
@@ -667,7 +667,8 @@ const BookingScreen = ({ route, navigation }) => {
   const cancelledCount = bookings.filter(b => ['cancelled', 'rejected', 'expired'].includes(b.status)).length;
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
+      <View style={styles.contentWrapper}>
       <View style={styles.header}>
         <TouchableOpacity 
           style={styles.backButton} 
@@ -719,6 +720,7 @@ const BookingScreen = ({ route, navigation }) => {
           }
         />
       )}
+      </View>
     </SafeAreaView>
   );
 };
@@ -728,8 +730,15 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#f8f8f8',
   },
+  contentWrapper: {
+    flex: 1,
+    maxWidth: 500, // Responsive max width for tablets
+    alignSelf: 'center',
+    width: '100%',
+  },
   header: {
     padding: 16,
+    paddingTop: 8, // SafeAreaView now handles safe area properly
     backgroundColor: '#fff',
     borderBottomWidth: 1,
     borderBottomColor: '#eee',

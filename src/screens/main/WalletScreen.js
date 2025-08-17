@@ -10,8 +10,8 @@ import {
   TextInput,
   ScrollView,
   Modal,
-  SafeAreaView,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { useAuth } from '../../context/AuthContext';
@@ -629,8 +629,9 @@ const WalletScreen = () => {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
-      <View style={styles.header}>
+    <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
+      <View style={styles.contentWrapper}>
+        <View style={styles.header}>
         <TouchableOpacity 
           style={styles.backButton} 
           onPress={() => navigation.navigate('Home')}
@@ -886,6 +887,7 @@ const WalletScreen = () => {
           />
         )}
       </Modal>
+      </View>
     </SafeAreaView>
   );
 };
@@ -895,8 +897,15 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#f8f8f8',
   },
+  contentWrapper: {
+    flex: 1,
+    maxWidth: 500, // Responsive max width for tablets
+    alignSelf: 'center',
+    width: '100%',
+  },
   header: {
     padding: 16,
+    paddingTop: 10, // SafeAreaView now handles safe area properly
     backgroundColor: '#fff',
     borderBottomWidth: 1,
     borderBottomColor: '#eee',

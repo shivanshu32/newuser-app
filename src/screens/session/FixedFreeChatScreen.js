@@ -11,9 +11,9 @@ import {
   Alert,
   ActivityIndicator,
   StatusBar,
-  SafeAreaView,
   AppState,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../context/AuthContext';
 import { useSocket } from '../../context/SocketContext';
@@ -1799,7 +1799,7 @@ const FixedFreeChatScreen = memo(({ route, navigation }) => {
   const statusInfo = getStatusInfo();
 
   return (
-    <SafeAreaView style={styles.safeArea}>
+    <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
       <StatusBar barStyle="light-content" backgroundColor="#6B46C1" />
       
       <KeyboardAvoidingView 
@@ -1907,7 +1907,6 @@ const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
     backgroundColor: '#6B46C1',
-    paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight : 0,
   },
   loadingContainer: {
     flex: 1,
@@ -1928,7 +1927,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#6B46C1',
-    paddingTop: Platform.OS === 'ios' ? 10 : 25,
+    paddingTop: 10, // SafeAreaView now handles safe area properly
     paddingBottom: 15,
     paddingHorizontal: 15,
     elevation: 4,

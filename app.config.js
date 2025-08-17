@@ -59,12 +59,8 @@ module.exports = ({ config }) => ({
       ]
     },
     ndkVersion: "26.1.10909125",
-    // Android 15+ Edge-to-Edge Display Support
-    edgeToEdge: {
-      enabled: true,
-      statusBarStyle: "auto",
-      navigationBarStyle: "auto"
-    },
+    // Disabled edge-to-edge to fix Theme.EdgeToEdge build error
+    // edgeToEdgeEnabled: true,
     // Android 16+ Large Screen Device Support
     supportsTablet: true,
     // Remove orientation restrictions for foldables and tablets
@@ -105,7 +101,8 @@ module.exports = ({ config }) => ({
       {
         "url": "https://sentry.io/",
         "project": "jyotishcalluser",
-        "organization": "jyotishcall-nl"
+        "organization": "jyotishcall-nl",
+        "uploadSourceMaps": true
       }
     ]
   ],

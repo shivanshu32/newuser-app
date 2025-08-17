@@ -8,12 +8,12 @@ import {
   TouchableOpacity,
   Alert,
   ActivityIndicator,
-  SafeAreaView,
   StatusBar,
   Platform,
   KeyboardAvoidingView,
   Modal,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -258,11 +258,12 @@ const AddUserProfile = ({ navigation, route }) => {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
       <StatusBar barStyle="dark-content" backgroundColor="#fff" />
       
-      {/* Header */}
-      <View style={styles.header}>
+      <View style={styles.contentWrapper}>
+        {/* Header */}
+        <View style={styles.header}>
         <TouchableOpacity
           style={styles.backButton}
           onPress={() => navigation.goBack()}
@@ -473,6 +474,7 @@ const AddUserProfile = ({ navigation, route }) => {
           </View>
         </View>
       </Modal>
+      </View>
     </SafeAreaView>
   );
 };
@@ -481,6 +483,12 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#fff',
+  },
+  contentWrapper: {
+    flex: 1,
+    maxWidth: 500, // Responsive max width for tablets
+    alignSelf: 'center',
+    width: '100%',
   },
   keyboardAvoidingView: {
     flex: 1,
@@ -491,6 +499,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: 16,
     paddingVertical: 12,
+    paddingTop: 8, // SafeAreaView now handles safe area properly
     borderBottomWidth: 1,
     borderBottomColor: '#E5E7EB',
   },

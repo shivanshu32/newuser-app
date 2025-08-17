@@ -9,13 +9,13 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   RefreshControl,
-  SafeAreaView,
   StatusBar,
   ScrollView,
   Platform,
   Alert,
   Modal,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons, MaterialIcons, FontAwesome } from '@expo/vector-icons';
 import Toast from 'react-native-toast-message';
 import { useAuth } from '../../context/AuthContext';
@@ -2516,20 +2516,22 @@ const HomeScreen = ({ navigation }) => {
   };
 
   return (
-    <SafeAreaView style={styles.safeAreaContainer}>
+    <SafeAreaView style={styles.safeAreaContainer} edges={['top', 'left', 'right']}>
       <StatusBar barStyle="dark-content" backgroundColor="#fff" translucent={false} />
       
-      <View style={styles.container}>
-        <FlatList
-          data={getFlatListData()}
-          keyExtractor={(item) => item.id}
-          renderItem={renderFlatListItem}
-          refreshControl={
-            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-          }
-          showsVerticalScrollIndicator={false}
-          contentContainerStyle={styles.flatListContent}
-        />
+      <View style={styles.contentWrapper}>
+        <View style={styles.container}>
+          <FlatList
+            data={getFlatListData()}
+            keyExtractor={(item) => item.id}
+            renderItem={renderFlatListItem}
+            refreshControl={
+              <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+            }
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={styles.flatListContent}
+          />
+        </View>
       </View>
 
       {loading && (
@@ -2615,6 +2617,12 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#fff', // Match header background
   },
+  contentWrapper: {
+    flex: 1,
+    maxWidth: 500, // Responsive max width for tablets
+    alignSelf: 'center',
+    width: '100%',
+  },
   container: {
     flex: 1,
     backgroundColor: '#f8f9fa',
@@ -2624,7 +2632,7 @@ const styles = StyleSheet.create({
   },
   header: {
     backgroundColor: '#fff',
-    paddingTop: Platform.OS === 'ios' ? 10 : 20, // Reduced since SafeAreaView handles safe area
+    paddingTop: 10, // SafeAreaView now handles safe area properly
     paddingBottom: 15,
     paddingHorizontal: 20,
     borderBottomWidth: 1,

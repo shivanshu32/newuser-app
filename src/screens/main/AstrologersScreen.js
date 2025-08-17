@@ -8,11 +8,11 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   RefreshControl,
-  SafeAreaView,
   StatusBar,
   Alert,
   TextInput,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons, MaterialIcons, FontAwesome } from '@expo/vector-icons';
 import { useAuth } from '../../context/AuthContext';
 import { astrologersAPI } from '../../services/api';
@@ -309,8 +309,9 @@ const AstrologersScreen = ({ navigation }) => {
 
   if (loading) {
     return (
-      <SafeAreaView style={styles.container}>
+      <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
         <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
+        <View style={styles.contentWrapper}>
         <View style={styles.header}>
           <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
             <Ionicons name="arrow-back" size={24} color="#1F2937" />
@@ -322,13 +323,16 @@ const AstrologersScreen = ({ navigation }) => {
           <ActivityIndicator size="large" color="#F97316" />
           <Text style={styles.loadingText}>Loading astrologers...</Text>
         </View>
+        </View>
       </SafeAreaView>
     );
   }
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
       <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
+      
+      <View style={styles.contentWrapper}>
       
       {/* Header */}
       <View style={styles.header}>
@@ -365,6 +369,7 @@ const AstrologersScreen = ({ navigation }) => {
           </View>
         )}
       />
+      </View>
     </SafeAreaView>
   );
 };
@@ -374,12 +379,19 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#FFFFFF',
   },
+  contentWrapper: {
+    flex: 1,
+    maxWidth: 500, // Responsive max width for tablets
+    alignSelf: 'center',
+    width: '100%',
+  },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
     paddingVertical: 12,
+    paddingTop: 8, // SafeAreaView now handles safe area properly
     borderBottomWidth: 1,
     borderBottomColor: '#E5E7EB',
   },
