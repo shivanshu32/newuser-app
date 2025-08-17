@@ -1951,6 +1951,7 @@ const HomeScreen = ({ navigation }) => {
           </TouchableOpacity>
         </View>
       </View>
+      
     </View>
   );
 
@@ -2435,6 +2436,9 @@ const HomeScreen = ({ navigation }) => {
       data.push({ type: 'freeChat', id: 'freeChat' });
     }
 
+    // Add daily horoscope section
+    data.push({ type: 'dailyHoroscope', id: 'dailyHoroscope' });
+
     // Add pending bookings section if there are any
     const activePendingBookings = pendingBookings.filter(booking => 
       booking.status !== 'expired' && booking.status !== 'cancelled'
@@ -2490,6 +2494,45 @@ const HomeScreen = ({ navigation }) => {
         return <BannerCarousel onBannerPress={handleBannerPress} />;
       case 'freeChat':
         return <FreeChatCard navigation={navigation} />;
+      case 'dailyHoroscope':
+        return (
+          <View style={styles.horoscopeSection}>
+            <TouchableOpacity
+              style={styles.enhancedHoroscopeCard}
+              onPress={() => navigation.navigate('DailyHoroscope')}
+              activeOpacity={0.8}
+            >
+              <View style={styles.horoscopeCardBackground}>
+                <View style={styles.horoscopeCardContent}>
+                  <View style={styles.horoscopeLeftContent}>
+                    <View style={styles.enhancedIconContainer}>
+                      <Ionicons name="star" size={24} color="#FFD700" />
+                      <View style={styles.iconGlow} />
+                    </View>
+                    <View style={styles.horoscopeTextContent}>
+                      <Text style={styles.enhancedHoroscopeTitle}>Daily Horoscope</Text>
+                      <Text style={styles.enhancedHoroscopeSubtitle}>Discover what the stars reveal for you today</Text>
+                      <View style={styles.horoscopeBadge}>
+                        <Text style={styles.badgeText}>FREE</Text>
+                      </View>
+                    </View>
+                  </View>
+                  <View style={styles.horoscopeRightContent}>
+                    <View style={styles.zodiacSymbols}>
+                      <Text style={styles.zodiacSymbol}>♈</Text>
+                      <Text style={styles.zodiacSymbol}>♉</Text>
+                      <Text style={styles.zodiacSymbol}>♊</Text>
+                    </View>
+                    <View style={styles.arrowContainer}>
+                      <Ionicons name="chevron-forward" size={18} color="#F97316" />
+                    </View>
+                  </View>
+                </View>
+                <View style={styles.cardShimmer} />
+              </View>
+            </TouchableOpacity>
+          </View>
+        );
       case 'blogSection':
         return <BlogSection navigation={navigation} />;
       case 'pendingBookingsHeader':
@@ -3504,6 +3547,116 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#F97316',
     marginLeft: 1,
+  },
+  // Enhanced Daily Horoscope Card Styles
+  horoscopeSection: {
+    paddingHorizontal: 20,
+    paddingVertical: 15,
+  },
+  enhancedHoroscopeCard: {
+    borderRadius: 16,
+    overflow: 'hidden',
+    elevation: 6,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.15,
+    shadowRadius: 6,
+  },
+  horoscopeCardBackground: {
+    backgroundColor: '#FFFFFF',
+    position: 'relative',
+    overflow: 'hidden',
+  },
+  horoscopeCardContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 20,
+    minHeight: 100,
+  },
+  horoscopeLeftContent: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  enhancedIconContainer: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    backgroundColor: 'rgba(255, 215, 0, 0.15)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 16,
+    position: 'relative',
+  },
+  iconGlow: {
+    position: 'absolute',
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    backgroundColor: 'rgba(255, 215, 0, 0.1)',
+    opacity: 0.6,
+  },
+  horoscopeTextContent: {
+    flex: 1,
+  },
+  enhancedHoroscopeTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#1F2937',
+    marginBottom: 4,
+    letterSpacing: 0.3,
+  },
+  enhancedHoroscopeSubtitle: {
+    fontSize: 13,
+    color: '#6B7280',
+    fontWeight: '400',
+    lineHeight: 18,
+    marginBottom: 8,
+  },
+  horoscopeBadge: {
+    backgroundColor: '#10B981',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 12,
+    alignSelf: 'flex-start',
+  },
+  badgeText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#FFFFFF',
+    letterSpacing: 0.5,
+  },
+  horoscopeRightContent: {
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    height: 60,
+  },
+  zodiacSymbols: {
+    flexDirection: 'row',
+    marginBottom: 8,
+  },
+  zodiacSymbol: {
+    fontSize: 16,
+    color: '#F97316',
+    marginHorizontal: 2,
+    opacity: 0.7,
+  },
+  arrowContainer: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: 'rgba(249, 115, 22, 0.1)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  cardShimmer: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.4), transparent)',
+    opacity: 0.3,
   },
 });
 

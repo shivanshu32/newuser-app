@@ -30,6 +30,7 @@ import TransactionHistoryScreen from '../screens/main/TransactionHistoryScreen';
 import TransactionDetailScreen from '../screens/main/TransactionDetailScreen';
 import ChatHistoryScreen from '../screens/ChatHistoryScreen';
 import BlogDetailScreen from '../screens/main/BlogDetailScreen';
+import DailyHoroscopeScreen from '../screens/main/DailyHoroscopeScreen';
 
 // E-Pooja screens
 import EPoojaCategories from '../screens/epooja/EPoojaCategories';
@@ -357,6 +358,11 @@ const MainNavigator = () => {
         <Stack.Screen 
           name="BlogDetail" 
           component={BlogDetailScreen} 
+          options={{ headerShown: false }}
+        />
+        <Stack.Screen 
+          name="DailyHoroscope" 
+          component={DailyHoroscopeScreen} 
           options={{ headerShown: false }}
         />
         <Stack.Screen 

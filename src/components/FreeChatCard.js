@@ -209,24 +209,26 @@ const FreeChatCard = ({ navigation }) => {
             Perfect introduction to our premium services!
           </Text>
 
-          <View style={styles.features}>
-            <View style={styles.feature}>
-              <View style={styles.featureIcon}>
-                <Ionicons name="time-outline" size={18} color="#F97316" />
+          <View style={styles.twoRowFeatures}>
+            <View style={styles.iconsRow}>
+              <View style={styles.featureColumn}>
+                <View style={styles.featureIconWrapper}>
+                  <Ionicons name="time-outline" size={18} color="#F97316" />
+                </View>
+                <Text style={styles.featureTextItem}>3 minutes session</Text>
               </View>
-              <Text style={styles.featureText}>3 minutes duration</Text>
-            </View>
-            <View style={styles.feature}>
-              <View style={styles.featureIcon}>
-                <Ionicons name="star-outline" size={18} color="#F97316" />
+              <View style={styles.featureColumn}>
+                <View style={styles.featureIconWrapper}>
+                  <Ionicons name="star-outline" size={18} color="#F97316" />
+                </View>
+                <Text style={styles.featureTextItem}>Expert astrologers</Text>
               </View>
-              <Text style={styles.featureText}>Expert astrologers</Text>
-            </View>
-            <View style={styles.feature}>
-              <View style={styles.featureIcon}>
-                <Ionicons name="gift-outline" size={18} color="#F97316" />
+              <View style={styles.featureColumn}>
+                <View style={styles.featureIconWrapper}>
+                  <Ionicons name="gift-outline" size={18} color="#F97316" />
+                </View>
+                <Text style={styles.featureTextItem}>Completely free</Text>
               </View>
-              <Text style={styles.featureText}>Completely free</Text>
             </View>
           </View>
 
@@ -406,6 +408,36 @@ const styles = StyleSheet.create({
     color: '#374151',
     fontWeight: '500',
     flex: 1,
+  },
+  twoRowFeatures: {
+    marginBottom: 20,
+    paddingHorizontal: 0,
+  },
+  iconsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    paddingHorizontal: 0,
+  },
+  featureColumn: {
+    alignItems: 'center',
+    flex: 1,
+  },
+  featureIconWrapper: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: 'rgba(249, 115, 22, 0.1)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 8,
+  },
+  featureTextItem: {
+    fontSize: 12,
+    color: '#374151',
+    fontWeight: '500',
+    textAlign: 'center',
+    maxWidth: 80,
   },
   button: {
     backgroundColor: '#F97316',
