@@ -185,15 +185,8 @@ class FCMService {
     try {
       console.log('🔄 [FCM] Registering token with backend...');
       
-      const response = await authAPI.post('/auth/register-fcm-token', {
-        fcmToken: token,
-        platform: Platform.OS,
-        deviceInfo: {
-          brand: Device.brand,
-          modelName: Device.modelName,
-          osName: Device.osName,
-          osVersion: Device.osVersion,
-        }
+      const response = await authAPI.post('/notifications/register-token', {
+        fcmToken: token
       });
 
       if (response.data.success) {
@@ -471,7 +464,7 @@ class FCMService {
       
       // Unregister token from backend
       if (this.token) {
-        await authAPI.post('/auth/unregister-fcm-token', {
+        await authAPI.post('/notifications/unregister-token', {
           fcmToken: this.token,
         });
       }
