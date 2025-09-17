@@ -11,6 +11,7 @@ import HomeScreen from '../screens/main/HomeScreen';
 import BookingScreen from '../screens/main/BookingScreen';
 import WalletScreen from '../screens/main/WalletScreen';
 import WalletTopUpSummaryScreen from '../screens/main/WalletTopUpSummaryScreen';
+import PrepaidOfferPaymentScreen from '../screens/main/PrepaidOfferPaymentScreen';
 import RazorpayPaymentScreen from '../screens/main/RazorpayPaymentScreen';
 import ProfileScreen from '../screens/main/ProfileScreen';
 import AddUserProfile from '../screens/main/AddUserProfile';
@@ -323,6 +324,11 @@ const MainNavigator = () => {
         <Stack.Screen 
           name="WalletTopUpSummary" 
           component={WalletTopUpSummaryScreen} 
+          options={{ headerShown: false }}
+        />
+        <Stack.Screen 
+          name="PrepaidOfferPayment" 
+          component={PrepaidOfferPaymentScreen} 
           options={{ headerShown: false }}
         />
         <Stack.Screen 

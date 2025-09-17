@@ -15,6 +15,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../context/AuthContext';
+import { AppEventsLogger } from 'react-native-fbsdk-next';
 
 const OtpVerificationScreen = ({ route, navigation }) => {
   const { phoneNumber } = route.params;
@@ -34,6 +35,7 @@ const OtpVerificationScreen = ({ route, navigation }) => {
   useEffect(() => {
     if (token && hasVerified) {
       console.log('OTP verification successful, token received');
+      AppEventsLogger.logEvent('fb_mobile_login_success');
     }
   }, [token, hasVerified]);
 

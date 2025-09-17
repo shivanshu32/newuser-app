@@ -12,12 +12,14 @@ import {
   ActivityIndicator,
   StatusBar,
   AppState,
+  Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../context/AuthContext';
 import { useSocket } from '../../context/SocketContext';
 import useMessagePersistence from '../../hooks/useMessagePersistence';
+import PrepaidOfferBottomSheet from '../../components/PrepaidOfferBottomSheet';
 
 // API Configuration
 const API_BASE_URL = 'https://jyotishcallbackend-2uxrv.ondigitalocean.app/api/v1';
@@ -116,6 +118,10 @@ const FixedFreeChatScreen = memo(({ route, navigation }) => {
     isActive: false,
     startTime: null
   });
+  
+  // Prepaid offer state
+  const [showPrepaidOffer, setShowPrepaidOffer] = useState(false);
+  const [prepaidOfferData, setPrepaidOfferData] = useState(null);
   
   // Component instance tracking for debugging
   const instanceId = useRef(Math.random().toString(36).substr(2, 9));
@@ -232,23 +238,18 @@ const FixedFreeChatScreen = memo(({ route, navigation }) => {
     console.log('⏰ [FREE_CHAT_TIMER] Timer expired - ending session');
     handleSessionEnd('timer_expired', 'system');
     
-    // Show timer expiry message and navigate back
+    // Show prepaid offer modal instead of generic alert
     setTimeout(() => {
       if (mountedRef.current) {
-        Alert.alert(
-          'Time Up!',
-          'Your free 3-minute chat session has ended. Thank you for using our service!',
-          [
-            {
-              text: 'OK',
-              onPress: () => navigation.goBack()
-            }
-          ],
-          { cancelable: false }
-        );
+        console.log('💰 [PREPAID_OFFER] Timer expired - showing prepaid offer modal');
+        showPrepaidOfferModal({
+          reason: 'timer_expired',
+          duration: sessionDuration,
+          endedBy: 'system'
+        });
       }
     }, 500);
-  }, [handleSessionEnd, navigation]);
+  }, [handleSessionEnd, showPrepaidOfferModal, sessionDuration]);
   
   const handleAstrologerEndSession = useCallback((data) => {
     console.log('🛑 [FREE_CHAT_END] Session ended by astrologer:', data);
@@ -1041,21 +1042,70 @@ const FixedFreeChatScreen = memo(({ route, navigation }) => {
       // Generic session end
       handleSessionEnd(reason, endedBy);
       
-      // Show generic end message
+      // Show prepaid offer or generic end message
       setTimeout(() => {
         if (mountedRef.current) {
           const duration = data.duration || sessionDuration;
-          const endReason = reason === 'time_expired' ? 'Your 3-minute free chat session has ended.' : 'The free chat session has ended.';
           
-          Alert.alert(
-            'Free Chat Ended',
-            `${endReason}\nDuration: ${formatTime(duration)}`,
-            [{ text: 'OK', onPress: () => navigation.goBack() }]
-          );
+          // Show prepaid offer for timer expired sessions
+          if (reason === 'time_expired' || reason === 'timer_expired') {
+            showPrepaidOfferModal(data);
+          } else {
+            // Show generic end message for other reasons
+            const endReason = 'The free chat session has ended.';
+            Alert.alert(
+              'Free Chat Ended',
+              `${endReason}\nDuration: ${formatTime(duration)}`,
+              [{ text: 'OK', onPress: () => navigation.goBack() }]
+            );
+          }
         }
       }, 500);
     }
   }, [freeChatId, sessionDuration, formatTime, handleSessionEnd, handleTimerExpiry, handleAstrologerEndSession, navigation]);
+
+  // ===== PREPAID OFFER FUNCTIONS =====
+  const showPrepaidOfferModal = useCallback((sessionData) => {
+    console.log('💰 [PREPAID_OFFER] Showing prepaid offer modal for session:', sessionData);
+    
+    // Prepare astrologer data for the offer
+    const astrologerData = {
+      id: astrologerId,
+      name: astrologer?.name || effectiveBookingDetails?.astrologer?.name || 'Astrologer',
+      profileImage: astrologer?.profileImage || effectiveBookingDetails?.astrologer?.profileImage,
+      specializations: astrologer?.specializations || effectiveBookingDetails?.astrologer?.specializations
+    };
+    
+    setPrepaidOfferData({
+      astrologer: astrologerData,
+      originalSessionId: sessionId || effectiveFreeChatId,
+      sessionData
+    });
+    
+    setShowPrepaidOffer(true);
+  }, [astrologerId, astrologer, effectiveBookingDetails, sessionId, effectiveFreeChatId]);
+
+  const handleOfferCreated = useCallback((offerData) => {
+    console.log('💰 [PREPAID_OFFER] Offer created successfully:', offerData);
+    
+    // Navigate to payment screen
+    navigation.navigate('PrepaidOfferPayment', { 
+      offerId: offerData.offerId 
+    });
+  }, [navigation]);
+
+  const handleOfferClosed = useCallback(() => {
+    console.log('💰 [PREPAID_OFFER] Offer modal closed');
+    setShowPrepaidOffer(false);
+    setPrepaidOfferData(null);
+    
+    // Navigate back to home after a short delay
+    setTimeout(() => {
+      if (mountedRef.current) {
+        navigation.navigate('Home');
+      }
+    }, 300);
+  }, [navigation]);
 
   const handleSessionResumed = useCallback((data) => {
     console.log('🔄 [FREE_CHAT_RESUMPTION] Session resumed event received:', data);
@@ -1813,12 +1863,25 @@ const FixedFreeChatScreen = memo(({ route, navigation }) => {
           </TouchableOpacity>
           
           <View style={styles.headerCenter}>
-            <Text style={styles.headerTitle}>
-              {bookingDetails?.astrologer?.name || 'Astrologer'}
-            </Text>
-            <Text style={styles.headerSubtitle}>
-              {consultationType === 'chat' ? 'Chat Consultation' : 'Consultation'}
-            </Text>
+            <View style={styles.astrologerInfo}>
+              <Image 
+                source={{ 
+                  uri: astrologer?.profileImage || 
+                       bookingDetails?.astrologer?.profileImage || 
+                       'https://via.placeholder.com/40x40.png?text=A' 
+                }}
+                style={styles.astrologerImage}
+                defaultSource={{ uri: 'https://via.placeholder.com/40x40.png?text=A' }}
+              />
+              <View style={styles.astrologerDetails}>
+                <Text style={styles.headerTitle}>
+                  {astrologer?.name || bookingDetails?.astrologer?.name || 'Astrologer'}
+                </Text>
+                <Text style={styles.headerSubtitle}>
+                  {consultationType === 'chat' ? 'Chat Consultation' : 'Consultation'}
+                </Text>
+              </View>
+            </View>
           </View>
           
           <View style={styles.headerRight}>
@@ -1899,6 +1962,15 @@ const FixedFreeChatScreen = memo(({ route, navigation }) => {
           </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>
+
+      {/* Prepaid Offer Bottom Sheet */}
+      <PrepaidOfferBottomSheet
+        visible={showPrepaidOffer}
+        onClose={handleOfferClosed}
+        astrologer={prepaidOfferData?.astrologer}
+        originalSessionId={prepaidOfferData?.originalSessionId}
+        onOfferCreated={handleOfferCreated}
+      />
     </SafeAreaView>
   );
 });
@@ -1941,6 +2013,21 @@ const styles = StyleSheet.create({
     marginRight: 8,
   },
   headerCenter: {
+    flex: 1,
+  },
+  astrologerInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  astrologerImage: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    marginRight: 12,
+    borderWidth: 2,
+    borderColor: 'rgba(255, 255, 255, 0.3)',
+  },
+  astrologerDetails: {
     flex: 1,
   },
   headerTitle: {

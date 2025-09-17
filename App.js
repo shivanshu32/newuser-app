@@ -38,7 +38,7 @@ import EdgeToEdgeHandler from './src/components/EdgeToEdgeHandler';
 
 // Analytics service import (no-op implementation)
 import analyticsService from './src/services/analyticsService';
-
+import { Settings } from 'react-native-fbsdk-next';
 // Import version check hook
 import useVersionCheck from './src/hooks/useVersionCheck';
 import * as Sentry from '@sentry/react-native';
@@ -65,6 +65,8 @@ function AppContent() {
   const { checkForUpdatesOnLaunch } = useVersionCheck();
   const [updateRequired, setUpdateRequired] = useState(null);
   const [versionCheckComplete, setVersionCheckComplete] = useState(false);
+
+
   
   // Analytics and crash tracking initialization (completely non-blocking)
   useEffect(() => {
@@ -154,6 +156,11 @@ function AppContent() {
 }
 
 export default Sentry.wrap(function App() {
+ 
+  useEffect(() => {
+    Settings.initializeSDK();
+  }, []);
+
   return (
     <ErrorBoundary>
       <SafeAreaProvider>

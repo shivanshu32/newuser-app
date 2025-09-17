@@ -21,8 +21,10 @@ import Toast from 'react-native-toast-message';
 import { useAuth } from '../../context/AuthContext';
 import { useSocket } from '../../context/SocketContext';
 import { astrologersAPI, walletAPI, versionAPI, freeChatAPI, sessionsAPI } from '../../services/api';
+import prepaidOffersAPI from '../../services/prepaidOffersAPI';
 import BookingAcceptedModal from '../../components/BookingAcceptedModal';
 import FreeChatCard from '../../components/FreeChatCard';
+import PrepaidOfferCard from '../../components/PrepaidOfferCard';
 import RejoinChatBottomSheet from '../../components/RejoinChatBottomSheet';
 import BannerCarousel from '../../components/BannerCarousel';
 import BlogSection from '../../components/BlogSection';
@@ -52,6 +54,10 @@ const HomeScreen = ({ navigation }) => {
   const [activeSessionData, setActiveSessionData] = useState(null);
   const [remainingTime, setRemainingTime] = useState(null);
   const [timerInterval, setTimerInterval] = useState(null);
+
+  // Prepaid Offers State
+  const [prepaidOffers, setPrepaidOffers] = useState([]);
+  const [loadingOffers, setLoadingOffers] = useState(false);
 
 
 
@@ -98,21 +104,17 @@ const HomeScreen = ({ navigation }) => {
   }, []);
 
 
-
   // Fetch wallet balance
   const fetchWalletBalance = useCallback(async () => {
     try {
       setLoadingWallet(true);
       console.log('🔄 Fetching wallet balance...');
-      const response = await walletAPI.getBalance();
-      console.log('💰 Wallet balance response:', response);
       
-      if (response.success && response.data) {
-        setWalletBalance(response.data.balance || 0);
-        console.log('✅ Wallet balance updated:', response.data.balance);
-      } else {
-        console.warn('⚠️ Wallet API returned success: false or no data');
-        setWalletBalance(0);
+      const data = await walletAPI.getBalance();
+      console.log('✅ Wallet balance fetched:', data);
+      
+      if (data.success) {
+        setWalletBalance(data.data.balance);
       }
     } catch (error) {
       console.error('❌ Error fetching wallet balance:', error);
@@ -122,6 +124,38 @@ const HomeScreen = ({ navigation }) => {
       setLoadingWallet(false);
     }
   }, []);
+
+  // Fetch active prepaid offers
+  const fetchPrepaidOffers = useCallback(async () => {
+    try {
+      setLoadingOffers(true);
+      console.log('🔄 Fetching active prepaid offers...');
+      
+      const data = await prepaidOffersAPI.getActiveOffers();
+      console.log('✅ Prepaid offers fetched:', data);
+      
+      if (data.success) {
+        setPrepaidOffers(data.data || []);
+      }
+    } catch (error) {
+      console.error('❌ Error fetching prepaid offers:', error);
+      setPrepaidOffers([]);
+    } finally {
+      setLoadingOffers(false);
+    }
+  }, []);
+
+  // Handle offer used (remove from list)
+  // Refresh prepaid offers
+  const refreshPrepaidOffers = useCallback(async () => {
+    await fetchPrepaidOffers();
+  }, [fetchPrepaidOffers]);
+
+  // Handle when an offer is used/completed
+  const handleOfferUsed = useCallback(() => {
+    // Refresh prepaid offers to remove used offer
+    refreshPrepaidOffers();
+  }, [refreshPrepaidOffers]);
 
   // Check global free chat settings
   const checkFreeChatSettings = useCallback(async () => {
@@ -1272,9 +1306,10 @@ const HomeScreen = ({ navigation }) => {
     await Promise.all([
       fetchAstrologers(),
       fetchWalletBalance(),
-      fetchUserPendingBookings()
+      fetchUserPendingBookings(),
+      fetchPrepaidOffers()
     ]);
-  }, [fetchAstrologers, fetchWalletBalance, fetchUserPendingBookings]);
+  }, [fetchAstrologers, fetchWalletBalance, fetchUserPendingBookings, fetchPrepaidOffers]);
 
   // Handle refresh
   const onRefresh = useCallback(async () => {
@@ -2395,8 +2430,8 @@ const HomeScreen = ({ navigation }) => {
             </TouchableOpacity>
           )}
           
-          {/* Rejoin Session Button - Show if session is active and user can rejoin, but NOT for voice consultations */}
-          {booking.type !== 'voice' && booking.sessionStarted && booking.status === 'accepted' && (
+          {/* Rejoin Session Button - Show if session is active and user can rejoin, but NOT for voice consultations or completed sessions */}
+          {booking.type !== 'voice' && booking.sessionStarted && booking.status === 'accepted' && booking.status !== 'completed' && booking.status !== 'cancelled' && (
             <TouchableOpacity
               style={styles.rejoinSessionButton}
               onPress={() => handleJoinSession(booking)}
@@ -2434,6 +2469,18 @@ const HomeScreen = ({ navigation }) => {
     // Only add free chat section if globally enabled
     if (freeChatEnabled) {
       data.push({ type: 'freeChat', id: 'freeChat' });
+    }
+
+    // Add prepaid offers section if there are any
+    console.log('🏠 [HOME_SCREEN] Prepaid offers count:', prepaidOffers.length, prepaidOffers);
+    if (prepaidOffers.length > 0) {
+      console.log('🏠 [HOME_SCREEN] Adding prepaid offers to data array');
+      data.push({ type: 'prepaidOffersHeader', id: 'prepaidOffersHeader' });
+      data.push(...prepaidOffers.map((offer, index) => ({
+        type: 'prepaidOffer',
+        id: `prepaid_offer_${offer._id || offer.offerId || index}`,
+        data: offer
+      })));
     }
 
     // Add daily horoscope section
@@ -2487,6 +2534,7 @@ const HomeScreen = ({ navigation }) => {
 
   // Render different item types
   const renderFlatListItem = ({ item }) => {
+    console.log('🏠 [HOME_SCREEN] Rendering item type:', item.type, item.id);
     switch (item.type) {
       case 'header':
         return renderHeader();
@@ -2494,6 +2542,26 @@ const HomeScreen = ({ navigation }) => {
         return <BannerCarousel onBannerPress={handleBannerPress} />;
       case 'freeChat':
         return <FreeChatCard navigation={navigation} />;
+      case 'prepaidOffersHeader':
+        return (
+          <View style={styles.sectionHeader}>
+            <View style={styles.sectionHeaderContent}>
+              <MaterialIcons name="local-fire-department" size={24} color="#FF6B35" />
+              <Text style={styles.sectionHeaderTitle}>Special Offers</Text>
+            </View>
+            <Text style={styles.sectionHeaderSubtitle}>Limited time offers just for you</Text>
+          </View>
+        );
+      case 'prepaidOffer':
+        console.log('🏠 [HOME_SCREEN] Rendering PrepaidOfferCard with data:', item.data);
+        return (
+          <PrepaidOfferCard 
+            offer={item.data} 
+            onOfferUsed={handleOfferUsed}
+            onRefresh={refreshPrepaidOffers}
+            navigation={navigation}
+          />
+        );
       case 'dailyHoroscope':
         return (
           <View style={styles.horoscopeSection}>
@@ -3657,6 +3725,23 @@ const styles = StyleSheet.create({
     bottom: 0,
     background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.4), transparent)',
     opacity: 0.3,
+  },
+  // Prepaid offers section styles
+  sectionHeaderContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  sectionHeaderTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#1a1a1a',
+    marginLeft: 8,
+  },
+  sectionHeaderSubtitle: {
+    fontSize: 14,
+    color: '#666',
+    marginLeft: 32,
   },
 });
 

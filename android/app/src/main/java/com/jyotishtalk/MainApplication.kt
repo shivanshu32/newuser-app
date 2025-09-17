@@ -1,6 +1,8 @@
 package com.jyotishtalk
 
 import android.app.Application
+import com.facebook.FacebookSdk
+import com.facebook.appevents.AppEventsLogger
 import android.content.res.Configuration
 
 import com.facebook.react.PackageList
@@ -42,6 +44,9 @@ class MainApplication : Application(), ReactApplication {
 
   override fun onCreate() {
     super.onCreate()
+    FacebookSdk.sdkInitialize(applicationContext)
+    AppEventsLogger.activateApp(this)
+
     SoLoader.init(this, OpenSourceMergedSoMapping)
     if (BuildConfig.IS_NEW_ARCHITECTURE_ENABLED) {
       // If you opted-in for the New Architecture, we load the native entry point for this app.

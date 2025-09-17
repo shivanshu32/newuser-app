@@ -4,7 +4,7 @@ module.exports = ({ config }) => ({
   jsEngine: "hermes",
   name: "Jyotish Call",
   slug: "jyotishcall-user-app",
-  version: "5.2.4",
+  version: "5.2.5",
   // Remove global orientation restriction for Android 16+ large screen support
   // orientation: "portrait", // Commented out for large screen compatibility
   icon: "./assets/icon-square.png",
@@ -35,7 +35,7 @@ module.exports = ({ config }) => ({
       backgroundColor: "#ffffff"
     },
     package: "com.jyotishtalk",
-    versionCode: 49,
+    versionCode: 50,
     minSdkVersion: 24,
     compileSdkVersion: 35,
     targetSdkVersion: 35,
@@ -103,6 +103,19 @@ module.exports = ({ config }) => ({
         "project": "jyotishcalluser",
         "organization": "jyotishcall-nl",
         "uploadSourceMaps": true
+      }
+    ],
+    [
+      "react-native-fbsdk-next",
+      {
+        appID: "1310699930409258",
+        clientToken: "749b16b18a225d9c7a43bdeb2e2aedd9",
+        displayName: "Jyotish Call",
+        scheme: "fb1310699930409258",
+        advertiserIDCollectionEnabled: false,
+        autoLogAppEventsEnabled: true,
+        isAutoInitEnabled: true,
+        iosUserTrackingPermission: "This identifier will be used to deliver personalized ads to you."
       }
     ]
   ],

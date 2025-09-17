@@ -94,8 +94,8 @@ android {
         applicationId 'com.jyotishtalk'
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 49
-        versionName "5.2.4"
+        versionCode 50
+        versionName "5.2.5"
     }
     signingConfigs {
         debug {
@@ -152,6 +152,7 @@ android {
 dependencies {
     // The version of react-native is set by the React Native Gradle Plugin
     implementation("com.facebook.react:react-android")
+    
 
     def isGifEnabled = (findProperty('expo.gif.enabled') ?: "") == "true";
     def isWebpEnabled = (findProperty('expo.webp.enabled') ?: "") == "true";
@@ -176,4 +177,6 @@ dependencies {
     } else {
         implementation jscFlavor
     }
+
+    implementation 'com.facebook.android:facebook-android-sdk:12.3.0'
 }
