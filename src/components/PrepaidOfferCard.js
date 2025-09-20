@@ -17,7 +17,7 @@ const PrepaidOfferCard = ({ offer, onOfferUsed, onRefresh }) => {
   const [loading, setLoading] = useState(false);
 
   const handleProceedToPay = () => {
-    if (offer.offerPaid) {
+    if (offer.isPaid) {
       // Already paid, show start chat option
       handleStartChat();
     } else {
@@ -102,15 +102,15 @@ const PrepaidOfferCard = ({ offer, onOfferUsed, onRefresh }) => {
 
   const getButtonText = () => {
     if (loading) return 'Starting...';
-    if (offer.offerPaid && offer.isAvailableToUse) return 'Start Offer Chat';
-    if (offer.offerPaid) return 'Paid';
+    if (offer.isPaid && offer.isAvailableToUse) return 'Start Offer Chat';
+    if (offer.isPaid) return 'Paid';
     return 'Proceed to Pay';
   };
 
   const getButtonStyle = () => {
     if (loading) return [styles.actionButton, styles.loadingButton];
-    if (offer.offerPaid && offer.isAvailableToUse) return [styles.actionButton, styles.startChatButton];
-    if (offer.offerPaid) return [styles.actionButton, styles.paidButton];
+    if (offer.isPaid && offer.isAvailableToUse) return [styles.actionButton, styles.startChatButton];
+    if (offer.isPaid) return [styles.actionButton, styles.paidButton];
     return [styles.actionButton, styles.payButton];
   };
 
@@ -183,7 +183,7 @@ const PrepaidOfferCard = ({ offer, onOfferUsed, onRefresh }) => {
       <TouchableOpacity 
         style={getButtonStyle()}
         onPress={handleProceedToPay}
-        disabled={loading || (offer.offerPaid && !offer.isAvailableToUse)}
+        disabled={loading || (offer.isPaid && !offer.isAvailableToUse)}
       >
         {loading ? (
           <ActivityIndicator color="#FFFFFF" size="small" />
@@ -193,7 +193,7 @@ const PrepaidOfferCard = ({ offer, onOfferUsed, onRefresh }) => {
       </TouchableOpacity>
 
       {/* Payment Status Indicator */}
-      {offer.offerPaid && (
+      {offer.isPaid && (
         <View style={styles.statusContainer}>
           <Icon name="check-circle" size={16} color="#4CAF50" />
           <Text style={styles.statusText}>

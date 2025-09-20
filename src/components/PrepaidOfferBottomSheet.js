@@ -58,7 +58,8 @@ const PrepaidOfferBottomSheet = ({
         Alert.alert('Error', response.message || 'Failed to create offer');
       }
     } catch (error) {
-      console.error('Error creating prepaid offer:', error);
+      console.error('❌ [PREPAID_OFFER] Exception caught:', error);
+      console.error('❌ [PREPAID_OFFER] Error response data:', error.response?.data);
       Alert.alert(
         'Error', 
         error.response?.data?.message || 'Failed to create offer. Please try again.'

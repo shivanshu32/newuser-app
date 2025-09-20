@@ -51,45 +51,75 @@ const PrepaidOfferPaymentScreen = () => {
   const handlePayNow = async () => {
     if (!offer || paying) return;
 
-    // Check wallet balance
-    if (user?.wallet?.balance < offer.totalAmount) {
-      Alert.alert(
-        'Insufficient Balance',
-        `You need ₹${offer.totalAmount} but have ₹${user.wallet.balance}. Please recharge your wallet first.`,
-        [
-          { text: 'Cancel', style: 'cancel' },
-          { 
-            text: 'Recharge Wallet', 
-            onPress: () => navigation.navigate('Wallet') 
-          }
-        ]
-      );
-      return;
-    }
-
     setPaying(true);
     try {
-      const response = await prepaidOffersAPI.payForOffer(offerId);
+      // Create Razorpay order
+      const orderResponse = await prepaidOffersAPI.createRazorpayOrder(offerId);
       
-      if (response.success) {
-        // Refresh user data to update wallet balance
-        await refreshUserData();
-        
-        Alert.alert(
-          'Payment Successful!',
-          'You can now start your prepaid chat session.',
-          [
-            {
-              text: 'OK',
-              onPress: () => navigation.navigate('Home')
-            }
-          ]
-        );
-      } else {
-        Alert.alert('Payment Failed', response.message || 'Please try again');
+      if (!orderResponse.success) {
+        Alert.alert('Error', orderResponse.message || 'Failed to create payment order');
+        return;
       }
+
+      const { orderId, amount, razorpayKeyId } = orderResponse.data;
+
+      // Import Razorpay
+      const RazorpayCheckout = require('react-native-razorpay');
+
+      const options = {
+        description: `Prepaid Chat Offer - 5 minutes with ${offer.astrologer?.name}`,
+        image: 'https://your-logo-url.com/logo.png', // Replace with your logo
+        currency: 'INR',
+        key: razorpayKeyId,
+        amount: amount,
+        order_id: orderId,
+        name: 'JyotishCall',
+        prefill: {
+          email: user?.email || '',
+          contact: user?.mobileNumber || '',
+          name: user?.name || ''
+        },
+        theme: { color: '#FF6B35' }
+      };
+
+      RazorpayCheckout.open(options)
+        .then(async (data) => {
+          // Payment successful, verify with backend
+          try {
+            const verifyResponse = await prepaidOffersAPI.verifyRazorpayPayment(offerId, {
+              razorpay_order_id: data.razorpay_order_id,
+              razorpay_payment_id: data.razorpay_payment_id,
+              razorpay_signature: data.razorpay_signature
+            });
+
+            if (verifyResponse.success) {
+              Alert.alert(
+                'Payment Successful!',
+                'You can now start your prepaid chat session.',
+                [
+                  {
+                    text: 'OK',
+                    onPress: () => navigation.navigate('Home')
+                  }
+                ]
+              );
+            } else {
+              Alert.alert('Payment Verification Failed', verifyResponse.message || 'Please contact support');
+            }
+          } catch (verifyError) {
+            console.error('Error verifying payment:', verifyError);
+            Alert.alert('Payment Verification Failed', 'Please contact support with your payment details');
+          }
+        })
+        .catch((error) => {
+          console.error('Razorpay payment error:', error);
+          if (error.code !== 'payment_cancelled') {
+            Alert.alert('Payment Failed', error.description || 'Please try again');
+          }
+        });
+
     } catch (error) {
-      console.error('Error processing payment:', error);
+      console.error('Error creating payment order:', error);
       Alert.alert(
         'Payment Failed',
         error.response?.data?.message || 'Please try again'
@@ -206,22 +236,23 @@ const PrepaidOfferPaymentScreen = () => {
           </View>
         </View>
 
-        {/* Wallet Balance */}
-        <View style={styles.walletCard}>
-          <View style={styles.walletHeader}>
-            <Icon name="account-balance-wallet" size={24} color="#4CAF50" />
-            <Text style={styles.walletTitle}>Wallet Balance</Text>
+        {/* Payment Method */}
+        <View style={styles.paymentMethodCard}>
+          <View style={styles.paymentMethodHeader}>
+            <Icon name="payment" size={24} color="#4CAF50" />
+            <Text style={styles.paymentMethodTitle}>Payment Method</Text>
           </View>
-          <Text style={styles.walletBalance}>₹{user?.wallet?.balance || 0}</Text>
-          
-          {user?.wallet?.balance < offer.totalAmount && (
-            <View style={styles.insufficientBalance}>
-              <Icon name="warning" size={16} color="#F44336" />
-              <Text style={styles.insufficientText}>
-                Insufficient balance. Need ₹{(offer.totalAmount - (user?.wallet?.balance || 0)).toFixed(2)} more.
+          <View style={styles.paymentMethodContent}>
+            <View style={styles.razorpayContainer}>
+              <Text style={styles.razorpayText}>Secure payment powered by Razorpay</Text>
+              <Text style={styles.paymentOptions}>
+                • Credit/Debit Cards{'\n'}
+                • Net Banking{'\n'}
+                • UPI{'\n'}
+                • Wallets & More
               </Text>
             </View>
-          )}
+          </View>
         </View>
 
         {/* Terms */}
@@ -229,8 +260,9 @@ const PrepaidOfferPaymentScreen = () => {
           <Text style={styles.termsTitle}>Important Notes</Text>
           <Text style={styles.termsText}>
             • This is a one-time offer valid for 24 hours{'\n'}
-            • Chat session will be 5 minutes long{'\n'}
-            • Amount will be deducted from your wallet{'\n'}
+            • Chat session will be maximum 5 minutes long{'\n'}
+            • Session can only be used once, regardless of duration{'\n'}
+            • Payment is processed securely via Razorpay{'\n'}
             • No refunds once session starts
           </Text>
         </View>
@@ -241,10 +273,10 @@ const PrepaidOfferPaymentScreen = () => {
         <TouchableOpacity 
           style={[
             styles.payButton,
-            (paying || user?.wallet?.balance < offer.totalAmount) && styles.disabledButton
+            paying && styles.disabledButton
           ]}
           onPress={handlePayNow}
-          disabled={paying || user?.wallet?.balance < offer.totalAmount}
+          disabled={paying}
         >
           {paying ? (
             <ActivityIndicator color="#FFFFFF" />
@@ -428,7 +460,7 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#FF6B35',
   },
-  walletCard: {
+  paymentMethodCard: {
     backgroundColor: '#FFFFFF',
     borderRadius: 12,
     padding: 20,
@@ -439,35 +471,36 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 3,
   },
-  walletHeader: {
+  paymentMethodHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 10,
+    marginBottom: 15,
   },
-  walletTitle: {
+  paymentMethodTitle: {
     fontSize: 16,
     fontWeight: '600',
     color: '#333',
     marginLeft: 8,
   },
-  walletBalance: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#4CAF50',
-  },
-  insufficientBalance: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 10,
-    padding: 10,
-    backgroundColor: '#FFEBEE',
+  paymentMethodContent: {
+    backgroundColor: '#F8F9FA',
     borderRadius: 8,
+    padding: 15,
   },
-  insufficientText: {
+  razorpayContainer: {
+    alignItems: 'center',
+  },
+  razorpayText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#4CAF50',
+    marginBottom: 10,
+  },
+  paymentOptions: {
     fontSize: 12,
-    color: '#F44336',
-    marginLeft: 5,
-    flex: 1,
+    color: '#666',
+    textAlign: 'center',
+    lineHeight: 18,
   },
   termsCard: {
     backgroundColor: '#F0F8FF',

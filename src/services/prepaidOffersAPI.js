@@ -8,7 +8,8 @@ const prepaidOffersAPI = {
         astrologerId,
         originalSessionId
       });
-      return response.data;
+      // API interceptor already extracts response.data, so return the full response
+      return response;
     } catch (error) {
       console.error('Error creating prepaid offer:', error);
       throw error;
@@ -37,13 +38,24 @@ const prepaidOffersAPI = {
     }
   },
 
-  // Pay for prepaid chat offer using wallet
-  payForOffer: async (offerId) => {
+  // Create Razorpay order for prepaid chat offer
+  createRazorpayOrder: async (offerId) => {
     try {
-      const response = await api.post(`/prepaid-offers/${offerId}/pay`);
+      const response = await api.post(`/prepaid-offers/${offerId}/create-order`);
       return response.data;
     } catch (error) {
-      console.error('Error paying for offer:', error);
+      console.error('Error creating Razorpay order:', error);
+      throw error;
+    }
+  },
+
+  // Verify Razorpay payment for prepaid chat offer
+  verifyRazorpayPayment: async (offerId, paymentData) => {
+    try {
+      const response = await api.post(`/prepaid-offers/${offerId}/verify-payment`, paymentData);
+      return response.data;
+    } catch (error) {
+      console.error('Error verifying payment:', error);
       throw error;
     }
   },

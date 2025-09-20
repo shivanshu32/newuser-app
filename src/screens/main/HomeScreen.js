@@ -1366,6 +1366,9 @@ const HomeScreen = ({ navigation }) => {
             fetchWalletBalance().catch(error => {
               console.error('❌ [FOCUS_EFFECT] Error fetching wallet balance:', error);
             }),
+            fetchPrepaidOffers().catch(error => {
+              console.error('❌ [FOCUS_EFFECT] Error fetching prepaid offers:', error);
+            }),
             checkActiveSession().catch(error => {
               console.error('❌ [FOCUS_EFFECT] Error checking active session:', error);
             })
@@ -1378,7 +1381,7 @@ const HomeScreen = ({ navigation }) => {
       };
       
       refreshData();
-    }, [fetchUserPendingBookings, fetchAstrologers, fetchWalletBalance, socket])
+    }, [fetchUserPendingBookings, fetchAstrologers, fetchWalletBalance, fetchPrepaidOffers, socket])
   );
   
   // Additional navigation listener to ensure pending bookings are refreshed

@@ -8,7 +8,11 @@
     "android": "expo run:android",
     "ios": "expo run:ios",
     "web": "expo start --web",
-    "fix-metro": "node fix-metro-import.js"
+    "fix-metro": "node fix-metro-import.js",
+    "fix-build": "node fix-build-issues.js",
+    "clean": "npx expo install --fix && cd android && ./gradlew clean && cd ..",
+    "build-android": "npx expo run:android --variant release",
+    "prebuild": "npx expo install --fix"
   },
   "dependencies": {
     "@expo/vector-icons": "^14.0.0",
@@ -17,13 +21,14 @@
     "@react-navigation/bottom-tabs": "^6.5.11",
     "@react-navigation/native": "^6.1.9",
     "@react-navigation/native-stack": "^6.9.17",
-    "@sentry/react-native": "^6.20.0",
     "axios": "^1.6.2",
-    "expo": "53.0.20",
+    "expo": "53.0.22",
+    "expo-asset": "~11.1.7",
     "expo-av": "~15.1.7",
     "expo-constants": "~17.1.7",
     "expo-dev-client": "~5.2.4",
     "expo-device": "~7.1.4",
+    "expo-font": "~13.3.2",
     "expo-linear-gradient": "^14.1.5",
     "expo-notifications": "~0.31.4",
     "expo-status-bar": "~2.2.3",
@@ -33,6 +38,7 @@
     "react": "19.0.0",
     "react-native": "0.79.5",
     "react-native-audio-record": "^0.2.2",
+    "react-native-edge-to-edge": "^1.0.4",
     "react-native-fbsdk-next": "^13.4.1",
     "react-native-gesture-handler": "~2.24.0",
     "react-native-google-places-autocomplete": "^2.5.7",
@@ -47,7 +53,6 @@
   },
   "devDependencies": {
     "@babel/core": "^7.20.0",
-    "@expo/metro-config": "~0.20.0",
     "@react-native-community/cli": "^20.0.1",
     "metro": "^0.82.0",
     "metro-resolver": "^0.82.0"

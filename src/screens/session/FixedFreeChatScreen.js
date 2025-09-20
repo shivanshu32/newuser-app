@@ -1088,10 +1088,17 @@ const FixedFreeChatScreen = memo(({ route, navigation }) => {
   const handleOfferCreated = useCallback((offerData) => {
     console.log('💰 [PREPAID_OFFER] Offer created successfully:', offerData);
     
-    // Navigate to payment screen
-    navigation.navigate('PrepaidOfferPayment', { 
-      offerId: offerData.offerId 
-    });
+    // Check if this is an existing paid offer
+    if (offerData.isExisting && offerData.isPaid) {
+      console.log('💰 [PREPAID_OFFER] Existing offer is already paid, navigating to home to show offer');
+      // Navigate to home where the user can see the paid offer
+      navigation.navigate('Home');
+    } else {
+      // Navigate to payment screen for new or unpaid offers
+      navigation.navigate('PrepaidOfferPayment', { 
+        offerId: offerData.offerId 
+      });
+    }
   }, [navigation]);
 
   const handleOfferClosed = useCallback(() => {

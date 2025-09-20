@@ -81,8 +81,6 @@ def enableProguardInReleaseBuilds = (findProperty('android.enableProguardInRelea
  */
 def jscFlavor = 'io.github.react-native-community:jsc-android:2026004.+'
 
-apply from: new File(["node", "--print", "require('path').dirname(require.resolve('@sentry/react-native/package.json'))"].execute().text.trim(), "sentry.gradle")
-
 android {
     ndkVersion rootProject.ext.ndkVersion
 
@@ -94,8 +92,8 @@ android {
         applicationId 'com.jyotishtalk'
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 50
-        versionName "5.2.5"
+        versionCode 53
+        versionName "5.2.8"
     }
     signingConfigs {
         debug {
@@ -152,7 +150,6 @@ android {
 dependencies {
     // The version of react-native is set by the React Native Gradle Plugin
     implementation("com.facebook.react:react-android")
-    
 
     def isGifEnabled = (findProperty('expo.gif.enabled') ?: "") == "true";
     def isWebpEnabled = (findProperty('expo.webp.enabled') ?: "") == "true";
@@ -177,6 +174,4 @@ dependencies {
     } else {
         implementation jscFlavor
     }
-
-    implementation 'com.facebook.android:facebook-android-sdk:12.3.0'
 }

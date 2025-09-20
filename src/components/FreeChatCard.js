@@ -261,7 +261,7 @@ const FreeChatCard = ({ navigation }) => {
             </View>
             <View style={styles.trustItem}>
               <Ionicons name="people" size={16} color="#10B981" />
-              <Text style={styles.trustText}>10,000+ Happy Users</Text>
+              <Text style={styles.trustText}>50,000+ Happy Users</Text>
             </View>
           </View>
         </View>

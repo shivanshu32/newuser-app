@@ -1,13 +1,14 @@
-const {
-  getSentryExpoConfig
-} = require("@sentry/react-native/metro");
+const { getDefaultConfig } = require('expo/metro-config');
 
-/** @type {import('expo/metro-config').MetroConfig} */
-const config = getSentryExpoConfig(__dirname);
+/**
+ * Metro configuration for Expo
+ * https://docs.expo.dev/guides/customizing-metro
+ *
+ * @type {import('expo/metro-config').MetroConfig}
+ */
+const config = getDefaultConfig(__dirname);
 
-// Firebase JS SDK configuration for React Native
-// Required for Firebase v9+ compatibility
+// Add custom source extensions
 config.resolver.sourceExts.push('cjs');
-config.resolver.unstable_enablePackageExports = false;
 
 module.exports = config;

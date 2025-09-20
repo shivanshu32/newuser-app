@@ -4,7 +4,7 @@ module.exports = ({ config }) => ({
   jsEngine: "hermes",
   name: "Jyotish Call",
   slug: "jyotishcall-user-app",
-  version: "5.2.5",
+  version: "5.2.8",
   // Remove global orientation restriction for Android 16+ large screen support
   // orientation: "portrait", // Commented out for large screen compatibility
   icon: "./assets/icon-square.png",
@@ -35,7 +35,7 @@ module.exports = ({ config }) => ({
       backgroundColor: "#ffffff"
     },
     package: "com.jyotishtalk",
-    versionCode: 50,
+    versionCode: 53,
     minSdkVersion: 24,
     compileSdkVersion: 35,
     targetSdkVersion: 35,
@@ -59,8 +59,8 @@ module.exports = ({ config }) => ({
       ]
     },
     ndkVersion: "26.1.10909125",
-    // Disabled edge-to-edge to fix Theme.EdgeToEdge build error
-    // edgeToEdgeEnabled: true,
+    // Enable edge-to-edge for Android 16+ compatibility
+    edgeToEdgeEnabled: true,
     // Android 16+ Large Screen Device Support
     supportsTablet: true,
     // Remove orientation restrictions for foldables and tablets
@@ -96,15 +96,8 @@ module.exports = ({ config }) => ({
       }
     ],
     "expo-dev-client",
-    [
-      "@sentry/react-native/expo",
-      {
-        "url": "https://sentry.io/",
-        "project": "jyotishcalluser",
-        "organization": "jyotishcall-nl",
-        "uploadSourceMaps": true
-      }
-    ],
+    "expo-font",
+    "react-native-edge-to-edge",
     [
       "react-native-fbsdk-next",
       {
@@ -119,6 +112,7 @@ module.exports = ({ config }) => ({
       }
     ]
   ],
+  // Updates configuration
   updates: {
     url: "https://u.expo.dev/19ce1c4d-7c68-407f-96a0-d41bedaa3d55"
   },
