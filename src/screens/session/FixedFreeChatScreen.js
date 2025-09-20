@@ -2041,6 +2041,7 @@ const FixedFreeChatScreen = memo(({ route, navigation }) => {
         onClose={handleOfferClosed}
         astrologer={prepaidOfferData?.astrologer}
         originalSessionId={prepaidOfferData?.originalSessionId}
+        offerData={prepaidOfferData?.offerData}
         onOfferCreated={handleOfferCreated}
       />
     </SafeAreaView>

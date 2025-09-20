@@ -20,6 +20,7 @@ const PrepaidOfferBottomSheet = ({
   onClose, 
   astrologer, 
   originalSessionId,
+  offerData, // Existing offer data if already created
   onOfferCreated 
 }) => {
   const [slideAnim] = useState(new Animated.Value(screenHeight));
@@ -42,6 +43,15 @@ const PrepaidOfferBottomSheet = ({
   }, [visible]);
 
   const handleProceedToPay = async () => {
+    // If offer already exists, use it directly
+    if (offerData) {
+      console.log('💰 [PREPAID_OFFER] Using existing offer data:', offerData);
+      onOfferCreated && onOfferCreated(offerData);
+      onClose();
+      return;
+    }
+
+    // Otherwise, create new offer (fallback for backward compatibility)
     if (!astrologer?.id || !originalSessionId) {
       Alert.alert('Error', 'Missing required information to create offer');
       return;
@@ -49,6 +59,7 @@ const PrepaidOfferBottomSheet = ({
 
     setLoading(true);
     try {
+      console.log('💰 [PREPAID_OFFER] Creating new offer for astrologer:', astrologer.id);
       const response = await prepaidOffersAPI.createOffer(astrologer.id, originalSessionId);
       
       if (response.success) {
@@ -136,19 +147,19 @@ const PrepaidOfferBottomSheet = ({
             </View>
             
             <Text style={styles.offerDescription}>
-              Get 5 more minutes of personalized guidance
+              Get {offerData?.durationMinutes || 5} more minutes of personalized guidance
             </Text>
             
             <View style={styles.priceContainer}>
               <Text style={styles.priceLabel}>Just</Text>
-              <Text style={styles.price}>₹25</Text>
-              <Text style={styles.gstNote}>(GST extra)</Text>
+              <Text style={styles.price}>₹{offerData?.totalAmount || 29.5}</Text>
+              <Text style={styles.gstNote}>(₹{offerData?.basePrice || 25} + ₹{offerData?.gstAmount || 4.5} GST)</Text>
             </View>
 
             <View style={styles.benefitsList}>
               <View style={styles.benefitItem}>
                 <Icon name="check-circle" size={16} color="#4CAF50" />
-                <Text style={styles.benefitText}>5 minutes of chat</Text>
+                <Text style={styles.benefitText}>{offerData?.durationMinutes || 5} minutes of chat</Text>
               </View>
               <View style={styles.benefitItem}>
                 <Icon name="check-circle" size={16} color="#4CAF50" />
