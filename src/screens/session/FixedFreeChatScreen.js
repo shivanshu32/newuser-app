@@ -20,6 +20,7 @@ import { useAuth } from '../../context/AuthContext';
 import { useSocket } from '../../context/SocketContext';
 import useMessagePersistence from '../../hooks/useMessagePersistence';
 import PrepaidOfferBottomSheet from '../../components/PrepaidOfferBottomSheet';
+import prepaidOffersAPI from '../../services/prepaidOffersAPI';
 
 // API Configuration
 const API_BASE_URL = 'https://jyotishcallbackend-2uxrv.ondigitalocean.app/api/v1';
@@ -238,18 +239,18 @@ const FixedFreeChatScreen = memo(({ route, navigation }) => {
     console.log('⏰ [FREE_CHAT_TIMER] Timer expired - ending session');
     handleSessionEnd('timer_expired', 'system');
     
-    // Show prepaid offer modal instead of generic alert
+    // Create prepaid offer and show modal for immediate action
     setTimeout(() => {
       if (mountedRef.current) {
-        console.log('💰 [PREPAID_OFFER] Timer expired - showing prepaid offer modal');
-        showPrepaidOfferModal({
+        console.log('💰 [PREPAID_OFFER] Timer expired - creating prepaid offer and showing modal');
+        createPrepaidOfferAndShowModal({
           reason: 'timer_expired',
           duration: sessionDuration,
           endedBy: 'system'
         });
       }
     }, 500);
-  }, [handleSessionEnd, showPrepaidOfferModal, sessionDuration]);
+  }, [handleSessionEnd, createPrepaidOfferAndShowModal, sessionDuration]);
   
   const handleAstrologerEndSession = useCallback((data) => {
     console.log('🛑 [FREE_CHAT_END] Session ended by astrologer:', data);
@@ -1047,9 +1048,9 @@ const FixedFreeChatScreen = memo(({ route, navigation }) => {
         if (mountedRef.current) {
           const duration = data.duration || sessionDuration;
           
-          // Show prepaid offer for timer expired sessions
+          // Create prepaid offer for timer expired sessions
           if (reason === 'time_expired' || reason === 'timer_expired') {
-            showPrepaidOfferModal(data);
+            createPrepaidOfferAndShowModal(data);
           } else {
             // Show generic end message for other reasons
             const endReason = 'The free chat session has ended.';
@@ -1062,9 +1063,59 @@ const FixedFreeChatScreen = memo(({ route, navigation }) => {
         }
       }, 500);
     }
-  }, [freeChatId, sessionDuration, formatTime, handleSessionEnd, handleTimerExpiry, handleAstrologerEndSession, navigation]);
+  }, [freeChatId, sessionDuration, formatTime, handleSessionEnd, handleTimerExpiry, handleAstrologerEndSession, createPrepaidOfferAndShowModal, navigation]);
 
   // ===== PREPAID OFFER FUNCTIONS =====
+  const createPrepaidOfferAndShowModal = useCallback(async (sessionData) => {
+    console.log('💰 [PREPAID_OFFER] Creating prepaid offer and showing modal for session:', sessionData);
+    
+    try {
+      // Prepare astrologer data for the offer
+      const astrologerData = {
+        id: astrologerId,
+        name: astrologer?.name || effectiveBookingDetails?.astrologer?.name || 'Astrologer',
+        profileImage: astrologer?.profileImage || effectiveBookingDetails?.astrologer?.profileImage,
+        specializations: astrologer?.specializations || effectiveBookingDetails?.astrologer?.specializations
+      };
+      
+      console.log('💰 [PREPAID_OFFER] Creating offer with astrologer:', astrologerData.id, 'session:', sessionId || effectiveFreeChatId);
+      
+      // Create the offer automatically
+      const response = await prepaidOffersAPI.createOffer(astrologerData.id, sessionId || effectiveFreeChatId);
+      
+      if (response.success) {
+        console.log('✅ [PREPAID_OFFER] Offer created successfully, showing modal for immediate action');
+        
+        // Set up the prepaid offer data and show the modal immediately
+        setPrepaidOfferData({
+          astrologer: astrologerData,
+          originalSessionId: sessionId || effectiveFreeChatId,
+          sessionData,
+          offerData: response.data // Include the created offer data
+        });
+        
+        setShowPrepaidOffer(true);
+      } else {
+        console.log('❌ [PREPAID_OFFER] Failed to create offer:', response.message);
+        // Show error and navigate to home
+        Alert.alert(
+          'Free Chat Ended',
+          'Your free chat session has ended. Please check the home screen for any available offers.',
+          [{ text: 'OK', onPress: () => navigation.navigate('Home') }]
+        );
+      }
+    } catch (error) {
+      console.error('❌ [PREPAID_OFFER] Error creating offer:', error);
+      // Show error and navigate to home
+      Alert.alert(
+        'Free Chat Ended',
+        'Your free chat session has ended. Please check the home screen for any available offers.',
+        [{ text: 'OK', onPress: () => navigation.navigate('Home') }]
+      );
+    }
+  }, [astrologerId, astrologer, effectiveBookingDetails, sessionId, effectiveFreeChatId, navigation]);
+
+  // Keep the old modal function for backward compatibility (if needed elsewhere)
   const showPrepaidOfferModal = useCallback((sessionData) => {
     console.log('💰 [PREPAID_OFFER] Showing prepaid offer modal for session:', sessionData);
     
@@ -1087,6 +1138,11 @@ const FixedFreeChatScreen = memo(({ route, navigation }) => {
 
   const handleOfferCreated = useCallback((offerData) => {
     console.log('💰 [PREPAID_OFFER] Offer created successfully:', offerData);
+    console.log('💰 [PREPAID_OFFER] Offer details:', {
+      isExisting: offerData.isExisting,
+      isPaid: offerData.isPaid,
+      offerId: offerData.offerId
+    });
     
     // Check if this is an existing paid offer
     if (offerData.isExisting && offerData.isPaid) {
@@ -1094,6 +1150,7 @@ const FixedFreeChatScreen = memo(({ route, navigation }) => {
       // Navigate to home where the user can see the paid offer
       navigation.navigate('Home');
     } else {
+      console.log('💰 [PREPAID_OFFER] Navigating to payment screen for unpaid offer');
       // Navigate to payment screen for new or unpaid offers
       navigation.navigate('PrepaidOfferPayment', { 
         offerId: offerData.offerId 
@@ -1102,16 +1159,24 @@ const FixedFreeChatScreen = memo(({ route, navigation }) => {
   }, [navigation]);
 
   const handleOfferClosed = useCallback(() => {
-    console.log('💰 [PREPAID_OFFER] Offer modal closed');
+    console.log('💰 [PREPAID_OFFER] Offer modal closed by user');
     setShowPrepaidOffer(false);
     setPrepaidOfferData(null);
     
-    // Navigate back to home after a short delay
-    setTimeout(() => {
-      if (mountedRef.current) {
-        navigation.navigate('Home');
-      }
-    }, 300);
+    // Show helpful message and navigate to home
+    Alert.alert(
+      'Offer Saved',
+      'Your prepaid offer has been saved! You can find it on the home screen whenever you\'re ready to proceed.',
+      [
+        {
+          text: 'OK',
+          onPress: () => {
+            // Navigate to home where user can see the offer
+            navigation.navigate('Home');
+          }
+        }
+      ]
+    );
   }, [navigation]);
 
   const handleSessionResumed = useCallback((data) => {

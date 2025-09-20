@@ -20,7 +20,7 @@ const prepaidOffersAPI = {
   getActiveOffers: async () => {
     try {
       const response = await api.get('/prepaid-offers/active');
-      return response.data;
+      return response; // API interceptor already extracts response.data
     } catch (error) {
       console.error('Error fetching active offers:', error);
       throw error;
@@ -31,7 +31,7 @@ const prepaidOffersAPI = {
   getOfferDetails: async (offerId) => {
     try {
       const response = await api.get(`/prepaid-offers/${offerId}`);
-      return response.data;
+      return response; // API interceptor already extracts response.data
     } catch (error) {
       console.error('Error fetching offer details:', error);
       throw error;
@@ -42,7 +42,7 @@ const prepaidOffersAPI = {
   createRazorpayOrder: async (offerId) => {
     try {
       const response = await api.post(`/prepaid-offers/${offerId}/create-order`);
-      return response.data;
+      return response; // API interceptor already extracts response.data
     } catch (error) {
       console.error('Error creating Razorpay order:', error);
       throw error;
@@ -53,7 +53,7 @@ const prepaidOffersAPI = {
   verifyRazorpayPayment: async (offerId, paymentData) => {
     try {
       const response = await api.post(`/prepaid-offers/${offerId}/verify-payment`, paymentData);
-      return response.data;
+      return response; // API interceptor already extracts response.data
     } catch (error) {
       console.error('Error verifying payment:', error);
       throw error;
@@ -64,7 +64,7 @@ const prepaidOffersAPI = {
   startPrepaidChat: async (offerId) => {
     try {
       const response = await api.post(`/prepaid-offers/${offerId}/start-chat`);
-      return response.data;
+      return response; // API interceptor already extracts response.data
     } catch (error) {
       console.error('Error starting prepaid chat:', error);
       throw error;
@@ -75,7 +75,7 @@ const prepaidOffersAPI = {
   expireOffer: async (offerId) => {
     try {
       const response = await api.put(`/prepaid-offers/${offerId}/expire`);
-      return response.data;
+      return response; // API interceptor already extracts response.data
     } catch (error) {
       console.error('Error expiring offer:', error);
       throw error;
