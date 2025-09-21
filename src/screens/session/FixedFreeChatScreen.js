@@ -16,6 +16,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import FallbackIcon from '../../components/FallbackIcon';
 import { useAuth } from '../../context/AuthContext';
 import { useSocket } from '../../context/SocketContext';
 import useMessagePersistence from '../../hooks/useMessagePersistence';
@@ -2030,7 +2031,7 @@ const FixedFreeChatScreen = memo(({ route, navigation }) => {
             onPress={sendMessage}
             disabled={!messageText.trim() || !sessionActive || sessionEnded}
           >
-            <Ionicons name="send" size={20} color="#FFFFFF" />
+            <FallbackIcon name="send" size={20} color="#FFFFFF" />
           </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>

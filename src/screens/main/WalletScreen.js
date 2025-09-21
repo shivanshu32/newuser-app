@@ -13,6 +13,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import FallbackIcon from '../../components/FallbackIcon';
 import { useNavigation } from '@react-navigation/native';
 import { useAuth } from '../../context/AuthContext';
 import { walletAPI, offersAPI } from '../../services/api';
@@ -502,7 +503,7 @@ const WalletScreen = () => {
     return (
       <View style={styles.transactionItem}>
         <View style={styles.transactionLeft}>
-          <Ionicons name={iconName} size={24} color={iconColor} />
+          <FallbackIcon name={iconName} size={24} color={iconColor} />
           <View style={styles.transactionDetails}>
             <Text style={styles.transactionType}>
               {getTransactionDescription(item)}
@@ -636,7 +637,7 @@ const WalletScreen = () => {
           style={styles.backButton} 
           onPress={() => navigation.navigate('Home')}
         >
-          <Ionicons name="arrow-back" size={24} color="#333" />
+          <FallbackIcon name="arrow-back" size={24} color="#333" />
         </TouchableOpacity>
         <Text style={styles.title}>My Wallet</Text>
       </View>
@@ -711,14 +712,14 @@ const WalletScreen = () => {
                   if (offers.length === 0) {
                     return (
                       <View style={styles.emptyOffers}>
-                        <Ionicons name="gift-outline" size={60} color="#ccc" />
+                        <FallbackIcon name="gift-outline" size={60} color="#ccc" />
                         <Text style={styles.emptyText}>No offers available</Text>
                       </View>
                     );
                   } else if (filteredOffers.length === 0) {
                     return (
                       <View style={styles.emptyOffers}>
-                        <Ionicons name="gift-outline" size={60} color="#ccc" />
+                        <FallbackIcon name="gift-outline" size={60} color="#ccc" />
                         <Text style={styles.emptyText}>No packages available</Text>
                         <Text style={[styles.emptyText, { fontSize: 12, marginTop: 5, opacity: 0.7 }]}>First recharge offers are no longer available</Text>
                       </View>
@@ -742,7 +743,7 @@ const WalletScreen = () => {
                   onPress={() => navigation.navigate('TransactionHistory')}
                 >
                   <Text style={styles.viewAllText}>View All</Text>
-                  <Ionicons name="chevron-forward" size={16} color="#F97316" />
+                  <FallbackIcon name="chevron-forward" size={16} color="#F97316" />
                 </TouchableOpacity>
               </View>
               {loading && (
@@ -750,7 +751,7 @@ const WalletScreen = () => {
               )}
               {!loading && transactions.length === 0 && (
                 <View style={styles.emptyTransactions}>
-                  <Ionicons name="wallet-outline" size={60} color="#ccc" />
+                  <FallbackIcon name="wallet-outline" size={60} color="#ccc" />
                   <Text style={styles.emptyText}>No transactions yet</Text>
                 </View>
               )}
@@ -785,7 +786,7 @@ const WalletScreen = () => {
                   <View style={styles.summaryHeader}>
                     <Text style={styles.summaryTitle}>Payment Summary</Text>
                     <TouchableOpacity onPress={handleCancelPayment}>
-                      <Ionicons name="close" size={24} color="#666" />
+                      <FallbackIcon name="close" size={24} color="#666" />
                     </TouchableOpacity>
                   </View>
                   

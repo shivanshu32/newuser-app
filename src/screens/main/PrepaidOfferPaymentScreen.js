@@ -63,66 +63,35 @@ const PrepaidOfferPaymentScreen = () => {
 
       const { orderId, amount, razorpayKeyId } = orderResponse.data;
 
-      // Import Razorpay
-      const RazorpayCheckout = require('react-native-razorpay');
-
-      const options = {
-        description: `Prepaid Chat Offer - 5 minutes with ${offer.astrologer?.name}`,
-        image: 'https://your-logo-url.com/logo.png', // Replace with your logo
-        currency: 'INR',
-        key: razorpayKeyId,
-        amount: amount,
-        order_id: orderId,
-        name: 'JyotishCall',
-        prefill: {
-          email: user?.email || '',
-          contact: user?.mobileNumber || '',
-          name: user?.name || ''
+      // Navigate to WebView payment screen (same as wallet recharge)
+      navigation.navigate('RazorpayPayment', {
+        order: {
+          orderId: orderId,
+          amount: amount,
+          currency: 'INR'
         },
-        theme: { color: '#FF6B35' }
-      };
+        config: {
+          keyId: razorpayKeyId
+        },
+        finalAmount: offer.totalAmount,
+        user: user,
+        // Add prepaid offer specific data
+        paymentType: 'prepaid_offer',
+        offerId: offerId,
+        offerDetails: {
+          astrologerName: offer.astrologer?.name,
+          durationMinutes: offer.durationMinutes,
+          description: `Prepaid Chat Offer - ${offer.durationMinutes} minutes with ${offer.astrologer?.name}`
+        }
+      });
 
-      RazorpayCheckout.open(options)
-        .then(async (data) => {
-          // Payment successful, verify with backend
-          try {
-            const verifyResponse = await prepaidOffersAPI.verifyRazorpayPayment(offerId, {
-              razorpay_order_id: data.razorpay_order_id,
-              razorpay_payment_id: data.razorpay_payment_id,
-              razorpay_signature: data.razorpay_signature
-            });
-
-            if (verifyResponse.success) {
-              Alert.alert(
-                'Payment Successful!',
-                'You can now start your prepaid chat session.',
-                [
-                  {
-                    text: 'OK',
-                    onPress: () => navigation.navigate('Home')
-                  }
-                ]
-              );
-            } else {
-              Alert.alert('Payment Verification Failed', verifyResponse.message || 'Please contact support');
-            }
-          } catch (verifyError) {
-            console.error('Error verifying payment:', verifyError);
-            Alert.alert('Payment Verification Failed', 'Please contact support with your payment details');
-          }
-        })
-        .catch((error) => {
-          console.error('Razorpay payment error:', error);
-          if (error.code !== 'payment_cancelled') {
-            Alert.alert('Payment Failed', error.description || 'Please try again');
-          }
-        });
+      console.log('Navigating to Razorpay WebView payment screen for prepaid offer');
 
     } catch (error) {
       console.error('Error creating payment order:', error);
       Alert.alert(
-        'Payment Failed',
-        error.response?.data?.message || 'Please try again'
+        'Payment Error',
+        error.message || 'Failed to initiate payment. Please try again.'
       );
     } finally {
       setPaying(false);

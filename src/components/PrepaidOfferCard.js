@@ -101,6 +101,14 @@ const PrepaidOfferCard = ({ offer, onOfferUsed, onRefresh }) => {
   };
 
   const getButtonText = () => {
+    console.log('🎯 [PREPAID_OFFER_CARD] Button text logic:', {
+      offerId: offer.offerId,
+      loading,
+      isPaid: offer.isPaid,
+      isAvailableToUse: offer.isAvailableToUse,
+      canStartChat: offer.isPaid && offer.isAvailableToUse
+    });
+    
     if (loading) return 'Starting...';
     if (offer.isPaid && offer.isAvailableToUse) return 'Start Offer Chat';
     if (offer.isPaid) return 'Paid';

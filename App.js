@@ -50,8 +50,6 @@ function AppContent() {
   const { checkForUpdatesOnLaunch } = useVersionCheck();
   const [updateRequired, setUpdateRequired] = useState(null);
   const [versionCheckComplete, setVersionCheckComplete] = useState(false);
-
-
   
   // Analytics and crash tracking initialization (completely non-blocking)
   useEffect(() => {
@@ -108,7 +106,7 @@ function AppContent() {
     performVersionCheck();
   }, []);
   
-  // Show loading only during initial auth check - remove version check dependency
+  // Show loading only during initial auth check
   if (initialLoading) {
     return (
       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>

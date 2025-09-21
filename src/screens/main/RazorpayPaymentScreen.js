@@ -12,10 +12,11 @@ import {
 import { WebView } from 'react-native-webview';
 import { useAuth } from '../../context/AuthContext';
 import { walletAPI } from '../../services/api';
+import prepaidOffersAPI from '../../services/prepaidOffersAPI';
 import usePaymentTimeout from '../../hooks/usePaymentTimeout';
 
 const RazorpayPaymentScreen = ({ route, navigation }) => {
-  const { order, config, finalAmount, user, selectedPackage } = route.params;
+  const { order, config, finalAmount, user, selectedPackage, paymentType, offerId, offerDetails } = route.params;
   const { updateWalletBalance, updateUser } = useAuth();
   const [loading, setLoading] = useState(true);
   const [transactionId, setTransactionId] = useState(order?.transactionId || null);
@@ -117,28 +118,49 @@ const RazorpayPaymentScreen = ({ route, navigation }) => {
   const handlePaymentSuccess = async (paymentData) => {
     try {
       console.log('Payment successful, verifying with backend:', paymentData);
+      console.log('Payment type:', paymentType);
       
-      // Verify payment with backend - include selected package information
-      const verificationData = {
-        razorpay_payment_id: paymentData.payment_id,
-        razorpay_order_id: paymentData.order_id,
-        razorpay_signature: paymentData.signature
-      };
+      let verificationResponse;
       
-      // Include selected package information if available
-      if (selectedPackage) {
-        verificationData.selectedPackage = {
-          id: selectedPackage.id,
-          name: selectedPackage.name,
-          percentageBonus: selectedPackage.percentageBonus || 0,
-          flatBonus: selectedPackage.flatBonus || 0,
-          minRechargeAmount: selectedPackage.minRechargeAmount || 0,
-          firstRecharge: selectedPackage.firstRecharge || false
+      if (paymentType === 'prepaid_offer') {
+        // Handle prepaid offer payment verification
+        console.log('Verifying prepaid offer payment for offerId:', offerId);
+        const verificationData = {
+          razorpay_payment_id: paymentData.payment_id,
+          razorpay_order_id: paymentData.order_id,
+          razorpay_signature: paymentData.signature
         };
-        console.log('🎁 Including selected package in verification:', verificationData.selectedPackage);
+        
+        verificationResponse = await prepaidOffersAPI.verifyRazorpayPayment(offerId, verificationData);
+        console.log('🎯 [PREPAID_OFFER_VERIFICATION] Response received:', {
+          success: verificationResponse?.success,
+          message: verificationResponse?.message,
+          data: verificationResponse?.data,
+          fullResponse: verificationResponse
+        });
+      } else {
+        // Handle wallet payment verification (existing logic)
+        const verificationData = {
+          razorpay_payment_id: paymentData.payment_id,
+          razorpay_order_id: paymentData.order_id,
+          razorpay_signature: paymentData.signature
+        };
+        
+        // Include selected package information if available
+        if (selectedPackage) {
+          verificationData.selectedPackage = {
+            id: selectedPackage.id,
+            name: selectedPackage.name,
+            percentageBonus: selectedPackage.percentageBonus || 0,
+            flatBonus: selectedPackage.flatBonus || 0,
+            minRechargeAmount: selectedPackage.minRechargeAmount || 0,
+            firstRecharge: selectedPackage.firstRecharge || false
+          };
+          console.log('🎁 Including selected package in verification:', verificationData.selectedPackage);
+        }
+        
+        verificationResponse = await walletAPI.verifyPayment(verificationData);
       }
-      
-      const verificationResponse = await walletAPI.verifyPayment(verificationData);
       
       console.log('Payment verification response:', verificationResponse);
       
@@ -160,9 +182,12 @@ const RazorpayPaymentScreen = ({ route, navigation }) => {
           await updateWalletBalance();
         }
         
-        // Show different success messages for package vs manual payments
+        // Show different success messages based on payment type
         let successMessage;
-        if (selectedPackage) {
+        if (paymentType === 'prepaid_offer') {
+          // Prepaid offer payment success message
+          successMessage = `Payment Successful!\n\n${offerDetails?.description || 'Prepaid Chat Offer'}\n\nPayment Details:\n• Amount Paid: ₹${finalAmount}\n• Duration: ${offerDetails?.durationMinutes || 5} minutes\n• Astrologer: ${offerDetails?.astrologerName || 'Selected Astrologer'}\n\nYou can now start your prepaid chat session!\n\nPayment ID: ${paymentData.payment_id}`;
+        } else if (selectedPackage) {
           // Package payment success message
           const rechargeAmount = selectedPackage.minRechargeAmount || 0;
           const bonusAmount = selectedPackage.percentageBonus > 0 
@@ -185,9 +210,16 @@ const RazorpayPaymentScreen = ({ route, navigation }) => {
           [
             {
               text: 'OK',
-              onPress: () => {
-                console.log('🔙 Navigating back to Wallet screen...');
-                navigation.goBack();
+              onPress: async () => {
+                if (paymentType === 'prepaid_offer') {
+                  console.log('🔙 Navigating to Home screen after prepaid offer payment...');
+                  // Small delay to ensure database update propagates
+                  await new Promise(resolve => setTimeout(resolve, 1000));
+                  navigation.navigate('Home');
+                } else {
+                  console.log('🔙 Navigating back to Wallet screen...');
+                  navigation.goBack();
+                }
               }
             }
           ]
