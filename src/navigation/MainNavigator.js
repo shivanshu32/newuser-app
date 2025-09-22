@@ -5,7 +5,6 @@ import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { useNavigation, CommonActions } from '@react-navigation/native';
 import { Ionicons, MaterialIcons, FontAwesome } from '@expo/vector-icons';
-import FallbackIcon from '../components/FallbackIcon';
 
 // Import screens
 import HomeScreen from '../screens/main/HomeScreen';
@@ -81,7 +80,7 @@ const TabNavigator = () => {
             iconName = focused ? 'person' : 'person-outline';
           }
 
-          return <FallbackIcon name={iconName} size={size} color={color} />;
+          return <Ionicons name={iconName} size={size} color={color} />;
         },
         tabBarActiveTintColor: '#F97316',
         tabBarInactiveTintColor: 'gray',

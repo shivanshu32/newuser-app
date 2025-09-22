@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import FallbackIcon from './FallbackIcon';
 
 const SmartIcon = ({ name, size = 24, color = '#333', style, testID }) => {
   const [useIonicons, setUseIonicons] = useState(true);
@@ -49,12 +48,13 @@ const SmartIcon = ({ name, size = 24, color = '#333', style, testID }) => {
       );
     } catch (error) {
       console.warn('⚠️ [SmartIcon] Ionicons error for:', name, error);
-      return <FallbackIcon name={name} size={size} color={color} style={style} />;
+      // If Ionicons fails, just return a simple Ionicons with a default icon
+      return <Ionicons name="help-outline" size={size} color={color} style={style} />;
     }
   }
 
-  // Use fallback icons
-  return <FallbackIcon name={name} size={size} color={color} style={style} />;
+  // Use Ionicons with a default fallback
+  return <Ionicons name="help-outline" size={size} color={color} style={style} />;
 };
 
 export default SmartIcon;

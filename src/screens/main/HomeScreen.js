@@ -17,7 +17,6 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons, MaterialIcons, FontAwesome } from '@expo/vector-icons';
-import FallbackIcon from '../../components/FallbackIcon';
 import Toast from 'react-native-toast-message';
 import { useAuth } from '../../context/AuthContext';
 import { useSocket } from '../../context/SocketContext';
@@ -279,11 +278,19 @@ const HomeScreen = ({ navigation }) => {
           rejoin: true
         });
       } else {
-        // Navigate to enhanced chat screen for paid consultations
+        // Navigate to enhanced chat screen for paid consultations and prepaid offers
+        console.log('🔄 [REJOIN] Navigating to EnhancedChat with:', {
+          bookingId: sessionData.bookingId,
+          sessionId: sessionData.sessionId,
+          isPrepaidOffer: sessionData.isPrepaidOffer,
+          astrologerName: sessionData.astrologer?.name
+        });
+        
         navigation.navigate('EnhancedChat', {
           bookingId: sessionData.bookingId,
           sessionId: sessionData.sessionId,
           astrologerName: sessionData.astrologer?.name,
+          isPrepaidOffer: sessionData.isPrepaidOffer || false,
           rejoin: true
         });
       }
@@ -321,7 +328,11 @@ const HomeScreen = ({ navigation }) => {
     try {
       const currentVersion = APP_CONFIG.getCurrentVersion();
       console.log('🔄 Checking app version...', currentVersion);
-      const response = await versionAPI.checkVersion(currentVersion);
+      const response = await versionAPI.checkVersion({
+        currentVersion,
+        appType: APP_CONFIG.appType,
+        platform: Platform.OS,
+      });
       console.log('📱 Version check response:', response);
       
       if (response.success) {
@@ -817,6 +828,14 @@ const HomeScreen = ({ navigation }) => {
   const handleSessionEnd = useCallback((data) => {
     console.log('📝 [HOME] Session ended:', data);
     
+    // Dismiss rejoin bottom sheet if it's showing
+    if (showRejoinBottomSheet) {
+      console.log('📝 [HOME] Dismissing rejoin bottom sheet due to session end');
+      setShowRejoinBottomSheet(false);
+      setActiveSessionData(null);
+      clearRemainingTimeTimer();
+    }
+    
     // Update local state to remove the ended session for immediate UI feedback
     if (data.bookingId) {
       setPendingBookings(prevBookings => {
@@ -844,7 +863,7 @@ const HomeScreen = ({ navigation }) => {
         });
       }, 1000); // Small delay to allow backend to process the session end
     }
-  }, [socket, fetchUserPendingBookings]);
+  }, [socket, fetchUserPendingBookings, showRejoinBottomSheet, clearRemainingTimeTimer]);
 
   // Handle call status updates from Exotel
   const handleCallStatusUpdate = useCallback((data) => {
@@ -1715,6 +1734,7 @@ const HomeScreen = ({ navigation }) => {
       socket.off('user_pending_bookings_updated', handleUserPendingBookingUpdates);
       socket.off('session_end', handleSessionEnd);
       socket.off('session_ended', handleSessionEnd);
+      socket.off('consultation_ended', handleSessionEnd);
       socket.off('call_status_update', handleCallStatusUpdate);
       socket.off('astrologer_ready_for_session', handleAstrologerReadyForSession);
       socket.off('astrologer_declined_session', handleAstrologerDeclinedSession);
@@ -1729,9 +1749,10 @@ const HomeScreen = ({ navigation }) => {
       // Listen for user pending booking updates
       socket.on('user_pending_bookings_updated', handleUserPendingBookingUpdates);
 
-      // Listen for session end events to clean up pending bookings
+      // Listen for session end events to clean up pending bookings and dismiss rejoin bottom sheet
       socket.on('session_end', handleSessionEnd);
       socket.on('session_ended', handleSessionEnd);
+      socket.on('consultation_ended', handleSessionEnd);
 
       // Listen for call status updates from Exotel
       console.log('🔥 [DEBUG] Registering call_status_update listener in user-app HomeScreen');
@@ -1942,6 +1963,7 @@ const HomeScreen = ({ navigation }) => {
           socket.off('user_pending_bookings_updated', handleUserPendingBookingUpdates);
           socket.off('session_end', handleSessionEnd);
           socket.off('session_ended', handleSessionEnd);
+          socket.off('consultation_ended', handleSessionEnd);
           // Removed setupListeners references as they were undefined
           socket.off('booking_rejected');
           socket.off('booking_auto_cancelled');
@@ -1980,7 +2002,7 @@ const HomeScreen = ({ navigation }) => {
             onPress={() => navigation.navigate('Wallet')}
           >
             <View style={styles.walletContent}>
-              <FallbackIcon name="wallet-outline" size={16} color="#F97316" />
+              <Ionicons name="wallet-outline" size={16} color="#F97316" />
               <View style={styles.walletInfo}>
                 <Text style={styles.walletLabel}>Wallet</Text>
                 <Text style={styles.walletBalance}>
@@ -1993,7 +2015,7 @@ const HomeScreen = ({ navigation }) => {
             style={styles.profileButton}
             onPress={() => navigation.navigate('AddUserProfile')}
           >
-            <FallbackIcon name="person-circle-outline" size={32} color="#F97316" />
+            <Ionicons name="person-circle-outline" size={32} color="#F97316" />
           </TouchableOpacity>
         </View>
       </View>
@@ -2030,7 +2052,7 @@ const HomeScreen = ({ navigation }) => {
             style={styles.viewAllButton}
           >
             <Text style={styles.viewAllText}>View All</Text>
-            <FallbackIcon name="chevron-forward" size={16} color="#F97316" />
+            <Ionicons name="chevron-forward" size={16} color="#F97316" />
           </TouchableOpacity>
         </View>
         
@@ -2295,7 +2317,7 @@ const HomeScreen = ({ navigation }) => {
                   navigation.navigate('AstrologerProfile', { astrologer: item });
                 }}
               >
-                <FallbackIcon name="chatbubble" size={16} color="#10B981" />
+                <Ionicons name="chatbubble" size={16} color="#10B981" />
               </TouchableOpacity>
             )}
             {/* Show Call button only if onlineStatus.call === 1 and consultationPrices.call exists */}
@@ -2307,7 +2329,7 @@ const HomeScreen = ({ navigation }) => {
                   navigation.navigate('AstrologerProfile', { astrologer: item });
                 }}
               >
-                <FallbackIcon name="call" size={16} color="#3B82F6" />
+                <Ionicons name="call" size={16} color="#3B82F6" />
               </TouchableOpacity>
             )}
           </View>
@@ -2385,7 +2407,7 @@ const HomeScreen = ({ navigation }) => {
         {/* Booking Time and Status Section */}
         <View style={styles.bookingTimeStatusSection}>
           <View style={styles.bookingTimeContainer}>
-            <FallbackIcon name="time-outline" size={16} color="#6B7280" />
+            <Ionicons name="time-outline" size={16} color="#6B7280" />
             <Text style={styles.bookingTimeLabel}>Booking Time:</Text>
             <Text style={styles.bookingTimeValue}>
               {booking.createdAt ? 
@@ -2403,7 +2425,7 @@ const HomeScreen = ({ navigation }) => {
           </View>
           
           <View style={styles.bookingStatusContainer}>
-            <FallbackIcon name="information-circle-outline" size={16} color={getStatusColor()} />
+            <Ionicons name="information-circle-outline" size={16} color={getStatusColor()} />
             <Text style={styles.bookingStatusLabel}>Status:</Text>
             <Text style={[styles.bookingStatusValue, { color: getStatusColor() }]}>
               {booking.status?.charAt(0).toUpperCase() + booking.status?.slice(1) || 'Unknown'}
@@ -2425,7 +2447,7 @@ const HomeScreen = ({ navigation }) => {
               style={styles.cancelButton}
               onPress={() => handleCancelBooking(booking)}
             >
-              <FallbackIcon name="close-circle-outline" size={18} color="#EF4444" />
+              <Ionicons name="close-circle-outline" size={18} color="#EF4444" />
               <Text style={styles.cancelButtonText}>Cancel</Text>
             </TouchableOpacity>
           )}
@@ -2436,7 +2458,7 @@ const HomeScreen = ({ navigation }) => {
               style={styles.joinSessionButton}
               onPress={() => handleJoinSession(booking)}
             >
-              <FallbackIcon name="play-circle" size={20} color="#fff" />
+              <Ionicons name="play-circle" size={20} color="#fff" />
               <Text style={styles.joinSessionText}>Join Session</Text>
             </TouchableOpacity>
           )}
@@ -2447,7 +2469,7 @@ const HomeScreen = ({ navigation }) => {
               style={styles.rejoinSessionButton}
               onPress={() => handleJoinSession(booking)}
             >
-              <FallbackIcon name="refresh-circle" size={20} color="#fff" />
+              <Ionicons name="refresh-circle" size={20} color="#fff" />
               <Text style={styles.rejoinSessionText}>Rejoin Session</Text>
             </TouchableOpacity>
           )}
@@ -2455,7 +2477,7 @@ const HomeScreen = ({ navigation }) => {
           {/* Voice consultation info message */}
           {booking.type === 'voice' && isAccepted && (
             <View style={styles.voiceConsultationInfo}>
-              <FallbackIcon name="call" size={20} color="#10B981" />
+              <Ionicons name="call" size={20} color="#10B981" />
               <Text style={styles.voiceConsultationText}>
                 You will receive a phone call shortly. Please answer to connect with the astrologer.
               </Text>
@@ -2585,7 +2607,7 @@ const HomeScreen = ({ navigation }) => {
                 <View style={styles.horoscopeCardContent}>
                   <View style={styles.horoscopeLeftContent}>
                     <View style={styles.enhancedIconContainer}>
-                      <FallbackIcon name="star" size={24} color="#FFD700" />
+                      <Ionicons name="star" size={24} color="#FFD700" />
                       <View style={styles.iconGlow} />
                     </View>
                     <View style={styles.horoscopeTextContent}>
@@ -2603,7 +2625,7 @@ const HomeScreen = ({ navigation }) => {
                       <Text style={styles.zodiacSymbol}>♊</Text>
                     </View>
                     <View style={styles.arrowContainer}>
-                      <FallbackIcon name="chevron-forward" size={18} color="#F97316" />
+                      <Ionicons name="chevron-forward" size={18} color="#F97316" />
                     </View>
                   </View>
                 </View>
@@ -2684,7 +2706,7 @@ const HomeScreen = ({ navigation }) => {
         <View style={styles.modalOverlay}>
           <View style={styles.cancelConfirmModal}>
             <View style={styles.modalHeader}>
-              <FallbackIcon name="warning" size={32} color="#EF4444" />
+              <Ionicons name="warning" size={32} color="#EF4444" />
               <Text style={styles.modalTitle}>Cancel Booking Request?</Text>
             </View>
             

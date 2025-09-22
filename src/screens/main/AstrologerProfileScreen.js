@@ -15,7 +15,6 @@ import {
   StatusBar,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import FallbackIcon from '../../components/FallbackIcon';
 import { useSocket } from '../../context/SocketContext';
 import { astrologersAPI, walletAPI, ratingsAPI } from '../../services/api';
 import { initiateRealTimeBooking, listenForBookingStatusUpdates } from '../../services/socketService';
@@ -976,7 +975,7 @@ const AstrologerProfileScreen = ({ route, navigation }) => {
   if (error) {
     return (
       <View style={styles.errorContainer}>
-        <FallbackIcon name="alert-circle-outline" size={60} color="#F44336" />
+        <Ionicons name="alert-circle-outline" size={60} color="#F44336" />
         <Text style={styles.errorText}>{error}</Text>
         <TouchableOpacity style={styles.retryButton} onPress={fetchAstrologerDetails}>
           <Text style={styles.retryButtonText}>Retry</Text>
@@ -1105,7 +1104,7 @@ const AstrologerProfileScreen = ({ route, navigation }) => {
             <Text style={styles.specialization}>{astrologer.specialization || astrologer.specialties?.[0] || 'Astrologer'}</Text>
             
             <View style={styles.ratingContainer}>
-              <FallbackIcon name="star" size={16} color="#FFD700" />
+              <Ionicons name="star" size={16} color="#FFD700" />
               <Text style={styles.rating}>{ratingText}</Text>
               {ratingCount > 0 && (
                 <Text style={styles.ratingCount} numberOfLines={1} ellipsizeMode="tail">({ratingCount} reviews)</Text>
@@ -1176,7 +1175,7 @@ const AstrologerProfileScreen = ({ route, navigation }) => {
                 onPress={handleBookChat}
                 accessibilityLabel="Book Chat Consultation"
               >
-                <FallbackIcon 
+                <Ionicons 
                   name="chatbubble" 
                   size={24} 
                   color="#fff" 
@@ -1205,7 +1204,7 @@ const AstrologerProfileScreen = ({ route, navigation }) => {
                 onPress={handleBookVoiceCall}
                 accessibilityLabel="Book Voice Call Consultation"
               >
-                <FallbackIcon 
+                <Ionicons 
                   name="call" 
                   size={24} 
                   color="#fff" 
@@ -1225,7 +1224,7 @@ const AstrologerProfileScreen = ({ route, navigation }) => {
               onPress={handleBookVideoCall}
               accessibilityLabel="Book Video Call Consultation"
             >
-              <FallbackIcon 
+              <Ionicons 
                 name="videocam" 
                 size={24} 
                 color="#fff" 
@@ -1290,7 +1289,7 @@ const AstrologerProfileScreen = ({ route, navigation }) => {
           <View style={styles.detailSection}>
             <Text style={styles.sectionTitle}>Experience</Text>
             <View style={styles.experienceContainer}>
-              <FallbackIcon name="briefcase-outline" size={20} color="#F97316" />
+              <Ionicons name="briefcase-outline" size={20} color="#F97316" />
               <Text style={styles.detailText}>{astrologer.experience || 'Not specified'} years of professional experience</Text>
             </View>
           </View>
@@ -1306,7 +1305,7 @@ const AstrologerProfileScreen = ({ route, navigation }) => {
               {reviews.length > 0 && (
                 <TouchableOpacity style={styles.viewAllButton}>
                   <Text style={styles.viewAllButtonText}>View All</Text>
-                  <FallbackIcon name="chevron-forward" size={16} color="#F97316" />
+                  <Ionicons name="chevron-forward" size={16} color="#F97316" />
                 </TouchableOpacity>
               )}
             </View>
@@ -1317,7 +1316,7 @@ const AstrologerProfileScreen = ({ route, navigation }) => {
                   <Text style={styles.overallRating}>{ratingText}</Text>
                   <View style={styles.overallStars}>
                     {[1, 2, 3, 4, 5].map((star) => (
-                      <FallbackIcon
+                      <Ionicons
                         key={star}
                         name={star <= (astrologer.rating?.average || 0) ? "star" : "star-outline"}
                         size={18}
@@ -1335,7 +1334,7 @@ const AstrologerProfileScreen = ({ route, navigation }) => {
                     return (
                       <View key={rating} style={styles.ratingBar}>
                         <Text style={styles.ratingNumber}>{rating}</Text>
-                        <FallbackIcon name="star" size={12} color="#FFD700" />
+                        <Ionicons name="star" size={12} color="#FFD700" />
                         <View style={styles.barContainer}>
                           <View style={[styles.barFill, { width: `${percentage}%` }]} />
                         </View>
@@ -1372,7 +1371,7 @@ const AstrologerProfileScreen = ({ route, navigation }) => {
             </View>
           ) : reviews.length === 0 ? (
             <View style={styles.noReviews}>
-              <FallbackIcon name="star-outline" size={48} color="#D1D5DB" />
+              <Ionicons name="star-outline" size={48} color="#D1D5DB" />
               <Text style={styles.noReviewsText}>No reviews yet</Text>
               <Text style={styles.noReviewsSubtext}>Be the first to review this astrologer</Text>
             </View>
@@ -1382,7 +1381,7 @@ const AstrologerProfileScreen = ({ route, navigation }) => {
                 <Text style={styles.recentReviewsTitle}>Recent Reviews</Text>
                 <View style={styles.reviewsFilter}>
                   <Text style={styles.filterText}>Most Recent</Text>
-                  <FallbackIcon name="chevron-down" size={14} color="#6B7280" />
+                  <Ionicons name="chevron-down" size={14} color="#6B7280" />
                 </View>
               </View>
               
@@ -1412,7 +1411,7 @@ const AstrologerProfileScreen = ({ route, navigation }) => {
                               {review.user?.name || 'Anonymous User'}
                             </Text>
                             <View style={styles.reviewRatingBadge}>
-                              <FallbackIcon name="star" size={12} color="#FFD700" />
+                              <Ionicons name="star" size={12} color="#FFD700" />
                               <Text style={styles.reviewRatingBadgeText}>{review.rating}.0</Text>
                             </View>
                           </View>
@@ -1433,7 +1432,7 @@ const AstrologerProfileScreen = ({ route, navigation }) => {
                             </Text>
                             <View style={styles.reviewDot} />
                             <View style={styles.consultationTypeBadge}>
-                              <FallbackIcon name="chatbubble" size={10} color="#6B7280" />
+                              <Ionicons name="chatbubble" size={10} color="#6B7280" />
                               <Text style={styles.consultationTypeText}>Chat</Text>
                             </View>
                           </View>
@@ -1448,7 +1447,7 @@ const AstrologerProfileScreen = ({ route, navigation }) => {
                     ) : (
                       <View style={styles.reviewCommentSection}>
                         <Text style={styles.reviewNoComment}>
-                          <FallbackIcon name="star" size={14} color="#FFD700" />
+                          <Ionicons name="star" size={14} color="#FFD700" />
                           {' '}Rated {review.rating} stars without written feedback
                         </Text>
                       </View>
@@ -1456,12 +1455,12 @@ const AstrologerProfileScreen = ({ route, navigation }) => {
                     
                     <View style={styles.reviewActions}>
                       <View style={styles.reviewVerified}>
-                        <FallbackIcon name="shield-checkmark" size={14} color="#10B981" />
+                        <Ionicons name="shield-checkmark" size={14} color="#10B981" />
                         <Text style={styles.reviewVerifiedText}>Verified Purchase</Text>
                       </View>
                       <View style={styles.reviewHelpful}>
                         <TouchableOpacity style={styles.helpfulButton}>
-                          <FallbackIcon name="thumbs-up-outline" size={14} color="#6B7280" />
+                          <Ionicons name="thumbs-up-outline" size={14} color="#6B7280" />
                           <Text style={styles.helpfulText}>Helpful</Text>
                         </TouchableOpacity>
                       </View>
@@ -1490,7 +1489,7 @@ const AstrologerProfileScreen = ({ route, navigation }) => {
                     </View>
                   )}
                   {!loadingMoreReviews && (
-                    <FallbackIcon name="chevron-down" size={20} color="#F97316" />
+                    <Ionicons name="chevron-down" size={20} color="#F97316" />
                   )}
                 </TouchableOpacity>
               )}
@@ -1523,7 +1522,7 @@ const AstrologerProfileScreen = ({ route, navigation }) => {
                 onPress={handleBookChat}
                 accessibilityLabel="Book Chat Consultation"
               >
-                <FallbackIcon 
+                <Ionicons 
                   name="chatbubble" 
                   size={24} 
                   color="#fff" 
@@ -1552,7 +1551,7 @@ const AstrologerProfileScreen = ({ route, navigation }) => {
                 onPress={handleBookVoiceCall}
                 accessibilityLabel="Book Voice Call Consultation"
               >
-                <FallbackIcon 
+                <Ionicons 
                   name="call" 
                   size={24} 
                   color="#fff" 
@@ -1572,7 +1571,7 @@ const AstrologerProfileScreen = ({ route, navigation }) => {
               onPress={handleBookVideoCall}
               accessibilityLabel="Book Video Call Consultation"
             >
-              <FallbackIcon 
+              <Ionicons 
                 name="videocam" 
                 size={24} 
                 color="#fff" 

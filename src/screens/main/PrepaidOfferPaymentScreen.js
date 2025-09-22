@@ -10,7 +10,7 @@ import {
   Image
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import Icon from 'react-native-vector-icons/MaterialIcons';
+import { MaterialIcons } from '@expo/vector-icons';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import prepaidOffersAPI from '../../services/prepaidOffersAPI';
 import { useAuth } from '../../context/AuthContext';
@@ -124,7 +124,7 @@ const PrepaidOfferPaymentScreen = () => {
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()}>
-          <Icon name="arrow-back" size={24} color="#333" />
+          <MaterialIcons name="arrow-back" size={24} color="#333" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Payment Summary</Text>
         <View style={{ width: 24 }} />
@@ -148,7 +148,7 @@ const PrepaidOfferPaymentScreen = () => {
             )}
             {offer.astrologer?.averageRating && (
               <View style={styles.ratingContainer}>
-                <Icon name="star" size={16} color="#FFD700" />
+                <MaterialIcons name="star" size={16} color="#FFD700" />
                 <Text style={styles.rating}>{offer.astrologer.averageRating}</Text>
               </View>
             )}
@@ -158,21 +158,21 @@ const PrepaidOfferPaymentScreen = () => {
         {/* Offer Details */}
         <View style={styles.offerCard}>
           <View style={styles.offerHeader}>
-            <Icon name="local-fire-department" size={24} color="#FF6B35" />
+            <MaterialIcons name="local-fire-department" size={24} color="#FF6B35" />
             <Text style={styles.offerTitle}>Special Prepaid Chat Offer</Text>
           </View>
           
           <View style={styles.offerDetails}>
             <View style={styles.detailRow}>
-              <Icon name="schedule" size={20} color="#666" />
+              <MaterialIcons name="schedule" size={20} color="#666" />
               <Text style={styles.detailText}>{offer.durationMinutes} minutes chat</Text>
             </View>
             <View style={styles.detailRow}>
-              <Icon name="person" size={20} color="#666" />
+              <MaterialIcons name="person" size={20} color="#666" />
               <Text style={styles.detailText}>Same astrologer</Text>
             </View>
             <View style={styles.detailRow}>
-              <Icon name="flash-on" size={20} color="#666" />
+              <MaterialIcons name="flash-on" size={20} color="#666" />
               <Text style={styles.detailText}>Instant start available</Text>
             </View>
           </View>
@@ -208,7 +208,7 @@ const PrepaidOfferPaymentScreen = () => {
         {/* Payment Method */}
         <View style={styles.paymentMethodCard}>
           <View style={styles.paymentMethodHeader}>
-            <Icon name="payment" size={24} color="#4CAF50" />
+            <MaterialIcons name="payment" size={24} color="#4CAF50" />
             <Text style={styles.paymentMethodTitle}>Payment Method</Text>
           </View>
           <View style={styles.paymentMethodContent}>

@@ -2,7 +2,6 @@ import React, { useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import SmartIcon from './SmartIcon';
-import FallbackIcon from './FallbackIcon';
 
 const IconTest = () => {
   const testIcons = [
@@ -60,13 +59,13 @@ const IconTest = () => {
         ))}
       </View>
 
-      {/* Fallback Icon Test */}
-      <Text style={styles.sectionTitle}>3. Fallback Icons (Always work):</Text>
+      {/* Direct Ionicons Test */}
+      <Text style={styles.sectionTitle}>3. Direct Ionicons (Consistent approach):</Text>
       <View style={styles.iconGrid}>
         {testIcons.map((icon, index) => (
           <View key={`fallback-${index}`} style={styles.iconItem}>
             <View style={styles.iconBox}>
-              <FallbackIcon name={icon.name} size={24} color="#333" />
+              <Ionicons name={icon.name} size={24} color="#333" />
             </View>
             <Text style={styles.iconLabel}>{icon.label}</Text>
           </View>

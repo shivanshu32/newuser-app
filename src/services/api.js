@@ -91,7 +91,15 @@ API.interceptors.response.use(
   (response) => {
     try {
       console.log('✅ [API] Response success:', response.status, response.config?.url);
-      return response.data; // Return only the data part
+      
+      // Check if response.data exists and is an object
+      if (response.data && typeof response.data === 'object') {
+        return response.data; // Return only the data part for JSON responses
+      } else {
+        // For non-JSON responses (like plain text), return the full response
+        console.log('📄 [API] Non-JSON response detected, returning full response');
+        return response;
+      }
     } catch (error) {
       console.error('❌ [API] Error processing successful response:', error);
       return response; // Fallback to full response
@@ -108,6 +116,8 @@ API.interceptors.response.use(
         status: error.response?.status,
         statusText: error.response?.statusText,
         data: error.response?.data,
+        dataType: typeof error.response?.data,
+        rawResponse: error.response?.data,
         message: error.message,
         code: error.code,
         isNetworkError: error.message === 'Network Error',

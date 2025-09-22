@@ -8,7 +8,7 @@ import {
   Alert,
   ActivityIndicator
 } from 'react-native';
-import Icon from 'react-native-vector-icons/MaterialIcons';
+import { MaterialIcons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import prepaidOffersAPI from '../services/prepaidOffersAPI';
 
@@ -34,27 +34,35 @@ const PrepaidOfferCard = ({ offer, onOfferUsed, onRefresh }) => {
 
     setLoading(true);
     try {
+      console.log('🚀 [PREPAID_OFFER_CARD] Starting prepaid chat for offer:', offer.offerId);
       const response = await prepaidOffersAPI.startPrepaidChat(offer.offerId);
+      console.log('✅ [PREPAID_OFFER_CARD] API response:', response);
       
       if (response.success) {
-        // Navigate to chat screen with session details
-        navigation.navigate('EnhancedChat', {
+        // Navigate to waiting screen for astrologer acceptance
+        navigation.navigate('BookingWaiting', {
           sessionId: response.data.sessionId,
+          sessionIdentifier: response.data.sessionIdentifier,
           astrologer: response.data.astrologer,
           sessionType: 'prepaid_offer',
-          duration: response.data.duration * 60, // Convert to seconds
-          isPrepaid: true
+          duration: response.data.duration,
+          totalAmount: response.data.totalAmount,
+          isPrepaidOffer: true,
+          bookingType: 'chat'
         });
         
-        // Refresh offers to remove used offer
-        if (onOfferUsed) {
-          onOfferUsed();
-        }
+        // Don't refresh offers yet - wait for astrologer acceptance
+        // onOfferUsed will be called after successful session completion
       } else {
         Alert.alert('Error', response.message || 'Failed to start chat session');
       }
     } catch (error) {
-      console.error('Error starting offer chat:', error);
+      console.error('❌ [PREPAID_OFFER_CARD] Error starting offer chat:', error);
+      console.error('❌ [PREPAID_OFFER_CARD] Error details:', {
+        message: error.message,
+        response: error.response?.data,
+        status: error.response?.status
+      });
       Alert.alert('Error', 'Failed to start offer chat session');
     } finally {
       setLoading(false);
@@ -127,11 +135,11 @@ const PrepaidOfferCard = ({ offer, onOfferUsed, onRefresh }) => {
       {/* Header with Fire Icon */}
       <View style={styles.header}>
         <View style={styles.offerBadge}>
-          <Icon name="local-fire-department" size={20} color="#FF6B35" />
+          <MaterialIcons name="local-fire-department" size={20} color="#FF6B35" />
           <Text style={styles.offerBadgeText}>Special Offer</Text>
         </View>
         <TouchableOpacity onPress={handleRemoveOffer} style={styles.closeButton}>
-          <Icon name="close" size={20} color="#666" />
+          <MaterialIcons name="close" size={20} color="#666" />
         </TouchableOpacity>
       </View>
 
@@ -148,7 +156,7 @@ const PrepaidOfferCard = ({ offer, onOfferUsed, onRefresh }) => {
           <View style={styles.astrologerMeta}>
             {offer.astrologer?.averageRating && (
               <View style={styles.ratingContainer}>
-                <Icon name="star" size={14} color="#FFD700" />
+                <MaterialIcons name="star" size={14} color="#FFD700" />
                 <Text style={styles.rating}>{offer.astrologer.averageRating}</Text>
               </View>
             )}
@@ -171,11 +179,11 @@ const PrepaidOfferCard = ({ offer, onOfferUsed, onRefresh }) => {
         
         <View style={styles.benefitsContainer}>
           <View style={styles.benefitItem}>
-            <Icon name="schedule" size={16} color="#4CAF50" />
+            <MaterialIcons name="schedule" size={16} color="#4CAF50" />
             <Text style={styles.benefitText}>{offer.durationMinutes} minutes</Text>
           </View>
           <View style={styles.benefitItem}>
-            <Icon name="flash-on" size={16} color="#4CAF50" />
+            <MaterialIcons name="flash-on" size={16} color="#4CAF50" />
             <Text style={styles.benefitText}>Instant start</Text>
           </View>
         </View>
@@ -183,7 +191,7 @@ const PrepaidOfferCard = ({ offer, onOfferUsed, onRefresh }) => {
 
       {/* Time Remaining */}
       <View style={styles.timeContainer}>
-        <Icon name="access-time" size={16} color="#FF6B35" />
+        <MaterialIcons name="access-time" size={16} color="#FF6B35" />
         <Text style={styles.timeText}>{getTimeRemaining()}</Text>
       </View>
 
@@ -203,7 +211,7 @@ const PrepaidOfferCard = ({ offer, onOfferUsed, onRefresh }) => {
       {/* Payment Status Indicator */}
       {offer.isPaid && (
         <View style={styles.statusContainer}>
-          <Icon name="check-circle" size={16} color="#4CAF50" />
+          <MaterialIcons name="check-circle" size={16} color="#4CAF50" />
           <Text style={styles.statusText}>
             {offer.isAvailableToUse ? 'Ready to start' : 'Payment completed'}
           </Text>

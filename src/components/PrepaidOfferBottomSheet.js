@@ -10,7 +10,7 @@ import {
   Image,
   Alert
 } from 'react-native';
-import Icon from 'react-native-vector-icons/MaterialIcons';
+import { MaterialIcons } from '@expo/vector-icons';
 import prepaidOffersAPI from '../services/prepaidOffersAPI';
 
 const { height: screenHeight } = Dimensions.get('window');
@@ -117,7 +117,7 @@ const PrepaidOfferBottomSheet = ({
               Continue Chat with {astrologer?.name || 'Astrologer'}
             </Text>
             <TouchableOpacity onPress={onClose} style={styles.closeButton}>
-              <Icon name="close" size={24} color="#666" />
+              <MaterialIcons name="close" size={24} color="#666" />
             </TouchableOpacity>
           </View>
 
@@ -142,7 +142,7 @@ const PrepaidOfferBottomSheet = ({
           {/* Offer Details */}
           <View style={styles.offerContainer}>
             <View style={styles.offerHeader}>
-              <Icon name="local-fire-department" size={24} color="#FF6B35" />
+              <MaterialIcons name="local-fire-department" size={24} color="#FF6B35" />
               <Text style={styles.offerTitle}>Special One-Time Offer!</Text>
             </View>
             
@@ -158,15 +158,15 @@ const PrepaidOfferBottomSheet = ({
 
             <View style={styles.benefitsList}>
               <View style={styles.benefitItem}>
-                <Icon name="check-circle" size={16} color="#4CAF50" />
+                <MaterialIcons name="check-circle" size={16} color="#4CAF50" />
                 <Text style={styles.benefitText}>{offerData?.durationMinutes || 5} minutes of chat</Text>
               </View>
               <View style={styles.benefitItem}>
-                <Icon name="check-circle" size={16} color="#4CAF50" />
+                <MaterialIcons name="check-circle" size={16} color="#4CAF50" />
                 <Text style={styles.benefitText}>Same astrologer</Text>
               </View>
               <View style={styles.benefitItem}>
-                <Icon name="check-circle" size={16} color="#4CAF50" />
+                <MaterialIcons name="check-circle" size={16} color="#4CAF50" />
                 <Text style={styles.benefitText}>Instant start</Text>
               </View>
             </View>

@@ -6,28 +6,46 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   Image,
-  SafeAreaView
+  SafeAreaView,
+  Alert
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useNavigation, useRoute } from '@react-navigation/native';
-import { socketService } from '../../services/socketService';
+import { useSocket } from '../../context/SocketContext';
 import { bookingsAPI } from '../../services/api';
 import { useBookingPopup } from '../../context/BookingPopupContext';
 
 const BookingWaitingScreen = () => {
   const navigation = useNavigation();
   const route = useRoute();
+  const { socket } = useSocket();
   const { showBookingAcceptedPopup } = useBookingPopup();
   
   console.log(' [BookingWaiting] Component mounting...');
   console.log(' [BookingWaiting] Route params:', JSON.stringify(route.params, null, 2));
   
-  const { bookingId, astrologer, bookingType } = route.params || {};
+  const { 
+    bookingId, 
+    sessionId, 
+    astrologer, 
+    bookingType, 
+    isPrepaidOffer,
+    sessionType,
+    duration,
+    totalAmount 
+  } = route.params || {};
+  
+  // For prepaid offers, use sessionId as the identifier
+  const waitingId = isPrepaidOffer ? sessionId : bookingId;
   
   console.log(' [BookingWaiting] Extracted params:', {
     bookingId,
-    astrologer: astrologer ? { id: astrologer._id, name: astrologer.displayName } : null,
-    bookingType
+    sessionId,
+    waitingId,
+    astrologer: astrologer ? { id: astrologer._id || astrologer.id, name: astrologer.displayName || astrologer.name } : null,
+    bookingType,
+    isPrepaidOffer,
+    sessionType
   });
   
   const [timeLeft, setTimeLeft] = useState(120); // 2 minutes in seconds
@@ -38,8 +56,8 @@ const BookingWaitingScreen = () => {
     console.log(' [BookingWaiting] useEffect running...');
     
     // Validate required params
-    if (!bookingId || !astrologer) {
-      console.error(' [BookingWaiting] Missing required params:', { bookingId, astrologer });
+    if (!waitingId || !astrologer) {
+      console.error(' [BookingWaiting] Missing required params:', { waitingId, astrologer, isPrepaidOffer });
       Alert.alert(
         'Navigation Error',
         'Missing booking information. Please try again.',
@@ -49,7 +67,6 @@ const BookingWaitingScreen = () => {
     }
     
     // Set up socket listeners for booking status updates
-    const socket = socketService.getSocket();
     console.log(' [BookingWaiting] Socket connection:', socket ? 'connected' : 'not connected');
     
     if (socket) {
@@ -57,6 +74,13 @@ const BookingWaitingScreen = () => {
       socket.on('booking_status_update', handleBookingStatusUpdate);
       socket.on('booking_auto_cancelled', handleBookingAutoCancelled);
       socket.on('booking_cancelled', handleBookingCancelled);
+      
+      // Add prepaid offer specific listeners
+      if (isPrepaidOffer) {
+        socket.on('prepaid_chat_accepted', handlePrepaidChatAccepted);
+        socket.on('prepaid_chat_rejected', handlePrepaidChatRejected);
+        socket.on('prepaid_chat_timeout', handlePrepaidChatTimeout);
+      }
     } else {
       console.error(' [BookingWaiting] No socket connection available');
     }
@@ -81,9 +105,16 @@ const BookingWaitingScreen = () => {
         socket.off('booking_status_update', handleBookingStatusUpdate);
         socket.off('booking_auto_cancelled', handleBookingAutoCancelled);
         socket.off('booking_cancelled', handleBookingCancelled);
+        
+        // Remove prepaid offer specific listeners
+        if (isPrepaidOffer) {
+          socket.off('prepaid_chat_accepted', handlePrepaidChatAccepted);
+          socket.off('prepaid_chat_rejected', handlePrepaidChatRejected);
+          socket.off('prepaid_chat_timeout', handlePrepaidChatTimeout);
+        }
       }
     };
-  }, [bookingId, astrologer, navigation]);
+  }, [waitingId, astrologer, navigation, isPrepaidOffer]);
 
   console.log('🔍 [BookingWaiting] Render state:', {
     timeLeft,
@@ -92,7 +123,7 @@ const BookingWaitingScreen = () => {
   });
 
   // Early return with loading state if missing critical data
-  if (!bookingId || !astrologer) {
+  if (!waitingId || !astrologer) {
     console.log('🔍 [BookingWaiting] Missing critical data, showing loading...');
     return (
       <View style={styles.container}>
@@ -122,8 +153,11 @@ const BookingWaitingScreen = () => {
     console.log('📨 [BookingWaiting] Data bookingId:', data.bookingId);
     console.log('📨 [BookingWaiting] BookingId match:', data.bookingId === bookingId);
     
-    if (data.bookingId === bookingId) {
-      console.log('✅ [BookingWaiting] BookingId matches - processing status update');
+    // Check if this update is for our current waiting session
+    const isOurSession = isPrepaidOffer ? (data.sessionId === sessionId) : (data.bookingId === bookingId);
+    
+    if (isOurSession) {
+      console.log('✅ [BookingWaiting] Session matches - processing status update');
       setBookingStatus(data.status);
       
       if (data.status === 'accepted') {
@@ -174,6 +208,69 @@ const BookingWaitingScreen = () => {
   const handleBookingCancelled = (data) => {
     console.log(' [BookingWaiting] Received cancellation confirmation:', data);
     navigation.goBack();
+  };
+
+  // Prepaid offer specific handlers
+  const handlePrepaidChatAccepted = (data) => {
+    console.log('🎉 [BookingWaiting] Prepaid chat accepted:', data);
+    
+    if (data.sessionId === sessionId) {
+      console.log('✅ [BookingWaiting] Our prepaid session was accepted');
+      setBookingStatus('accepted');
+      
+      // Navigate to EnhancedChatScreen for prepaid offers (uses consultation room system)
+      navigation.replace('EnhancedChat', {
+        bookingId: data.sessionId, // Use sessionId as bookingId for prepaid offers
+        sessionId: data.sessionId,
+        astrologer: astrologer,
+        sessionType: 'prepaid_offer',
+        duration: (data.sessionDuration || 300), // 5 minutes in seconds
+        isPrepaid: true,
+        isPrepaidOffer: true,
+        bookingType: 'chat',
+        consultationType: 'chat'
+      });
+    }
+  };
+
+  const handlePrepaidChatRejected = (data) => {
+    console.log('❌ [BookingWaiting] Prepaid chat rejected:', data);
+    
+    if (data.sessionId === sessionId) {
+      console.log('❌ [BookingWaiting] Our prepaid session was rejected');
+      setBookingStatus('rejected');
+      
+      Alert.alert(
+        'Session Unavailable',
+        'The astrologer is currently unavailable for your prepaid chat session. Please try again later.',
+        [
+          {
+            text: 'OK',
+            onPress: () => navigation.goBack()
+          }
+        ]
+      );
+    }
+  };
+
+  const handlePrepaidChatTimeout = (data) => {
+    console.log('⏰ [BookingWaiting] Prepaid chat timed out:', data);
+    
+    if (data.sessionId === sessionId) {
+      console.log('⏰ [BookingWaiting] Our prepaid session timed out');
+      setBookingStatus('timeout');
+      
+      Alert.alert(
+        'Request Timed Out',
+        'The astrologer did not respond in time. Your prepaid offer is still available - you can try again with the same or a different astrologer.',
+        [
+          {
+            text: 'Try Again',
+            onPress: () => navigation.goBack()
+          }
+        ]
+      );
+    }
   };
 
   const handleCancelBooking = async () => {

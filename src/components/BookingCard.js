@@ -8,7 +8,6 @@ import {
   Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import FallbackIcon from './FallbackIcon';
 import { SocketContext } from '../context/SocketContext';
 
 const BookingCard = ({ consultation, onJoin, onDismiss, onCancel, onReschedule }) => {
@@ -356,7 +355,7 @@ const BookingCard = ({ consultation, onJoin, onDismiss, onCancel, onReschedule }
     if (isExpired) {
       return (
         <TouchableOpacity style={[styles.actionButton, styles.expiredButton]} disabled>
-          <FallbackIcon name="time-outline" size={16} color="#fff" />
+          <Ionicons name="time-outline" size={16} color="#fff" />
           <Text style={styles.actionButtonText}>Expired</Text>
         </TouchableOpacity>
       );
@@ -365,7 +364,7 @@ const BookingCard = ({ consultation, onJoin, onDismiss, onCancel, onReschedule }
     if (canJoin()) {
       return (
         <TouchableOpacity style={[styles.actionButton, styles.joinButton]} onPress={handleJoinPress}>
-          <FallbackIcon name="play-circle-outline" size={16} color="#fff" />
+          <Ionicons name="play-circle-outline" size={16} color="#fff" />
           <Text style={styles.actionButtonText}>
             {booking.status === 'in-progress' ? 'Continue' : 'Join Now'}
           </Text>
@@ -376,7 +375,7 @@ const BookingCard = ({ consultation, onJoin, onDismiss, onCancel, onReschedule }
     if (booking.status === 'pending') {
       return (
         <TouchableOpacity style={[styles.actionButton, styles.waitingButton]} disabled>
-          <FallbackIcon name="hourglass-outline" size={16} color="#fff" />
+          <Ionicons name="hourglass-outline" size={16} color="#fff" />
           <Text style={styles.actionButtonText}>Waiting for Astrologer</Text>
         </TouchableOpacity>
       );
@@ -385,7 +384,7 @@ const BookingCard = ({ consultation, onJoin, onDismiss, onCancel, onReschedule }
     if (booking.status === 'completed') {
       return (
         <TouchableOpacity style={[styles.actionButton, styles.completedButton]} disabled>
-          <FallbackIcon name="checkmark-done-outline" size={16} color="#fff" />
+          <Ionicons name="checkmark-done-outline" size={16} color="#fff" />
           <Text style={styles.actionButtonText}>Completed</Text>
         </TouchableOpacity>
       );
@@ -406,7 +405,7 @@ const BookingCard = ({ consultation, onJoin, onDismiss, onCancel, onReschedule }
           <View style={styles.astrologerDetails}>
             <Text style={styles.astrologerName}>{astrologer.name}</Text>
             <View style={styles.consultationType}>
-              <FallbackIcon name={getTypeIcon()} size={14} color="#666" />
+              <Ionicons name={getTypeIcon()} size={14} color="#666" />
               <Text style={styles.consultationTypeText}>
                 {isFreeChat() ? 'Free Chat' : getTypeText()}
               </Text>
@@ -420,7 +419,7 @@ const BookingCard = ({ consultation, onJoin, onDismiss, onCancel, onReschedule }
         </View>
         
         <View style={[styles.statusBadge, { backgroundColor: getStatusColor() }]}>
-          <FallbackIcon name={getStatusIcon()} size={12} color="#fff" />
+          <Ionicons name={getStatusIcon()} size={12} color="#fff" />
           <Text style={styles.statusText}>{getStatusText()}</Text>
         </View>
       </View>
@@ -428,13 +427,13 @@ const BookingCard = ({ consultation, onJoin, onDismiss, onCancel, onReschedule }
       {/* Booking details */}
       <View style={styles.details}>
         <View style={styles.detailRow}>
-          <FallbackIcon name="calendar-outline" size={16} color="#666" />
+          <Ionicons name="calendar-outline" size={16} color="#666" />
           <Text style={styles.detailText}>{formatScheduledTime()}</Text>
         </View>
         
         {booking.totalAmount && booking.totalAmount > 0 && (
           <View style={styles.detailRow}>
-            <FallbackIcon name="cash-outline" size={16} color="#666" />
+            <Ionicons name="cash-outline" size={16} color="#666" />
             <Text style={styles.detailText}>₹{parseFloat(booking.totalAmount).toFixed(0)}</Text>
           </View>
         )}
@@ -442,7 +441,7 @@ const BookingCard = ({ consultation, onJoin, onDismiss, onCancel, onReschedule }
         {/* Countdown timer for pending bookings */}
         {booking.status === 'pending' && timeRemaining && (
           <View style={styles.countdownContainer}>
-            <FallbackIcon name="timer-outline" size={16} color="#FF9800" />
+            <Ionicons name="timer-outline" size={16} color="#FF9800" />
             <Text style={styles.countdownText}>
               Expires in {timeRemaining}
             </Text>
@@ -465,21 +464,21 @@ const BookingCard = ({ consultation, onJoin, onDismiss, onCancel, onReschedule }
         <View style={styles.secondaryActions}>
           {canCancel() && (
             <TouchableOpacity style={styles.secondaryButton} onPress={handleCancelPress}>
-              <FallbackIcon name="close-outline" size={16} color="#F44336" />
+              <Ionicons name="close-outline" size={16} color="#F44336" />
               <Text style={[styles.secondaryButtonText, { color: '#F44336' }]}>Cancel</Text>
             </TouchableOpacity>
           )}
           
           {canReschedule() && (
             <TouchableOpacity style={styles.secondaryButton} onPress={handleReschedulePress}>
-              <FallbackIcon name="calendar-outline" size={16} color="#2196F3" />
+              <Ionicons name="calendar-outline" size={16} color="#2196F3" />
               <Text style={[styles.secondaryButtonText, { color: '#2196F3' }]}>Reschedule</Text>
             </TouchableOpacity>
           )}
           
           {['completed', 'cancelled', 'rejected', 'expired', 'no_show'].includes(booking.status) && (
             <TouchableOpacity style={styles.secondaryButton} onPress={handleDismissPress}>
-              <FallbackIcon name="trash-outline" size={16} color="#666" />
+              <Ionicons name="trash-outline" size={16} color="#666" />
               <Text style={[styles.secondaryButtonText, { color: '#666' }]}>Dismiss</Text>
             </TouchableOpacity>
           )}

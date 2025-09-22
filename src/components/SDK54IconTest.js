@@ -32,7 +32,7 @@ const SDK54IconTest = () => {
       
       <Text style={styles.note}>
         ✅ If you see icons: SDK 54 upgrade successful!{'\n'}
-        ❌ If you see empty boxes: Fallback to FallbackIcon system{'\n'}
+        ❌ If you see empty boxes: Icon loading failed{'\n'}
         🎯 React 19.1 + Expo SDK 54 should fix icon loading
       </Text>
     </View>
