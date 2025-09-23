@@ -6,20 +6,46 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
  */
 class FreeChatMessagePersistence {
   constructor() {
-    // In-memory cache for immediate access
-    this.messageCache = new Map();
-    
-    // Session storage for current app session
-    this.sessionCache = new Map();
-    
-    // Debounce timers for storage operations
-    this.saveTimers = new Map();
-    
-    // Storage keys
-    this.STORAGE_PREFIX = 'freechat_messages_';
-    this.SESSION_PREFIX = 'freechat_session_';
-    
-    console.log('📦 [MESSAGE_PERSISTENCE] Service initialized');
+    try {
+      // In-memory cache for immediate access
+      this.messageCache = new Map();
+      
+      // Session storage for current app session
+      this.sessionCache = new Map();
+      
+      // Debounce timers for storage operations
+      this.saveTimers = new Map();
+      
+      // Storage keys
+      this.STORAGE_PREFIX = 'freechat_messages_';
+      this.SESSION_PREFIX = 'freechat_session_';
+      
+      // Test AsyncStorage availability
+      this.asyncStorageAvailable = true;
+      this.testAsyncStorage();
+      
+      console.log('📦 [MESSAGE_PERSISTENCE] Service initialized successfully');
+    } catch (error) {
+      console.error('❌ [MESSAGE_PERSISTENCE] Failed to initialize service:', error);
+      this.asyncStorageAvailable = false;
+    }
+  }
+
+  /**
+   * Test AsyncStorage availability
+   */
+  async testAsyncStorage() {
+    try {
+      const testKey = 'freechat_test_key';
+      await AsyncStorage.setItem(testKey, 'test');
+      await AsyncStorage.getItem(testKey);
+      await AsyncStorage.removeItem(testKey);
+      this.asyncStorageAvailable = true;
+      console.log('✅ [MESSAGE_PERSISTENCE] AsyncStorage is available');
+    } catch (error) {
+      console.error('❌ [MESSAGE_PERSISTENCE] AsyncStorage is not available:', error);
+      this.asyncStorageAvailable = false;
+    }
   }
 
   /**
@@ -58,12 +84,14 @@ class FreeChatMessagePersistence {
       console.log(`📦 [MESSAGE_PERSISTENCE] Saved ${messages.length} messages to cache for ${freeChatId}`);
 
       // 3. Save to AsyncStorage (debounced or immediate)
-      if (!skipAsyncStorage) {
+      if (!skipAsyncStorage && this.asyncStorageAvailable) {
         if (immediate) {
           await this.saveToAsyncStorage(freeChatId, messages);
         } else {
           this.debouncedSaveToAsyncStorage(freeChatId, messages);
         }
+      } else if (!this.asyncStorageAvailable) {
+        console.warn('📦 [MESSAGE_PERSISTENCE] AsyncStorage not available, skipping persistent save');
       }
 
     } catch (error) {
@@ -138,25 +166,29 @@ class FreeChatMessagePersistence {
       }
 
       // 3. Try AsyncStorage (slowest but most persistent)
-      const storageKey = this.getStorageKey(freeChatId);
-      const storedData = await AsyncStorage.getItem(storageKey);
-      
-      if (storedData) {
-        const data = JSON.parse(storedData);
-        const messages = data.messages || [];
+      if (this.asyncStorageAvailable) {
+        const storageKey = this.getStorageKey(freeChatId);
+        const storedData = await AsyncStorage.getItem(storageKey);
         
-        console.log(`📦 [MESSAGE_PERSISTENCE] Loaded ${messages.length} messages from AsyncStorage for ${freeChatId}`);
-        console.log(`📦 [MESSAGE_PERSISTENCE] Data last updated: ${data.lastUpdated}`);
-        
-        // Populate both caches
-        this.messageCache.set(freeChatId, [...messages]);
-        this.sessionCache.set(freeChatId, {
-          messages: [...messages],
-          timestamp: Date.now(),
-          lastUpdated: new Date().toISOString()
-        });
-        
-        return [...messages];
+        if (storedData) {
+          const data = JSON.parse(storedData);
+          const messages = data.messages || [];
+          
+          console.log(`📦 [MESSAGE_PERSISTENCE] Loaded ${messages.length} messages from AsyncStorage for ${freeChatId}`);
+          console.log(`📦 [MESSAGE_PERSISTENCE] Data last updated: ${data.lastUpdated}`);
+          
+          // Populate both caches
+          this.messageCache.set(freeChatId, [...messages]);
+          this.sessionCache.set(freeChatId, {
+            messages: [...messages],
+            timestamp: Date.now(),
+            lastUpdated: new Date().toISOString()
+          });
+          
+          return [...messages];
+        }
+      } else {
+        console.warn('📦 [MESSAGE_PERSISTENCE] AsyncStorage not available, skipping persistent load');
       }
 
       console.log(`📦 [MESSAGE_PERSISTENCE] No persisted messages found for ${freeChatId}`);
@@ -254,8 +286,10 @@ class FreeChatMessagePersistence {
       this.sessionCache.delete(freeChatId);
       
       // Clear from AsyncStorage
-      const storageKey = this.getStorageKey(freeChatId);
-      await AsyncStorage.removeItem(storageKey);
+      if (this.asyncStorageAvailable) {
+        const storageKey = this.getStorageKey(freeChatId);
+        await AsyncStorage.removeItem(storageKey);
+      }
       
       console.log(`📦 [MESSAGE_PERSISTENCE] Cleared all messages for ${freeChatId}`);
     } catch (error) {
@@ -271,6 +305,7 @@ class FreeChatMessagePersistence {
       memoryCacheSize: this.messageCache.size,
       sessionCacheSize: this.sessionCache.size,
       activeTimers: this.saveTimers.size,
+      asyncStorageAvailable: this.asyncStorageAvailable,
       memoryCacheKeys: Array.from(this.messageCache.keys()),
       sessionCacheKeys: Array.from(this.sessionCache.keys())
     };
@@ -292,22 +327,24 @@ class FreeChatMessagePersistence {
       }
 
       // Cleanup AsyncStorage (more expensive, do less frequently)
-      const keys = await AsyncStorage.getAllKeys();
-      const freeChatKeys = keys.filter(key => key.startsWith(this.STORAGE_PREFIX));
-      
-      for (const key of freeChatKeys) {
-        try {
-          const data = await AsyncStorage.getItem(key);
-          if (data) {
-            const parsed = JSON.parse(data);
-            if (now - parsed.timestamp > maxAge) {
-              await AsyncStorage.removeItem(key);
-              console.log(`📦 [MESSAGE_PERSISTENCE] Cleaned up AsyncStorage for ${key}`);
+      if (this.asyncStorageAvailable) {
+        const keys = await AsyncStorage.getAllKeys();
+        const freeChatKeys = keys.filter(key => key.startsWith(this.STORAGE_PREFIX));
+        
+        for (const key of freeChatKeys) {
+          try {
+            const data = await AsyncStorage.getItem(key);
+            if (data) {
+              const parsed = JSON.parse(data);
+              if (now - parsed.timestamp > maxAge) {
+                await AsyncStorage.removeItem(key);
+                console.log(`📦 [MESSAGE_PERSISTENCE] Cleaned up AsyncStorage for ${key}`);
+              }
             }
+          } catch (error) {
+            // If we can't parse the data, remove it
+            await AsyncStorage.removeItem(key);
           }
-        } catch (error) {
-          // If we can't parse the data, remove it
-          await AsyncStorage.removeItem(key);
         }
       }
     } catch (error) {

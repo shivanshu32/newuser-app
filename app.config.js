@@ -4,7 +4,7 @@ module.exports = ({ config }) => ({
   jsEngine: "hermes",
   name: "Jyotish Call",
   slug: "jyotishcall-user-app",
-  version: "5.3.0",
+  version: "5.3.1",
   // Remove global orientation restriction for Android 16+ large screen support
   // orientation: "portrait", // Commented out for large screen compatibility
   icon: "./assets/icon-square.png",
@@ -35,10 +35,11 @@ module.exports = ({ config }) => ({
       backgroundColor: "#ffffff"
     },
     package: "com.jyotishtalk",
-    versionCode: 55,
+    versionCode: 56,
     minSdkVersion: 24,
     compileSdkVersion: 36,
     targetSdkVersion: 36,
+    googleServicesFile: "./google-services.json",
     permissions: [
       "MODIFY_AUDIO_SETTINGS",
       "INTERNET",
@@ -85,6 +86,7 @@ module.exports = ({ config }) => ({
     favicon: "./assets/splash.png"
   },
   plugins: [
+    "expo-asset",
     [
       "expo-notifications",
       {
@@ -95,6 +97,7 @@ module.exports = ({ config }) => ({
         ]
       }
     ],
+    "@react-native-firebase/app",
     "expo-dev-client",
     "expo-font",
     "react-native-edge-to-edge",

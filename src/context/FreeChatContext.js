@@ -1,5 +1,4 @@
 import React, { createContext, useContext, useReducer, useCallback, useRef, useEffect } from 'react';
-import FreeChatMessagePersistence from '../services/FreeChatMessagePersistence';
 
 /**
  * FreeChatContext - Global state management for free chat sessions
@@ -238,16 +237,57 @@ const FreeChatContext = createContext();
 
 // Provider component
 export function FreeChatProvider({ children }) {
+  console.log('🚀 [FREE_CHAT_CONTEXT] FreeChatProvider rendering...');
+  
   const [state, dispatch] = useReducer(freeChatReducer, initialState);
-  const persistenceRef = useRef(FreeChatMessagePersistence);
+  const persistenceRef = useRef({
+    saveMessages: async () => { console.log('📦 [FREE_CHAT_CONTEXT] Persistence not initialized yet'); },
+    loadMessages: async () => { console.log('📦 [FREE_CHAT_CONTEXT] Persistence not initialized yet'); return []; },
+    addMessage: async () => { console.log('📦 [FREE_CHAT_CONTEXT] Persistence not initialized yet'); return []; },
+    mergeMessages: async (freeChatId, messages) => { console.log('📦 [FREE_CHAT_CONTEXT] Persistence not initialized yet'); return messages || []; },
+    clearMessages: async () => { console.log('📦 [FREE_CHAT_CONTEXT] Persistence not initialized yet'); },
+    getCacheStats: () => ({ status: 'not_initialized' })
+  });
+
+  console.log('✅ [FREE_CHAT_CONTEXT] State and refs initialized successfully');
+
+  // Initialize persistence service with error handling
+  useEffect(() => {
+    const initializePersistence = async () => {
+      try {
+        // Dynamically import the persistence service to avoid import-time errors
+        const { default: FreeChatMessagePersistence } = await import('../services/FreeChatMessagePersistence');
+        persistenceRef.current = FreeChatMessagePersistence;
+        console.log('✅ [FREE_CHAT_CONTEXT] FreeChatMessagePersistence initialized successfully');
+      } catch (error) {
+        console.error('❌ [FREE_CHAT_CONTEXT] Failed to initialize FreeChatMessagePersistence:', error);
+        // Keep the fallback service
+      }
+    };
+
+    initializePersistence();
+  }, []);
 
   // Auto-save messages to persistence when they change
   useEffect(() => {
     const saveSessionMessages = async () => {
-      for (const [freeChatId, session] of Object.entries(state.sessions)) {
-        if (session.messages.length > 0 && session.persistenceLoaded) {
-          await persistenceRef.current.saveMessages(freeChatId, session.messages);
+      try {
+        if (!persistenceRef.current) {
+          console.warn('📦 [FREE_CHAT_CONTEXT] Persistence service not available for auto-save');
+          return;
         }
+
+        for (const [freeChatId, session] of Object.entries(state.sessions)) {
+          if (session.messages.length > 0 && session.persistenceLoaded) {
+            try {
+              await persistenceRef.current.saveMessages(freeChatId, session.messages);
+            } catch (error) {
+              console.error(`❌ [FREE_CHAT_CONTEXT] Error auto-saving messages for ${freeChatId}:`, error);
+            }
+          }
+        }
+      } catch (error) {
+        console.error('❌ [FREE_CHAT_CONTEXT] Error in auto-save effect:', error);
       }
     };
 
@@ -270,6 +310,15 @@ export function FreeChatProvider({ children }) {
       
       // Load persisted messages with error handling
       try {
+        if (!persistenceRef.current) {
+          console.warn('📦 [FREE_CHAT_CONTEXT] Persistence service not available for loading messages');
+          dispatch({ 
+            type: ACTIONS.SET_SESSION_STATUS, 
+            payload: { freeChatId, updates: { persistenceLoaded: true } } 
+          });
+          return;
+        }
+
         const persistedMessages = await persistenceRef.current.loadMessages(freeChatId);
         if (persistedMessages && persistedMessages.length > 0) {
           console.log(`🏗️ [FREE_CHAT_CONTEXT] Loaded ${persistedMessages.length} persisted messages for ${freeChatId}`);
@@ -310,7 +359,11 @@ export function FreeChatProvider({ children }) {
       
       // Also save to persistence immediately for new messages
       try {
-        await persistenceRef.current.addMessage(freeChatId, message);
+        if (persistenceRef.current && typeof persistenceRef.current.addMessage === 'function') {
+          await persistenceRef.current.addMessage(freeChatId, message);
+        } else {
+          console.warn('📦 [FREE_CHAT_CONTEXT] Persistence service not available for adding message');
+        }
       } catch (error) {
         console.error('❌ [FREE_CHAT_CONTEXT] Error persisting new message:', error);
       }
@@ -336,12 +389,22 @@ export function FreeChatProvider({ children }) {
       
       // Use persistence service to merge intelligently
       try {
-        const mergedMessages = await persistenceRef.current.mergeMessages(freeChatId, backendMessages);
-        dispatch({ 
-          type: ACTIONS.SET_MESSAGES, 
-          payload: { freeChatId, messages: mergedMessages } 
-        });
-        return mergedMessages;
+        if (persistenceRef.current && typeof persistenceRef.current.mergeMessages === 'function') {
+          const mergedMessages = await persistenceRef.current.mergeMessages(freeChatId, backendMessages);
+          dispatch({ 
+            type: ACTIONS.SET_MESSAGES, 
+            payload: { freeChatId, messages: mergedMessages } 
+          });
+          return mergedMessages;
+        } else {
+          console.warn('📦 [FREE_CHAT_CONTEXT] Persistence service not available for merging messages');
+          // Fallback to simple merge
+          dispatch({ 
+            type: ACTIONS.MERGE_BACKEND_MESSAGES, 
+            payload: { freeChatId, backendMessages } 
+          });
+          return backendMessages;
+        }
       } catch (error) {
         console.error('❌ [FREE_CHAT_CONTEXT] Error merging backend messages:', error);
         // Fallback to simple merge
@@ -386,7 +449,11 @@ export function FreeChatProvider({ children }) {
       
       // Also clear from persistence
       try {
-        await persistenceRef.current.clearMessages(freeChatId);
+        if (persistenceRef.current && typeof persistenceRef.current.clearMessages === 'function') {
+          await persistenceRef.current.clearMessages(freeChatId);
+        } else {
+          console.warn('📦 [FREE_CHAT_CONTEXT] Persistence service not available for clearing messages');
+        }
       } catch (error) {
         console.error('❌ [FREE_CHAT_CONTEXT] Error clearing persisted messages:', error);
       }
@@ -412,7 +479,16 @@ export function FreeChatProvider({ children }) {
 
   // Get persistence stats for debugging
   const getPersistenceStats = useCallback(() => {
-    return persistenceRef.current.getCacheStats();
+    try {
+      if (persistenceRef.current && typeof persistenceRef.current.getCacheStats === 'function') {
+        return persistenceRef.current.getCacheStats();
+      } else {
+        return { error: 'Persistence service not available' };
+      }
+    } catch (error) {
+      console.error('❌ [FREE_CHAT_CONTEXT] Error getting persistence stats:', error);
+      return { error: error.message };
+    }
   }, []);
 
   const contextValue = {

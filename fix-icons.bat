@@ -23,18 +23,22 @@ rd /s /q node_modules 2>nul
 echo.
 
 echo Installing fresh dependencies...
-npm install
+npm install --legacy-peer-deps
 echo.
 
-echo Step 5: Installing Expo modules...
+echo Step 5: Installing Expo modules with correct versions...
 npx expo install --fix
 echo.
 
-echo Step 6: Verifying vector icons installation...
-npm install @expo/vector-icons@14.0.0
+echo Step 6: Installing required Expo packages...
+npx expo install expo-asset expo-av expo-constants expo-dev-client expo-device expo-font expo-linear-gradient expo-notifications expo-status-bar expo-system-ui expo-updates
 echo.
 
-echo Step 7: Clearing Metro bundler cache...
+echo Step 7: Ensuring vector icons are properly installed...
+npx expo install @expo/vector-icons
+echo.
+
+echo Step 8: Clearing Metro bundler cache...
 npx expo start --clear-cache
 echo.
 

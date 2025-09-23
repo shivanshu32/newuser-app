@@ -581,18 +581,18 @@ const BookingScreen = ({ route, navigation }) => {
             <Ionicons name="time-outline" size={16} color="#666" />
             <Text style={styles.detailText}>{formatTime()}</Text>
           </View>
-          {formatDuration() && (
+          {formatDuration() ? (
             <View style={styles.detailItem}>
               <Ionicons name="hourglass-outline" size={16} color="#666" />
               <Text style={styles.detailText}>{formatDuration()}</Text>
             </View>
-          )}
-          {item.totalAmount && item.totalAmount > 0 && (
+          ) : null}
+          {(item.totalAmount && item.totalAmount > 0) ? (
             <View style={styles.detailItem}>
               <Ionicons name="cash-outline" size={16} color="#666" />
               <Text style={styles.detailText}>₹{parseFloat(item.totalAmount).toFixed(0)}</Text>
             </View>
-          )}
+          ) : null}
         </View>
         
         {/* Join Button for accepted bookings */}
@@ -615,7 +615,7 @@ const BookingScreen = ({ route, navigation }) => {
               <Ionicons name="chatbubbles-outline" size={18} color="#4A90E2" />
               <Text style={styles.chatHistoryButtonText}>View Chat History</Text>
             </TouchableOpacity>
-            {!item.rated && (
+            {!item.rated ? (
               <TouchableOpacity 
                 style={styles.rateButton}
                 onPress={() => {
@@ -630,7 +630,7 @@ const BookingScreen = ({ route, navigation }) => {
                 <Ionicons name="star-outline" size={18} color="#FF9500" />
                 <Text style={styles.rateButtonText}>Rate</Text>
               </TouchableOpacity>
-            )}
+            ) : null}
           </View>
         ) : (
           <View style={styles.actionContainer}>
@@ -652,11 +652,11 @@ const BookingScreen = ({ route, navigation }) => {
       <Text style={[styles.tabText, activeTab === tabKey && styles.activeTabText]}>
         {title}
       </Text>
-      {count > 0 && (
+      {count > 0 ? (
         <View style={styles.tabBadge}>
           <Text style={styles.tabBadgeText}>{count}</Text>
         </View>
-      )}
+      ) : null}
     </TouchableOpacity>
   );
 
@@ -687,7 +687,7 @@ const BookingScreen = ({ route, navigation }) => {
         {renderTabButton('cancelled', 'Cancelled', cancelledCount)}
       </View>
 
-      {loading && !refreshing ? (
+      {(loading && !refreshing) ? (
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color="#FF5722" />
           <Text style={styles.loadingText}>Loading bookings...</Text>
@@ -696,7 +696,7 @@ const BookingScreen = ({ route, navigation }) => {
         <FlatList
           data={filteredBookings}
           renderItem={renderBookingItem}
-          keyExtractor={(item) => item._id}
+          keyExtractor={(item, index) => item._id || `booking-${index}`}
           contentContainerStyle={styles.listContainer}
           refreshControl={
             <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
@@ -705,16 +705,16 @@ const BookingScreen = ({ route, navigation }) => {
             <View style={styles.emptyContainer}>
               <Ionicons name="calendar-outline" size={64} color="#ccc" />
               <Text style={styles.emptyText}>
-                {activeTab === 'all' && 'No bookings yet'}
-                {activeTab === 'active' && 'No active bookings'}
-                {activeTab === 'completed' && 'No completed bookings'}
-                {activeTab === 'cancelled' && 'No cancelled bookings'}
+                {activeTab === 'all' ? 'No bookings yet' :
+                 activeTab === 'active' ? 'No active bookings' :
+                 activeTab === 'completed' ? 'No completed bookings' :
+                 activeTab === 'cancelled' ? 'No cancelled bookings' : 'No bookings'}
               </Text>
               <Text style={styles.emptySubtext}>
-                {activeTab === 'all' && 'Book a consultation to get started'}
-                {activeTab === 'active' && 'Book a consultation to get started'}
-                {activeTab === 'completed' && 'Completed sessions will appear here'}
-                {activeTab === 'cancelled' && 'Cancelled bookings will appear here'}
+                {activeTab === 'all' ? 'Book a consultation to get started' :
+                 activeTab === 'active' ? 'Book a consultation to get started' :
+                 activeTab === 'completed' ? 'Completed sessions will appear here' :
+                 activeTab === 'cancelled' ? 'Cancelled bookings will appear here' : 'Book a consultation to get started'}
               </Text>
             </View>
           }
