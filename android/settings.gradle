@@ -35,5 +35,17 @@ rootProject.name = 'Jyotish Call'
 
 expoAutolinking.useExpoVersionCatalog()
 
+// Override AGP version in version catalogs before they're used
+gradle.beforeProject { project ->
+    project.configurations.all { configuration ->
+        configuration.resolutionStrategy.eachDependency { dependency ->
+            if (dependency.requested.group == 'com.android.tools.build' && dependency.requested.name == 'gradle') {
+                dependency.useVersion '8.10.0'
+                dependency.because 'Force AGP 8.10.0 for Android Studio compatibility'
+            }
+        }
+    }
+}
+
 include ':app'
 includeBuild(expoAutolinking.reactNativeGradlePlugin)

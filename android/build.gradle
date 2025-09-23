@@ -15,6 +15,18 @@ buildscript {
     classpath('com.google.gms:google-services:4.4.0')
   }
   
+  // Force AGP version resolution for Android Studio
+  configurations.classpath {
+    resolutionStrategy {
+      force 'com.android.tools.build:gradle:8.10.0'
+      eachDependency { details ->
+        if (details.requested.group == 'com.android.tools.build' && details.requested.name == 'gradle') {
+          details.useVersion '8.10.0'
+          details.because 'Android Studio AGP compatibility'
+        }
+      }
+    }
+  }
 }
 
 allprojects {
@@ -22,6 +34,19 @@ allprojects {
     google()
     mavenCentral()
     maven { url 'https://www.jitpack.io' }
+  }
+  
+  // Global AGP version override for all subprojects
+  configurations.all {
+    resolutionStrategy {
+      force 'com.android.tools.build:gradle:8.10.0'
+      eachDependency { details ->
+        if (details.requested.group == 'com.android.tools.build' && details.requested.name == 'gradle') {
+          details.useVersion '8.10.0'
+          details.because 'Global AGP 8.10.0 override'
+        }
+      }
+    }
   }
 }
 
