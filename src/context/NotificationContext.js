@@ -58,13 +58,8 @@ export const NotificationProvider = ({ children }) => {
     try {
       console.log('🚀 [NotificationContext] Initializing FCM service...');
       
-      // Add timeout to prevent hanging
-      const timeoutPromise = new Promise((_, reject) => {
-        setTimeout(() => reject(new Error('FCM initialization timeout')), 10000);
-      });
-      
-      const initPromise = FCMService.initialize();
-      const success = await Promise.race([initPromise, timeoutPromise]);
+      // Initialize FCM without timeout race condition to avoid false timeouts
+      const success = await FCMService.initialize();
       
       if (success) {
         const token = await FCMService.getToken();
@@ -84,6 +79,18 @@ export const NotificationProvider = ({ children }) => {
       }
     } catch (error) {
       console.error('❌ [NotificationContext] FCM initialization error:', error);
+      
+      // Even if initialization fails, check if we got a token
+      try {
+        const token = await FCMService.getToken();
+        if (token) {
+          setFcmToken(token);
+          console.log('✅ [NotificationContext] FCM token recovered after initialization error');
+        }
+      } catch (tokenError) {
+        console.warn('⚠️ [NotificationContext] Could not recover FCM token:', tokenError);
+      }
+      
       setIsInitialized(true); // Set to true even on error to prevent retry loops
       
       // Don't throw error - let app continue without notifications

@@ -600,8 +600,8 @@ class FCMService {
       if (messaging && isStandaloneBuild && !isExpoGo) {
         console.log('🔄 [FCM] Setting up token refresh handler...');
         
-        // Listen for token refresh events
-        this.tokenRefreshUnsubscribe = messaging.onTokenRefresh(async (newToken) => {
+        // Listen for token refresh events using the correct method
+        this.tokenRefreshUnsubscribe = messaging().onTokenRefresh(async (newToken) => {
           console.log('🔄 [FCM] FCM token refreshed:', newToken.substring(0, 20) + '...');
           
           try {

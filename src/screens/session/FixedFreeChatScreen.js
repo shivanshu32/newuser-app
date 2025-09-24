@@ -14,7 +14,7 @@ import {
   AppState,
   Image,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../context/AuthContext';
 import { useSocket } from '../../context/SocketContext';
@@ -22,14 +22,16 @@ import useMessagePersistence from '../../hooks/useMessagePersistence';
 import PrepaidOfferBottomSheet from '../../components/PrepaidOfferBottomSheet';
 import prepaidOffersAPI from '../../services/prepaidOffersAPI';
 
-// API Configuration
 const API_BASE_URL = 'https://jyotishcallbackend-2uxrv.ondigitalocean.app/api/v1';
 
 /**
  * FixedFreeChatScreen - Production-Ready Free Chat Implementation
  */
-const FixedFreeChatScreen = memo(({ route, navigation }) => {
+const FixedFreeChatScreen = React.memo(({ route, navigation }) => {
   console.log('🚀 FixedFreeChatScreen: Component mounting with params:', route.params);
+  
+  // Get safe area insets for proper Android navigation bar handling
+  const insets = useSafeAreaInsets();
   console.log('🔍 [DEBUG] Raw route.params:', JSON.stringify(route.params, null, 2));
   
   // Memoize route parameters to prevent continuous re-mounting
@@ -147,6 +149,10 @@ const FixedFreeChatScreen = memo(({ route, navigation }) => {
   const sessionDurationRef = useRef(sessionDuration);
   const maxReconnectAttempts = 5;
   const isReconnectingRef = useRef(false);
+  const messageHistoryRequestInProgressRef = useRef(false);
+  const lastMessageHistoryRequestRef = useRef(0);
+  const messageRecoveryCoordinatorRef = useRef(null);
+  const pendingRecoveryRequestsRef = useRef(new Set());
   
   // Callback function refs to prevent stale closures
   const handleReconnectionRef = useRef(null);
@@ -553,10 +559,10 @@ const FixedFreeChatScreen = memo(({ route, navigation }) => {
       // Wait a bit for room join to complete, then request message history
       setTimeout(() => {
         if (mountedRef.current && socketRef.current?.connected) {
-          console.log('📨 [RECONNECT] Requesting missed messages after rejoin');
+          console.log('📨 [RECONNECT] Requesting missed messages after rejoin (delayed)');
           requestMissedMessages();
         }
-      }, 1000);
+      }, 1500); // Increased delay to avoid conflicts with room join message history
       
       console.log('✅ [FREE_CHAT_RECONNECT] Successfully reconnected and synced');
       safeSetState(setConnected, true);
@@ -600,127 +606,210 @@ const FixedFreeChatScreen = memo(({ route, navigation }) => {
   // Update ref to current function
   handleReconnectionRef.current = handleReconnection;
 
-  const requestMissedMessages = useCallback(async () => {
+  // ===== MESSAGE RECOVERY COORDINATOR =====
+  const messageRecoveryCoordinator = useCallback(async (source = 'unknown', force = false) => {
+    const requestId = `${source}_${Date.now()}`;
+    console.log(`🎯 [FREE_CHAT_COORDINATOR] Request from ${source} (ID: ${requestId})`);
+    
+    // Check if coordinator is already running
+    if (messageRecoveryCoordinatorRef.current && !force) {
+      console.log(`🎯 [FREE_CHAT_COORDINATOR] Already running, queuing request from ${source}`);
+      pendingRecoveryRequestsRef.current.add(source);
+      return messageRecoveryCoordinatorRef.current;
+    }
+    
+    // Enhanced rate limiting: 30 seconds for backgrounding scenarios
+    const now = Date.now();
+    const timeSinceLastRequest = now - lastMessageHistoryRequestRef.current;
+    const minInterval = source.includes('background') || source.includes('foreground') ? 30000 : 5000;
+    
+    if (timeSinceLastRequest < minInterval && !force) {
+      console.log(`🎯 [FREE_CHAT_COORDINATOR] Rate limiting: ${timeSinceLastRequest}ms < ${minInterval}ms, skipping ${source}`);
+      return Promise.resolve();
+    }
+    
     const socket = socketRef.current;
     if (!socket?.connected) {
-      console.log('📨 [FREE_CHAT_MESSAGES] Socket not connected, skipping missed message request');
+      console.log(`🎯 [FREE_CHAT_COORDINATOR] Socket not connected, cannot recover messages for ${source}`);
+      return Promise.resolve();
+    }
+    
+    // Create coordinator promise
+    const coordinatorPromise = new Promise(async (resolve) => {
+      try {
+        console.log(`🎯 [FREE_CHAT_COORDINATOR] Starting message recovery for ${source}`);
+        lastMessageHistoryRequestRef.current = now;
+        
+        const timeout = setTimeout(() => {
+          console.log(`🎯 [FREE_CHAT_COORDINATOR] Timeout for ${source}`);
+          resolve();
+        }, 10000); // 10 second timeout
+        
+        const requestPayload = {
+          freeChatId,
+          sessionId,
+          since: messages.length === 0 ? null : lastMessageTimestampRef.current,
+          userId: authUser?.id
+        };
+        
+        socket.emit('get_free_chat_message_history', requestPayload, (response) => {
+          clearTimeout(timeout);
+          console.log(`🎯 [FREE_CHAT_COORDINATOR] Response for ${source}:`, response);
+          
+          if (response?.success && response?.messages && Array.isArray(response.messages)) {
+            processRecoveredMessages(response.messages, source);
+          }
+          
+          resolve();
+        });
+        
+      } catch (error) {
+        console.error(`🎯 [FREE_CHAT_COORDINATOR] Error for ${source}:`, error);
+        resolve();
+      }
+    });
+    
+    messageRecoveryCoordinatorRef.current = coordinatorPromise;
+    
+    // Wait for completion and process any pending requests
+    await coordinatorPromise;
+    messageRecoveryCoordinatorRef.current = null;
+    
+    // Process any pending requests
+    if (pendingRecoveryRequestsRef.current.size > 0) {
+      const pendingSources = Array.from(pendingRecoveryRequestsRef.current);
+      pendingRecoveryRequestsRef.current.clear();
+      console.log(`🎯 [FREE_CHAT_COORDINATOR] Processing ${pendingSources.length} pending requests:`, pendingSources);
+      
+      // Process the most recent pending request
+      const latestSource = pendingSources[pendingSources.length - 1];
+      setTimeout(() => {
+        if (mountedRef.current) {
+          messageRecoveryCoordinator(latestSource, false);
+        }
+      }, 1000);
+    }
+    
+    return coordinatorPromise;
+  }, [freeChatId, sessionId, authUser?.id, messages]);
+  
+  // Enhanced message processing with robust deduplication
+  const processRecoveredMessages = useCallback((newMessages, source) => {
+    console.log(`📨 [FREE_CHAT_PROCESS] Processing ${newMessages.length} messages from ${source}`);
+    
+    if (newMessages.length === 0) {
+      console.log(`📨 [FREE_CHAT_PROCESS] No messages to process from ${source}`);
       return;
     }
 
-    console.log('📨 [FREE_CHAT_MESSAGES] Requesting ALL message history for freeChatId:', freeChatId);
-    console.log('📨 [FREE_CHAT_MESSAGES] SessionId:', sessionId);
-    console.log('📨 [FREE_CHAT_MESSAGES] UserId:', authUser?.id);
-    console.log('📨 [FREE_CHAT_MESSAGES] Current messages count:', messages.length);
-    console.log('📨 [FREE_CHAT_MESSAGES] Last message timestamp:', lastMessageTimestampRef.current);
-    console.log('📨 [FREE_CHAT_MESSAGES] Socket connected:', socket.connected);
-    console.log('📨 [FREE_CHAT_MESSAGES] Socket ID:', socket.id);
+    // Normalize message structure to ensure compatibility
+    const normalizedMessages = newMessages.map(msg => ({
+      id: msg.id || msg._id || generateMessageId(),
+      text: msg.content || msg.text || msg.message || '',
+      content: msg.content || msg.text || msg.message || '',
+      sender: msg.senderType || msg.sender || (msg.senderId === authUser?.id ? 'user' : 'astrologer'),
+      senderId: msg.senderId || msg.sender,
+      senderType: msg.senderType || (msg.senderId === authUser?.id ? 'user' : 'astrologer'),
+      timestamp: msg.timestamp || msg.createdAt || new Date().toISOString(),
+      status: msg.status || 'delivered'
+    }));
     
-    return new Promise((resolve) => {
-      const timeout = setTimeout(() => {
-        console.log('⚠️ [FREE_CHAT_MESSAGES] Socket timeout for missed messages - no response from backend');
-        console.log('⚠️ [FREE_CHAT_MESSAGES] This might indicate a backend issue or socket connection problem');
-        console.log('⚠️ [FREE_CHAT_MESSAGES] Socket still connected:', socket?.connected);
-        resolve();
-      }, 10000); // Increased timeout to 10 seconds
+    // Enhanced deduplication with 60-second tolerance for backgrounding scenarios
+    const deduplicatedMessages = normalizedMessages.filter(serverMsg => {
+      // Normalize message content from all possible field variations
+      const serverContent = serverMsg.content || serverMsg.text || serverMsg.message || '';
+      const serverSenderId = serverMsg.senderId || serverMsg.sender;
+      const serverTimestamp = new Date(serverMsg.timestamp || serverMsg.createdAt).getTime();
       
-      // Request ALL messages, not just since last timestamp (for rejoin scenarios)
-      const requestPayload = {
-        freeChatId,
-        sessionId,
-        since: null, // Request all messages for rejoin
-        userId: authUser?.id
-      };
+      // Primary check: ID-based deduplication
+      const existsByID = messages.find(existing => existing.id === serverMsg.id);
+      if (existsByID) {
+        console.log(`📨 [FREE_CHAT_DEDUP] Skipping duplicate by ID: ${serverMsg.id}`);
+        return false;
+      }
       
-      console.log('📨 [FREE_CHAT_MESSAGES] Emitting get_free_chat_message_history with payload:', requestPayload);
-      
-      socket.emit('get_free_chat_message_history', requestPayload, (response) => {
-        clearTimeout(timeout);
-        console.log('📨 [FREE_CHAT_MESSAGES] Message history response:', response);
+      // Secondary check: Content-based deduplication with extended tolerance
+      const existsByContent = messages.find(existing => {
+        const existingContent = existing.content || existing.text || existing.message || '';
+        const existingSenderId = existing.senderId || existing.sender;
+        const existingTimestamp = new Date(existing.timestamp || existing.createdAt).getTime();
         
-        if (response?.success && response?.messages && Array.isArray(response.messages)) {
-          console.log(`📨 [FREE_CHAT_MESSAGES] Received ${response.messages.length} messages from history`);
-          console.log('📨 [FREE_CHAT_MESSAGES] Sample message structure:', response.messages[0]);
-          console.log('📨 [FREE_CHAT_MESSAGES] Current messages in state:', messages.length);
-          
-          // Normalize message structure to ensure compatibility
-          const normalizedMessages = response.messages.map(msg => ({
-            id: msg.id || msg._id || generateMessageId(),
-            text: msg.content || msg.text || msg.message || '',
-            content: msg.content || msg.text || msg.message || '',
-            sender: msg.senderType || msg.sender || (msg.senderId === authUser?.id ? 'user' : 'astrologer'),
-            senderId: msg.senderId || msg.sender,
-            senderType: msg.senderType || (msg.senderId === authUser?.id ? 'user' : 'astrologer'),
-            timestamp: msg.timestamp || msg.createdAt || new Date().toISOString(),
-            status: msg.status || 'delivered'
-          }));
-          
-          console.log('📨 [FREE_CHAT_MESSAGES] Normalized messages:', normalizedMessages.length);
-          console.log('📨 [FREE_CHAT_MESSAGES] Sample normalized message:', normalizedMessages[0]);
-          
-          // Special case: If we have no messages (rejoin scenario), load all messages
-          let newMessages;
-          if (messages.length === 0) {
-            console.log('📨 [FREE_CHAT_MESSAGES] No existing messages - loading all messages from history (rejoin scenario)');
-            newMessages = normalizedMessages;
-          } else {
-            // Filter out messages we already have - use more robust comparison
-            newMessages = normalizedMessages.filter(msg => {
-              const exists = messages.find(existing => {
-                // Check by ID first, then by content and sender
-                const sameId = existing.id === msg.id;
-                const sameContent = existing.content === msg.content || existing.text === msg.text;
-                const sameSender = existing.senderId === msg.senderId || existing.sender === msg.sender;
-                const sameTimestamp = Math.abs(new Date(existing.timestamp).getTime() - new Date(msg.timestamp).getTime()) < 1000; // Within 1 second
-                
-                return sameId || (sameContent && sameSender && sameTimestamp);
-              });
-              return !exists;
-            });
-          }
-          
-          console.log(`📨 [FREE_CHAT_MESSAGES] After deduplication: ${newMessages.length} new messages to add`);
-          
-          if (newMessages.length > 0) {
-            console.log(`📨 [FREE_CHAT_MESSAGES] Adding ${newMessages.length} new messages from history`);
-            console.log('📨 [FREE_CHAT_MESSAGES] New messages to add:', newMessages.map(m => ({ id: m.id, content: m.content, sender: m.sender })));
-            
-            safeSetState(setMessages, prev => {
-              const combined = [...prev, ...newMessages];
-              const sorted = combined.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
-              console.log(`📨 [FREE_CHAT_MESSAGES] Total messages after history load: ${sorted.length}`);
-              console.log('📨 [FREE_CHAT_MESSAGES] Final message list:', sorted.map(m => ({ id: m.id, content: m.content || m.text, sender: m.sender })));
-              return sorted;
-            });
-            
-            // Update last message timestamp
-            const latestTimestamp = Math.max(...normalizedMessages.map(msg => new Date(msg.timestamp).getTime()));
-            if (latestTimestamp > lastMessageTimestampRef.current) {
-              lastMessageTimestampRef.current = latestTimestamp;
-              console.log('📨 [FREE_CHAT_MESSAGES] Updated last message timestamp to:', new Date(latestTimestamp));
-            }
-            
-            // Scroll to bottom after loading history
-            setTimeout(() => {
-              flatListRef.current?.scrollToEnd({ animated: true });
-            }, 100);
-          } else {
-            console.log('📨 [FREE_CHAT_MESSAGES] No new messages to add (all already present)');
-            console.log('📨 [FREE_CHAT_MESSAGES] Existing messages:', messages.map(m => ({ id: m.id, content: m.content || m.text, sender: m.sender })));
-            console.log('📨 [FREE_CHAT_MESSAGES] Received messages:', normalizedMessages.map(m => ({ id: m.id, content: m.content, sender: m.sender })));
-          }
-        } else {
-          console.log('📨 [FREE_CHAT_MESSAGES] Invalid or empty response:', response);
-          console.log('📨 [FREE_CHAT_MESSAGES] Response structure:', {
-            success: response?.success,
-            hasMessages: !!response?.messages,
-            isArray: Array.isArray(response?.messages),
-            messageCount: response?.messages?.length || 0
-          });
-        }
-        resolve();
+        const contentMatch = existingContent === serverContent;
+        const senderMatch = existingSenderId === serverSenderId || existing.senderType === serverMsg.senderType;
+        
+        // Extended tolerance: 60 seconds for backgrounding scenarios
+        const timeDiff = Math.abs(existingTimestamp - serverTimestamp);
+        const timestampMatch = timeDiff < 60000; // 60 seconds tolerance
+        
+        return contentMatch && senderMatch && timestampMatch;
       });
+      
+      if (existsByContent) {
+        console.log(`📨 [FREE_CHAT_DEDUP] Skipping duplicate by content/sender/time: ${serverContent.substring(0, 30)}...`);
+        return false;
+      }
+      
+      return true; // Message is new
     });
-  }, [freeChatId, sessionId, messages, safeSetState, authUser?.id]);
+          
+    if (deduplicatedMessages.length > 0) {
+      console.log(`📨 [FREE_CHAT_PROCESS] Adding ${deduplicatedMessages.length} new messages from ${source} (filtered from ${newMessages.length})`);
+      
+      safeSetState(setMessages, prev => {
+        // Final deduplication check in state update with extended tolerance
+        const finalFilteredMessages = deduplicatedMessages.filter(newMsg => {
+          const newContent = newMsg.content || newMsg.text || newMsg.message || '';
+          const newSenderId = newMsg.senderId || newMsg.sender;
+          const newTimestamp = new Date(newMsg.timestamp || newMsg.createdAt).getTime();
+          
+          return !prev.find(existing => {
+            const existingContent = existing.content || existing.text || existing.message || '';
+            const existingSenderId = existing.senderId || existing.sender;
+            const existingTimestamp = new Date(existing.timestamp || existing.createdAt).getTime();
+            
+            // ID match
+            if (existing.id === newMsg.id) return true;
+            
+            // Content match with extended tolerance
+            const contentMatch = existingContent === newContent;
+            const senderMatch = existingSenderId === newSenderId;
+            const timestampMatch = Math.abs(existingTimestamp - newTimestamp) < 60000; // 60 seconds
+            
+            return contentMatch && senderMatch && timestampMatch;
+          });
+        });
+        
+        if (finalFilteredMessages.length !== deduplicatedMessages.length) {
+          console.log(`📨 [FREE_CHAT_DEDUP] Final state filter removed ${deduplicatedMessages.length - finalFilteredMessages.length} additional duplicates`);
+        }
+        
+        const combined = [...prev, ...finalFilteredMessages];
+        const sorted = combined.sort((a, b) => new Date(a.timestamp || a.createdAt) - new Date(b.timestamp || b.createdAt));
+        
+        console.log(`📨 [FREE_CHAT_PROCESS] Total messages after merge: ${sorted.length}`);
+        return sorted;
+      });
+      
+      // Update last message timestamp
+      const latestTimestamp = Math.max(...deduplicatedMessages.map(msg => new Date(msg.timestamp || msg.createdAt).getTime()));
+      if (latestTimestamp > lastMessageTimestampRef.current) {
+        lastMessageTimestampRef.current = latestTimestamp;
+        console.log(`📨 [FREE_CHAT_PROCESS] Updated last message timestamp to: ${new Date(latestTimestamp).toISOString()}`);
+      }
+      
+      // Auto-scroll to show new messages
+      setTimeout(() => {
+        flatListRef.current?.scrollToEnd({ animated: true });
+      }, 100);
+    } else {
+      console.log(`📨 [FREE_CHAT_PROCESS] No new messages to add from ${source} (all already exist)`);
+    }
+  }, [messages, safeSetState, authUser?.id, generateMessageId]);
+  
+  // Legacy requestMissedMessages function - now uses coordinator
+  const requestMissedMessages = useCallback(async (source = 'legacy') => {
+    return messageRecoveryCoordinator(source);
+  }, [messageRecoveryCoordinator]);
   
   // Update ref to current function
   requestMissedMessagesRef.current = requestMissedMessages;
@@ -1222,9 +1311,12 @@ const FixedFreeChatScreen = memo(({ route, navigation }) => {
       startLocalTimer(duration, startTime);
     }
     
-    // Request message history for any missed messages
+    // Use coordinator for session resumption message recovery
     setTimeout(() => {
-      requestMissedMessages();
+      if (mountedRef.current) {
+        console.log('📨 [SESSION_RESUME] Requesting missed messages via coordinator');
+        messageRecoveryCoordinator('session_resume');
+      }
     }, 500);
     
     console.log('✅ [FREE_CHAT_RESUMPTION] Session successfully resumed');
@@ -1265,31 +1357,12 @@ const FixedFreeChatScreen = memo(({ route, navigation }) => {
         }
         
         // Request message history after successful room join (for rejoin scenarios)
-        // Use shorter delay and add fallback
         setTimeout(() => {
           if (mountedRef.current && socketRef.current?.connected) {
-            console.log('📨 [ROOM_JOIN] Requesting message history after room join');
-            console.log('📨 [ROOM_JOIN] Current messages count before request:', messages.length);
-            requestMissedMessages();
+            console.log('📨 [ROOM_JOIN] Requesting message history after room join via coordinator');
+            messageRecoveryCoordinator('room_join');
           }
-        }, 100);
-        
-        // Fallback: Request messages again after a longer delay to ensure we don't miss them
-        setTimeout(() => {
-          if (mountedRef.current && socketRef.current?.connected && messages.length === 0) {
-            console.log('📨 [ROOM_JOIN] Fallback: Requesting message history again (no messages loaded yet)');
-            requestMissedMessages();
-          }
-        }, 1500);
-        
-        // Additional aggressive fallback for rejoin scenarios
-        setTimeout(() => {
-          if (mountedRef.current && socketRef.current?.connected) {
-            console.log('📨 [ROOM_JOIN] Final fallback: Requesting message history one more time');
-            console.log('📨 [ROOM_JOIN] Current messages count before final request:', messages.length);
-            requestMissedMessages();
-          }
-        }, 3000);
+        }, 500); // Single request with reasonable delay
       } else {
         console.error('❌ [FREE_CHAT_ROOM] Failed to join room:', response?.error);
         Alert.alert('Connection Error', 'Failed to join free chat session. Please try again.');
@@ -1662,13 +1735,23 @@ const FixedFreeChatScreen = memo(({ route, navigation }) => {
         } else {
           console.log('✅ [APP-STATE] Socket still connected, syncing state...');
           
-          // Re-join free chat room if needed
-          joinFreeChatRoom();
+          // Re-join free chat room if needed (this will handle message history internally)
+          if (!initializationCompleteRef.current) {
+            console.log('🔄 [APP-STATE] Re-joining free chat room after foreground');
+            joinFreeChatRoom();
+          }
           
           // Sync timer from session state even if connected
           syncTimerFromSession();
-          // Request any missed messages
-          requestMissedMessages();
+          
+          // Request missed messages with delay to avoid conflicts with room join
+          // Use coordinator for foreground message recovery
+          setTimeout(() => {
+            if (mountedRef.current && socketRef.current?.connected) {
+              console.log('📨 [APP-STATE] Requesting missed messages after foreground via coordinator');
+              messageRecoveryCoordinator('app_foreground');
+            }
+          }, 2000); // Increased delay to avoid conflicts with other systems
         }
       }
       
@@ -1698,6 +1781,8 @@ const FixedFreeChatScreen = memo(({ route, navigation }) => {
       mountingGuardRef.current = false;
       initializationCompleteRef.current = false;
       loadingStateSetRef.current = false;
+      messageHistoryRequestInProgressRef.current = false;
+      lastMessageHistoryRequestRef.current = 0;
       
       if (timerIntervalRef.current) {
         clearInterval(timerIntervalRef.current);
@@ -1786,13 +1871,7 @@ const FixedFreeChatScreen = memo(({ route, navigation }) => {
               console.log('🚀 [FREE_CHAT_INIT] Joining free chat room');
               joinFreeChatRoom();
               
-              // Also request message history immediately for rejoin scenarios
-              setTimeout(() => {
-                if (mountedRef.current && socketRef.current?.connected) {
-                  console.log('📨 [INIT] Requesting message history immediately after room join for rejoin scenario');
-                  requestMissedMessages();
-                }
-              }, 1000);
+              // Message history will be requested by room join callback
             }
           }, 500);
           
@@ -1927,7 +2006,7 @@ const FixedFreeChatScreen = memo(({ route, navigation }) => {
       <KeyboardAvoidingView 
         style={styles.container}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
       >
         <View style={styles.header}>
           <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
@@ -2008,7 +2087,7 @@ const FixedFreeChatScreen = memo(({ route, navigation }) => {
           </View>
         )}
 
-        <View style={styles.inputContainer}>
+        <View style={[styles.inputContainer, { paddingBottom: Math.max(insets.bottom, Platform.OS === 'android' ? 20 : 10) }]}>
           <TextInput
             style={[
               styles.textInput,
@@ -2235,7 +2314,6 @@ const styles = StyleSheet.create({
     alignItems: 'flex-end',
     paddingHorizontal: 15,
     paddingVertical: 10,
-    paddingBottom: Platform.OS === 'android' ? 20 : 10,
     backgroundColor: '#FFFFFF',
     borderTopWidth: 1,
     borderTopColor: '#E0E0E0',

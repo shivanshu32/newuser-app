@@ -13,7 +13,7 @@ import {
   StatusBar,
   AppState,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../context/AuthContext';
 import { useSocket } from '../../context/SocketContext';
@@ -25,6 +25,9 @@ const API_BASE_URL = 'https://jyotishcallbackend-2uxrv.ondigitalocean.app/api/v1
  */
 const FixedChatScreen = ({ route, navigation }) => {
   console.log('🚀 FixedChatScreen: Component mounting with params:', route.params);
+  
+  // Get safe area insets for proper Android navigation bar handling
+  const insets = useSafeAreaInsets();
   
   const {
     bookingId,
@@ -74,6 +77,10 @@ const FixedChatScreen = ({ route, navigation }) => {
   const sessionDurationRef = useRef(null);
   const maxReconnectAttempts = 5;
   const isReconnectingRef = useRef(false);
+  const messageHistoryRequestInProgressRef = useRef(false);
+  const lastMessageHistoryRequestRef = useRef(0);
+  const messageRecoveryCoordinatorRef = useRef(null);
+  const pendingRecoveryRequestsRef = useRef(new Set());
   
   // Callback function refs to prevent stale closures
   const handleReconnectionRef = useRef(null);
@@ -301,9 +308,13 @@ const FixedChatScreen = ({ route, navigation }) => {
       // Sync timer from session state
       syncTimerFromSession();
       
-      // Note: No need to manually request missed messages anymore
-      // Backend automatically sends missed messages via 'missed_messages_recovery' event when rejoining room
-      console.log('📨 [RECONNECT] Skipping manual missed message request - backend handles this automatically');
+      // Use coordinator for reconnection message recovery
+      setTimeout(() => {
+        if (mountedRef.current) {
+          console.log('📨 [RECONNECT] Requesting missed messages after reconnection via coordinator');
+          messageRecoveryCoordinator('reconnection');
+        }
+      }, 1000);
       
       console.log('✅ [RECONNECT] Successfully reconnected and synced');
       safeSetState(setConnected, true);
@@ -347,150 +358,234 @@ const FixedChatScreen = ({ route, navigation }) => {
   // Update ref to current function
   handleReconnectionRef.current = handleReconnection;
 
-  const requestMissedMessages = useCallback(async () => {
+  // ===== MESSAGE RECOVERY COORDINATOR =====
+  const messageRecoveryCoordinator = useCallback(async (source = 'unknown', force = false) => {
+    const requestId = `${source}_${Date.now()}`;
+    console.log(`🎯 [RECOVERY_COORDINATOR] Request from ${source} (ID: ${requestId})`);
+    
+    // Check if coordinator is already running
+    if (messageRecoveryCoordinatorRef.current && !force) {
+      console.log(`🎯 [RECOVERY_COORDINATOR] Already running, queuing request from ${source}`);
+      pendingRecoveryRequestsRef.current.add(source);
+      return messageRecoveryCoordinatorRef.current;
+    }
+    
+    // Enhanced rate limiting: 30 seconds for backgrounding scenarios
+    const now = Date.now();
+    const timeSinceLastRequest = now - lastMessageHistoryRequestRef.current;
+    const minInterval = source.includes('background') || source.includes('foreground') ? 30000 : 5000;
+    
+    if (timeSinceLastRequest < minInterval && !force) {
+      console.log(`🎯 [RECOVERY_COORDINATOR] Rate limiting: ${timeSinceLastRequest}ms < ${minInterval}ms, skipping ${source}`);
+      return Promise.resolve();
+    }
+    
     const socket = socketRef.current;
     if (!socket?.connected) {
-      console.log('📨 [MESSAGES] Socket not connected, skipping missed message request');
+      console.log(`🎯 [RECOVERY_COORDINATOR] Socket not connected, cannot recover messages for ${source}`);
+      return Promise.resolve();
+    }
+    
+    // Create coordinator promise
+    const coordinatorPromise = new Promise(async (resolve) => {
+      try {
+        console.log(`🎯 [RECOVERY_COORDINATOR] Starting message recovery for ${source}`);
+        lastMessageHistoryRequestRef.current = now;
+        
+        const timeout = setTimeout(() => {
+          console.log(`🎯 [RECOVERY_COORDINATOR] Timeout for ${source}`);
+          resolve();
+        }, 10000); // 10 second timeout
+        
+        socket.emit('get_missed_messages', {
+          bookingId,
+          sessionId,
+          since: lastMessageTimestampRef.current,
+          roomId: getCurrentRoomId()
+        }, (response) => {
+          clearTimeout(timeout);
+          console.log(`🎯 [RECOVERY_COORDINATOR] Response for ${source}:`, response);
+          
+          if (response?.messages && Array.isArray(response.messages)) {
+            processRecoveredMessages(response.messages, source);
+          }
+          
+          resolve();
+        });
+        
+      } catch (error) {
+        console.error(`🎯 [RECOVERY_COORDINATOR] Error for ${source}:`, error);
+        resolve();
+      }
+    });
+    
+    messageRecoveryCoordinatorRef.current = coordinatorPromise;
+    
+    // Wait for completion and process any pending requests
+    await coordinatorPromise;
+    messageRecoveryCoordinatorRef.current = null;
+    
+    // Process any pending requests
+    if (pendingRecoveryRequestsRef.current.size > 0) {
+      const pendingSources = Array.from(pendingRecoveryRequestsRef.current);
+      pendingRecoveryRequestsRef.current.clear();
+      console.log(`🎯 [RECOVERY_COORDINATOR] Processing ${pendingSources.length} pending requests:`, pendingSources);
+      
+      // Process the most recent pending request
+      const latestSource = pendingSources[pendingSources.length - 1];
+      setTimeout(() => {
+        if (mountedRef.current) {
+          messageRecoveryCoordinator(latestSource, false);
+        }
+      }, 1000);
+    }
+    
+    return coordinatorPromise;
+  }, [bookingId, sessionId, getCurrentRoomId]);
+  
+  // Enhanced message processing with robust deduplication
+  const processRecoveredMessages = useCallback((newMessages, source) => {
+    console.log(`📨 [PROCESS_MESSAGES] Processing ${newMessages.length} messages from ${source}`);
+    
+    if (newMessages.length === 0) {
+      console.log(`📨 [PROCESS_MESSAGES] No messages to process from ${source}`);
       return;
     }
 
-    console.log('📨 [MESSAGES] Requesting missed messages since:', lastMessageTimestampRef.current);
-    
-    return new Promise((resolve) => {
-      const timeout = setTimeout(() => {
-        console.log('⚠️ [MESSAGES] Socket timeout for missed messages');
-        resolve();
-      }, 5000);
+    // Enhanced deduplication with 60-second tolerance for backgrounding scenarios
+    const deduplicatedMessages = newMessages.filter(serverMsg => {
+      // Normalize message content from all possible field variations
+      const serverContent = serverMsg.content || serverMsg.text || serverMsg.message || '';
+      const serverSenderId = serverMsg.senderId || serverMsg.sender;
+      const serverTimestamp = new Date(serverMsg.timestamp || serverMsg.createdAt).getTime();
       
-      socket.emit('get_missed_messages', {
-        bookingId,
-        sessionId,
-        since: lastMessageTimestampRef.current,
-        roomId: getCurrentRoomId()
-      }, (response) => {
-        clearTimeout(timeout);
-        console.log('📨 [MESSAGES] Missed messages response:', response);
+      // Primary check: ID-based deduplication
+      const existsByID = messages.find(existing => existing.id === serverMsg.id);
+      if (existsByID) {
+        console.log(`📨 [DEDUP] Skipping duplicate by ID: ${serverMsg.id}`);
+        return false;
+      }
+      
+      // Secondary check: Content-based deduplication with extended tolerance
+      const existsByContent = messages.find(existing => {
+        const existingContent = existing.content || existing.text || existing.message || '';
+        const existingSenderId = existing.senderId || existing.sender;
+        const existingTimestamp = new Date(existing.timestamp || existing.createdAt).getTime();
         
-        if (response?.messages && Array.isArray(response.messages)) {
-          console.log(`📨 [MESSAGES] Processing ${response.messages.length} messages from server`);
-          
-          // Enhanced deduplication logic to handle ID mismatches
-          const newMessages = response.messages.filter(serverMsg => {
-            // First check by exact ID match (for messages that haven't been locally modified)
-            const existsByID = messages.find(existing => existing.id === serverMsg.id);
-            if (existsByID) {
-              console.log(`📨 [DEDUP] Skipping duplicate by ID: ${serverMsg.id}`);
-              return false;
-            }
-            
-            // Enhanced deduplication: Check by content, timestamp, and sender
-            // This handles cases where local message ID != database message ID
-            const existsByContent = messages.find(existing => {
-              const contentMatch = existing.content === serverMsg.content;
-              const senderMatch = existing.senderId === serverMsg.senderId || 
-                                  existing.senderType === serverMsg.senderType;
-              
-              // Allow 5 second tolerance for timestamp comparison (network delays)
-              const timeDiff = Math.abs(
-                new Date(existing.timestamp).getTime() - 
-                new Date(serverMsg.timestamp).getTime()
-              );
-              const timestampMatch = timeDiff < 5000; // 5 seconds tolerance
-              
-              return contentMatch && senderMatch && timestampMatch;
-            });
-            
-            if (existsByContent) {
-              console.log(`📨 [DEDUP] Skipping duplicate by content/sender/time: ${serverMsg.content.substring(0, 30)}...`);
-              return false;
-            }
-            
-            return true; // Message is new
-          });
-          
-          if (newMessages.length > 0) {
-            console.log(`📨 [MESSAGES] Adding ${newMessages.length} new missed messages (filtered from ${response.messages.length})`);
-            
-            safeSetState(setMessages, prev => {
-              // Merge messages and sort by timestamp
-              const combined = [...prev, ...newMessages];
-              const sorted = combined.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
-              
-              console.log(`📨 [MESSAGES] Total messages after merge: ${sorted.length}`);
-              return sorted;
-            });
-            
-            // Update last message timestamp
-            const latestTimestamp = Math.max(...newMessages.map(msg => new Date(msg.timestamp).getTime()));
-            if (latestTimestamp > lastMessageTimestampRef.current) {
-              lastMessageTimestampRef.current = latestTimestamp;
-              console.log(`📨 [MESSAGES] Updated last message timestamp to: ${new Date(latestTimestamp).toISOString()}`);
-            }
-          } else {
-            console.log(`📨 [MESSAGES] No new messages to add (all ${response.messages.length} messages already exist)`);
-          }
-        }
-        resolve();
+        const contentMatch = existingContent === serverContent;
+        const senderMatch = existingSenderId === serverSenderId || existing.senderType === serverMsg.senderType;
+        
+        // Extended tolerance: 60 seconds for backgrounding scenarios
+        const timeDiff = Math.abs(existingTimestamp - serverTimestamp);
+        const timestampMatch = timeDiff < 60000; // 60 seconds tolerance
+        
+        return contentMatch && senderMatch && timestampMatch;
       });
+      
+      if (existsByContent) {
+        console.log(`📨 [DEDUP] Skipping duplicate by content/sender/time: ${serverContent.substring(0, 30)}...`);
+        return false;
+      }
+      
+      return true; // Message is new
     });
-  }, [bookingId, sessionId, getCurrentRoomId, messages, safeSetState]);
+          
+    if (deduplicatedMessages.length > 0) {
+      console.log(`📨 [PROCESS_MESSAGES] Adding ${deduplicatedMessages.length} new messages from ${source} (filtered from ${newMessages.length})`);
+      
+      safeSetState(setMessages, prev => {
+        // Final deduplication check in state update with extended tolerance
+        const finalFilteredMessages = deduplicatedMessages.filter(newMsg => {
+          const newContent = newMsg.content || newMsg.text || newMsg.message || '';
+          const newSenderId = newMsg.senderId || newMsg.sender;
+          const newTimestamp = new Date(newMsg.timestamp || newMsg.createdAt).getTime();
+          
+          return !prev.find(existing => {
+            const existingContent = existing.content || existing.text || existing.message || '';
+            const existingSenderId = existing.senderId || existing.sender;
+            const existingTimestamp = new Date(existing.timestamp || existing.createdAt).getTime();
+            
+            // ID match
+            if (existing.id === newMsg.id) return true;
+            
+            // Content match with extended tolerance
+            const contentMatch = existingContent === newContent;
+            const senderMatch = existingSenderId === newSenderId;
+            const timestampMatch = Math.abs(existingTimestamp - newTimestamp) < 60000; // 60 seconds
+            
+            return contentMatch && senderMatch && timestampMatch;
+          });
+        });
+        
+        if (finalFilteredMessages.length !== deduplicatedMessages.length) {
+          console.log(`📨 [DEDUP] Final state filter removed ${deduplicatedMessages.length - finalFilteredMessages.length} additional duplicates`);
+        }
+        
+        const combined = [...prev, ...finalFilteredMessages];
+        const sorted = combined.sort((a, b) => new Date(a.timestamp || a.createdAt) - new Date(b.timestamp || b.createdAt));
+        
+        console.log(`📨 [PROCESS_MESSAGES] Total messages after merge: ${sorted.length}`);
+        return sorted;
+      });
+      
+      // Update last message timestamp
+      const latestTimestamp = Math.max(...deduplicatedMessages.map(msg => new Date(msg.timestamp || msg.createdAt).getTime()));
+      if (latestTimestamp > lastMessageTimestampRef.current) {
+        lastMessageTimestampRef.current = latestTimestamp;
+        console.log(`📨 [PROCESS_MESSAGES] Updated last message timestamp to: ${new Date(latestTimestamp).toISOString()}`);
+      }
+      
+      // Auto-scroll to show new messages
+      setTimeout(() => {
+        flatListRef.current?.scrollToEnd({ animated: true });
+      }, 100);
+    } else {
+      console.log(`📨 [PROCESS_MESSAGES] No new messages to add from ${source} (all already exist)`);
+    }
+  }, [messages, safeSetState]);
+  
+  // Legacy requestMissedMessages function - now uses coordinator
+  const requestMissedMessages = useCallback(async (source = 'legacy') => {
+    return messageRecoveryCoordinator(source);
+  }, [messageRecoveryCoordinator]);
   
   // Update ref to current function
   requestMissedMessagesRef.current = requestMissedMessages;
 
-  // ===== TIMER MANAGEMENT =====
+  // ===== BACKEND-ONLY TIMER MANAGEMENT =====
+  // REMOVED: Local timer functionality - backend is now the only timer source
   const startLocalTimer = useCallback((duration = 0, existingStartTime = null) => {
-    console.log('⏱️ [TIMER] Starting local timer with duration:', duration, 'existingStartTime:', existingStartTime);
+    console.log('⏱️ [BACKEND-ONLY] startLocalTimer called but DISABLED - backend handles all timing');
+    console.log('⏱️ [BACKEND-ONLY] Waiting for backend timer updates instead of local timer');
     
+    // Clear any existing local timer
     if (timerIntervalRef.current) {
+      console.log('🛑 [BACKEND-ONLY] Clearing any existing local timer');
       clearInterval(timerIntervalRef.current);
+      timerIntervalRef.current = null;
     }
     
-    const startTime = existingStartTime || Date.now();
-    const currentElapsed = existingStartTime ? Math.floor((Date.now() - existingStartTime) / 1000) : 0;
-    
-    // Save session state with proper startTime
-    saveSessionState(startTime, duration);
-    
+    // Set initial state but don't start local timer
     safeSetState(setTimerData, {
-      elapsed: currentElapsed,
-      duration,
-      isActive: true,
-      startTime
+      elapsed: 0,
+      duration: duration,
+      isActive: false, // Will be activated by backend updates
+      startTime: null,
+      remainingSeconds: duration
     });
     
-    console.log('⏱️ [TIMER] Timer started with startTime:', startTime, 'currentElapsed:', currentElapsed);
-    
-    timerIntervalRef.current = setInterval(() => {
-      if (!mountedRef.current) return;
-      
-      const elapsed = Math.floor((Date.now() - startTime) / 1000);
-      if (elapsed < duration) {
-        safeSetState(setTimerData, prev => ({
-          ...prev,
-          elapsed
-        }));
-      } else {
-        // Timer completed
-        clearInterval(timerIntervalRef.current);
-        timerIntervalRef.current = null;
-        safeSetState(setTimerData, prev => ({
-          ...prev,
-          elapsed: duration,
-          isActive: false
-        }));
-      }
-    }, 1000);
+    console.log('✅ [BACKEND-ONLY] Initial timer state set - waiting for backend updates');
   }, [safeSetState]);
 
   const stopLocalTimer = useCallback(() => {
-    console.log('⏱️ [TIMER] Stopping local timer');
+    console.log('⏱️ [BACKEND-ONLY] Stopping local timer (if any)');
     if (timerIntervalRef.current) {
       clearInterval(timerIntervalRef.current);
       timerIntervalRef.current = null;
     }
-    safeSetState(setTimerData, prev => ({ ...prev, isActive: false }));
-  }, [safeSetState]);
+    // Don't update timer state - let backend handle it
+    console.log('✅ [BACKEND-ONLY] Local timer cleared - backend will handle state');
+  }, []);
 
   // ===== TYPING INDICATOR HANDLING =====
   const handleTypingStarted = useCallback((data) => {
@@ -632,63 +727,54 @@ const FixedChatScreen = ({ route, navigation }) => {
   
   // ===== SESSION EVENT HANDLERS =====
   const handleSessionStarted = useCallback((data) => {
-    console.log('🎯 [SESSION] Session started:', data);
+    console.log('🎯 [BACKEND-ONLY] Session started:', data);
     safeSetState(setSessionActive, true);
     safeSetState(setConnected, true);
     
-    if (data.duration) {
-      const duration = parseInt(data.duration, 10);
-      console.log('⏱️ [SESSION] Starting timer with duration from session start:', duration);
-      
-      // Save session state for reconnection
-      const startTime = Date.now();
-      saveSessionState(startTime, duration);
-      
-      startLocalTimer(duration);
-    } else {
-      console.log('⚠️ [SESSION] No duration provided in session start data');
-    }
-  }, [safeSetState, startLocalTimer, saveSessionState]);
+    console.log('✅ [BACKEND-ONLY] Session started - waiting for backend timer updates');
+    console.log('⏱️ [BACKEND-ONLY] No local timer started - backend will send timer updates');
+  }, [safeSetState]);
   
   const handleTimerUpdate = useCallback((data) => {
-    console.log('⏱️ [TIMER] Update received:', data);
-    console.log('⏱️ [TIMER] Current bookingId:', bookingId);
-    console.log('⏱️ [TIMER] Data bookingId:', data.bookingId);
+    console.log('⏱️ [BACKEND-ONLY] Timer update received:', data);
+    console.log('⏱️ [BACKEND-ONLY] Current bookingId:', bookingId);
+    console.log('⏱️ [BACKEND-ONLY] Data bookingId:', data.bookingId);
     
     // Validate the timer update is for this session
     if (data.bookingId !== bookingId) {
-      console.log('⚠️ [TIMER] Ignoring timer update for different booking');
+      console.log('⚠️ [BACKEND-ONLY] Ignoring timer update for different booking');
       return;
     }
     
-    const duration = data.duration || data.elapsed || 0;
-    const totalDuration = data.totalDuration || duration;
-    console.log('⏱️ [TIMER] Activating timer with backend elapsed:', duration, 'totalDuration:', totalDuration);
+    // CRITICAL FIX: Stop any local timer - backend is authoritative
+    if (timerIntervalRef.current) {
+      console.log('🛑 [BACKEND-ONLY] Stopping local timer - using backend only');
+      clearInterval(timerIntervalRef.current);
+      timerIntervalRef.current = null;
+    }
     
-    // Calculate proper startTime based on backend elapsed time
-    const backendStartTime = Date.now() - (duration * 1000);
-    saveSessionState(backendStartTime, totalDuration);
+    const elapsed = data.duration || data.elapsed || 0;
+    const maxAllowedSeconds = data.maxAllowedSeconds || 300; // Default 5 minutes for prepaid
+    const remainingSeconds = data.remainingSeconds || Math.max(0, maxAllowedSeconds - elapsed);
     
-    console.log('⏱️ [TIMER] Setting timer data - isActive: true, elapsed:', duration, 'startTime:', backendStartTime);
+    console.log('⏱️ [BACKEND-ONLY] Pure backend timer - elapsed:', elapsed, 'remaining:', remainingSeconds);
+    
+    // BACKEND-ONLY: Use backend data directly without any local calculations
     safeSetState(setTimerData, {
-      elapsed: duration,
-      duration: totalDuration,
-      isActive: true,
-      startTime: backendStartTime // Fix: Use calculated startTime instead of null
+      elapsed: elapsed,
+      duration: maxAllowedSeconds,
+      isActive: remainingSeconds > 0,
+      startTime: null, // Not needed for backend-only approach
+      remainingSeconds: remainingSeconds,
+      formattedTime: data.formattedTime || formatTime(elapsed)
     });
     
-    console.log('⏱️ [TIMER] New timer data:', {
-      duration: totalDuration,
-      elapsed: duration,
-      isActive: true,
-      startTime: backendStartTime
-    });
+    // Update connection status if receiving timer updates
+    safeSetState(setConnected, true);
+    safeSetState(setSessionActive, remainingSeconds > 0);
     
-    safeSetState(setSessionActive, true);
-    
-    // Start local timer with existing startTime to maintain continuity
-    startLocalTimer(totalDuration, backendStartTime);
-  }, [bookingId, safeSetState, startLocalTimer]);
+    console.log('✅ [BACKEND-ONLY] Timer synced with backend - no local calculations');
+  }, [bookingId, safeSetState, formatTime]);
 
   const handleSessionEnded = useCallback((data) => {
     console.log('🛑 [SESSION] Session ended:', data);
@@ -1146,8 +1232,14 @@ const FixedChatScreen = ({ route, navigation }) => {
           
           // Sync timer from session state even if connected
           syncTimerFromSession();
-          // Request any missed messages
-          requestMissedMessages();
+          
+          // Use coordinator for foreground message recovery
+          setTimeout(() => {
+            if (mountedRef.current && socketRef.current?.connected) {
+              console.log('📨 [APP-STATE] Requesting missed messages after foreground via coordinator');
+              messageRecoveryCoordinator('app_foreground');
+            }
+          }, 2000); // Increased delay to avoid conflicts with other systems
         }
       }
       
@@ -1177,6 +1269,8 @@ const FixedChatScreen = ({ route, navigation }) => {
       mountingGuardRef.current = false;
       initializationCompleteRef.current = false;
       loadingStateSetRef.current = false;
+      messageHistoryRequestInProgressRef.current = false;
+      lastMessageHistoryRequestRef.current = 0;
       
       if (timerIntervalRef.current) {
         clearInterval(timerIntervalRef.current);
@@ -1380,7 +1474,7 @@ const FixedChatScreen = ({ route, navigation }) => {
       <KeyboardAvoidingView 
         style={styles.container}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
       >
         <View style={styles.header}>
           <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
@@ -1436,7 +1530,7 @@ const FixedChatScreen = ({ route, navigation }) => {
           </View>
         )}
 
-        <View style={styles.inputContainer}>
+        <View style={[styles.inputContainer, { paddingBottom: Math.max(insets.bottom, Platform.OS === 'android' ? 20 : 10) }]}>
           <TextInput
             style={styles.textInput}
             value={messageText}
@@ -1635,7 +1729,6 @@ const styles = StyleSheet.create({
     alignItems: 'flex-end',
     paddingHorizontal: 15,
     paddingVertical: 10,
-    paddingBottom: Platform.OS === 'android' ? 20 : 10,
     backgroundColor: '#FFFFFF',
     borderTopWidth: 1,
     borderTopColor: '#E0E0E0',
