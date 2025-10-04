@@ -12,6 +12,7 @@ import {
   ActivityIndicator,
   StatusBar,
   AppState,
+  Image,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -1482,12 +1483,25 @@ const FixedChatScreen = ({ route, navigation }) => {
           </TouchableOpacity>
           
           <View style={styles.headerCenter}>
-            <Text style={styles.headerTitle}>
-              {bookingDetails?.astrologer?.name || 'Astrologer'}
-            </Text>
-            <Text style={styles.headerSubtitle}>
-              {consultationType === 'chat' ? 'Chat Consultation' : 'Consultation'}
-            </Text>
+            <View style={styles.astrologerInfo}>
+              <Image 
+                source={{ 
+                  uri: bookingDetails?.astrologer?.profileImage || 
+                       bookingDetails?.astrologer?.imageUrl || 
+                       'https://via.placeholder.com/40x40.png?text=A' 
+                }}
+                style={styles.astrologerImage}
+                defaultSource={{ uri: 'https://via.placeholder.com/40x40.png?text=A' }}
+              />
+              <View style={styles.astrologerDetails}>
+                <Text style={styles.headerTitle}>
+                  {bookingDetails?.astrologer?.name || 'Astrologer'}
+                </Text>
+                <Text style={styles.headerSubtitle}>
+                  {consultationType === 'chat' ? 'Chat Consultation' : 'Consultation'}
+                </Text>
+              </View>
+            </View>
           </View>
           
           <View style={styles.headerRight}>
@@ -1595,6 +1609,20 @@ const styles = StyleSheet.create({
     marginRight: 8,
   },
   headerCenter: {
+    flex: 1,
+  },
+  astrologerInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  astrologerImage: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    marginRight: 12,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+  },
+  astrologerDetails: {
     flex: 1,
   },
   headerTitle: {
