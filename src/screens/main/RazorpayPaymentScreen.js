@@ -14,6 +14,7 @@ import { useAuth } from '../../context/AuthContext';
 import { walletAPI } from '../../services/api';
 import prepaidOffersAPI from '../../services/prepaidOffersAPI';
 import usePaymentTimeout from '../../hooks/usePaymentTimeout';
+import facebookTrackingService from '../../services/facebookTrackingService';
 
 const RazorpayPaymentScreen = ({ route, navigation }) => {
   const { order, config, finalAmount, user, selectedPackage, paymentType, offerId, offerDetails } = route.params;
@@ -103,6 +104,30 @@ const RazorpayPaymentScreen = ({ route, navigation }) => {
     }
   }, [transactionId, order]);
 
+  // Track payment initiation when component mounts
+  useEffect(() => {
+    const trackPaymentInitiation = async () => {
+      try {
+        await facebookTrackingService.initialize();
+        
+        const trackingData = {
+          amount: finalAmount,
+          currency: 'INR',
+          paymentType: paymentType || 'wallet_recharge',
+          selectedPackage: selectedPackage,
+          offerId: offerId
+        };
+
+        await facebookTrackingService.trackPaymentInitiated(trackingData);
+        console.log('📊 [FB-TRACKING] Payment initiation tracked for amount:', finalAmount);
+      } catch (error) {
+        console.error('❌ [FB-TRACKING] Failed to track payment initiation:', error);
+      }
+    };
+
+    trackPaymentInitiation();
+  }, [finalAmount, paymentType, selectedPackage, offerId]);
+
   const handleBackPress = () => {
     Alert.alert(
       'Cancel Payment?',
@@ -181,6 +206,65 @@ const RazorpayPaymentScreen = ({ route, navigation }) => {
           console.log('⚠️ No balance in verification response, fetching from API...');
           await updateWalletBalance();
         }
+
+        // Track successful payment with Facebook SDK
+        try {
+          const trackingData = {
+            amount: finalAmount,
+            currency: 'INR',
+            paymentId: paymentData.payment_id,
+            orderId: paymentData.order_id,
+            paymentType: paymentType || 'wallet_recharge',
+            selectedPackage: selectedPackage,
+            offerId: offerId
+          };
+
+          if (paymentType === 'prepaid_offer') {
+            // Track prepaid offer purchase
+            await facebookTrackingService.trackPrepaidOfferPurchase({
+              offerId: offerId,
+              amount: finalAmount,
+              currency: 'INR',
+              astrologerName: offerDetails?.astrologerName,
+              durationMinutes: offerDetails?.durationMinutes,
+              paymentId: paymentData.payment_id,
+              orderId: paymentData.order_id
+            });
+          } else {
+            // Calculate bonus and total wallet credit for regular payments
+            let bonusAmount = 0;
+            let totalWalletCredit = finalAmount;
+
+            if (selectedPackage) {
+              const rechargeAmount = selectedPackage.minRechargeAmount || 0;
+              bonusAmount = selectedPackage.percentageBonus > 0 
+                ? Math.round(rechargeAmount * selectedPackage.percentageBonus / 100)
+                : (selectedPackage.flatBonus || 0);
+              totalWalletCredit = rechargeAmount + bonusAmount;
+            } else {
+              // Manual recharge - remove GST to get actual wallet credit
+              totalWalletCredit = Math.round(finalAmount / 1.18);
+            }
+
+            trackingData.bonusAmount = bonusAmount;
+            trackingData.totalWalletCredit = totalWalletCredit;
+
+            await facebookTrackingService.trackPaymentCompleted(trackingData);
+          }
+
+          // Track first payment milestone
+          await facebookTrackingService.trackFirstPayment({
+            amount: finalAmount,
+            currency: 'INR',
+            paymentType: paymentType || 'wallet_recharge',
+            paymentId: paymentData.payment_id
+          });
+
+          console.log('📊 [FB-TRACKING] Payment success tracked with Facebook SDK');
+        } catch (trackingError) {
+          console.error('❌ [FB-TRACKING] Failed to track payment success:', trackingError);
+          // Don't fail the payment flow if tracking fails
+        }
         
         // Show different success messages based on payment type
         let successMessage;
@@ -252,7 +336,24 @@ const RazorpayPaymentScreen = ({ route, navigation }) => {
     }
   };
 
-  const handlePaymentFailure = (error) => {
+  const handlePaymentFailure = async (error) => {
+    // Track payment failure with Facebook SDK
+    try {
+      const trackingData = {
+        amount: finalAmount,
+        currency: 'INR',
+        error: error,
+        paymentType: paymentType || 'wallet_recharge',
+        selectedPackage: selectedPackage,
+        offerId: offerId
+      };
+
+      await facebookTrackingService.trackPaymentFailed(trackingData);
+      console.log('📊 [FB-TRACKING] Payment failure tracked with Facebook SDK');
+    } catch (trackingError) {
+      console.error('❌ [FB-TRACKING] Failed to track payment failure:', trackingError);
+    }
+
     Alert.alert(
       'Payment Failed',
       `Payment could not be completed.\nError: ${error}\n\nPlease try again.`,

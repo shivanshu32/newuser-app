@@ -15,6 +15,7 @@ import { Linking } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { walletAPI } from '../../services/api';
+import facebookTrackingService from '../../services/facebookTrackingService';
 
 // API Base URL for payment link creation
 const API_BASE_URL = 'https://jyotishcall-backend.onrender.com';
@@ -50,6 +51,24 @@ const WalletTopUpSummaryScreen = () => {
 
     setProcessingPayment(true);
     try {
+      // Track payment initiation with Facebook SDK
+      try {
+        await facebookTrackingService.initialize();
+        
+        const trackingData = {
+          amount: finalAmount,
+          currency: 'INR',
+          paymentType: 'wallet_recharge',
+          selectedPackage: selectedPackage
+        };
+
+        await facebookTrackingService.trackPaymentInitiated(trackingData);
+        console.log('📊 [FB-TRACKING] Wallet recharge payment initiation tracked for amount:', finalAmount);
+      } catch (trackingError) {
+        console.error('❌ [FB-TRACKING] Failed to track wallet recharge payment initiation:', trackingError);
+        // Don't fail the payment flow if tracking fails
+      }
+
       console.log('🔄 Starting payment process for amount:', finalAmount);
       console.log('📦 Selected package:', selectedPackage);
       console.log('📦 Selected package details:', JSON.stringify(selectedPackage, null, 2));
@@ -128,6 +147,22 @@ const WalletTopUpSummaryScreen = () => {
       
     } catch (error) {
       console.error('Payment error:', error);
+      
+      // Track payment failure with Facebook SDK
+      try {
+        const trackingData = {
+          amount: finalAmount,
+          currency: 'INR',
+          error: error.message || 'Payment initialization failed',
+          paymentType: 'wallet_recharge',
+          selectedPackage: selectedPackage
+        };
+
+        await facebookTrackingService.trackPaymentFailed(trackingData);
+        console.log('📊 [FB-TRACKING] Wallet recharge payment failure tracked');
+      } catch (trackingError) {
+        console.error('❌ [FB-TRACKING] Failed to track wallet recharge payment failure:', trackingError);
+      }
       
       if (error.code === 'payment_cancelled') {
         Alert.alert('Payment Cancelled', 'Payment was cancelled by user.');

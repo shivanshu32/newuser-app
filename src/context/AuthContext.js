@@ -4,6 +4,7 @@ import axios from 'axios';
 import { Alert } from 'react-native';
 import { walletAPI } from '../services/api';
 import analyticsService from '../services/analyticsService';
+import facebookTrackingService from '../services/facebookTrackingService';
 // import LogRocket from '@logrocket/react-native'; // Temporarily disabled due to build issues
 
 // Create context
@@ -268,6 +269,29 @@ export const AuthProvider = ({ children }) => {
           console.log('🔥 [AUTH] Login success event tracked for user:', userData._id || userData.id);
         } catch (analyticsError) {
           console.error('🔥 [AUTH] Failed to track login success:', analyticsError);
+        }
+
+        // Track user registration/login with Facebook SDK
+        try {
+          await facebookTrackingService.initialize();
+          await facebookTrackingService.trackUserRegistration({
+            id: userData._id || userData.id,
+            name: userData.name,
+            mobile: userData.mobile,
+            createdAt: userData.createdAt
+          });
+          
+          // Set user properties for better targeting
+          await facebookTrackingService.setUserProperties({
+            id: userData._id || userData.id,
+            createdAt: userData.createdAt,
+            walletBalance: userData.walletBalance || 0,
+            totalConsultations: userData.totalConsultations || 0
+          });
+
+          console.log('📊 [FB-TRACKING] User registration/login tracked');
+        } catch (fbError) {
+          console.error('❌ [FB-TRACKING] Failed to track user registration:', fbError);
         }
         
         setLoading(false);

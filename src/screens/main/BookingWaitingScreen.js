@@ -71,15 +71,29 @@ const BookingWaitingScreen = () => {
     
     if (socket) {
       console.log(' [BookingWaiting] Setting up socket listeners...');
+      console.log(' [BookingWaiting] Socket ID:', socket.id);
+      console.log(' [BookingWaiting] Socket connected:', socket.connected);
+      console.log(' [BookingWaiting] isPrepaidOffer:', isPrepaidOffer);
+      
       socket.on('booking_status_update', handleBookingStatusUpdate);
       socket.on('booking_auto_cancelled', handleBookingAutoCancelled);
       socket.on('booking_cancelled', handleBookingCancelled);
       
       // Add prepaid offer specific listeners
       if (isPrepaidOffer) {
+        console.log('🎯 [BookingWaiting] Setting up prepaid offer listeners for sessionId:', sessionId);
         socket.on('prepaid_chat_accepted', handlePrepaidChatAccepted);
         socket.on('prepaid_chat_rejected', handlePrepaidChatRejected);
         socket.on('prepaid_chat_timeout', handlePrepaidChatTimeout);
+        
+        // Test socket connection by emitting a test event
+        socket.emit('test_connection', { 
+          sessionId: sessionId, 
+          userId: waitingId,
+          message: 'BookingWaitingScreen connected and listening for prepaid events'
+        }, (response) => {
+          console.log('🔍 [BookingWaiting] Test connection response:', response);
+        });
       }
     } else {
       console.error(' [BookingWaiting] No socket connection available');
@@ -213,15 +227,23 @@ const BookingWaitingScreen = () => {
   // Prepaid offer specific handlers
   const handlePrepaidChatAccepted = (data) => {
     console.log('🎉 [BookingWaiting] Prepaid chat accepted:', data);
+    console.log('🎉 [BookingWaiting] Current sessionId:', sessionId);
+    console.log('🎉 [BookingWaiting] Data sessionId:', data.sessionId);
+    console.log('🎉 [BookingWaiting] SessionId match:', data.sessionId === sessionId);
+    console.log('🎉 [BookingWaiting] Data sessionIdentifier:', data.sessionIdentifier);
+    console.log('🎉 [BookingWaiting] SessionIdentifier match:', data.sessionIdentifier === sessionId);
     
-    if (data.sessionId === sessionId) {
-      console.log('✅ [BookingWaiting] Our prepaid session was accepted');
+    // Check both sessionId and sessionIdentifier for compatibility
+    const isOurSession = (data.sessionId === sessionId) || (data.sessionIdentifier === sessionId);
+    
+    if (isOurSession) {
+      console.log('✅ [BookingWaiting] Our prepaid session was accepted - navigating to chat');
       setBookingStatus('accepted');
       
       // Navigate to EnhancedChatScreen for prepaid offers (uses consultation room system)
-      navigation.replace('EnhancedChat', {
-        bookingId: data.sessionId, // Use sessionId as bookingId for prepaid offers
-        sessionId: data.sessionId,
+      const navigationParams = {
+        bookingId: data.sessionId || data.sessionIdentifier, // Use sessionId as bookingId for prepaid offers
+        sessionId: data.sessionId || data.sessionIdentifier,
         astrologer: astrologer,
         sessionType: 'prepaid_offer',
         duration: (data.sessionDuration || 300), // 5 minutes in seconds
@@ -229,7 +251,16 @@ const BookingWaitingScreen = () => {
         isPrepaidOffer: true,
         bookingType: 'chat',
         consultationType: 'chat'
-      });
+      };
+      
+      console.log('🚀 [BookingWaiting] Navigation params:', navigationParams);
+      
+      navigation.replace('EnhancedChat', navigationParams);
+    } else {
+      console.log('❌ [BookingWaiting] Prepaid session acceptance not for our session');
+      console.log('❌ [BookingWaiting] Expected:', sessionId);
+      console.log('❌ [BookingWaiting] Received sessionId:', data.sessionId);
+      console.log('❌ [BookingWaiting] Received sessionIdentifier:', data.sessionIdentifier);
     }
   };
 

@@ -14,6 +14,7 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import prepaidOffersAPI from '../../services/prepaidOffersAPI';
 import { useAuth } from '../../context/AuthContext';
+import facebookTrackingService from '../../services/facebookTrackingService';
 
 const PrepaidOfferPaymentScreen = () => {
   const navigation = useNavigation();
@@ -53,6 +54,24 @@ const PrepaidOfferPaymentScreen = () => {
 
     setPaying(true);
     try {
+      // Track payment initiation with Facebook SDK
+      try {
+        await facebookTrackingService.initialize();
+        
+        const trackingData = {
+          amount: offer.totalAmount,
+          currency: 'INR',
+          paymentType: 'prepaid_offer',
+          offerId: offerId
+        };
+
+        await facebookTrackingService.trackPaymentInitiated(trackingData);
+        console.log('📊 [FB-TRACKING] Prepaid offer payment initiation tracked for amount:', offer.totalAmount);
+      } catch (trackingError) {
+        console.error('❌ [FB-TRACKING] Failed to track prepaid offer payment initiation:', trackingError);
+        // Don't fail the payment flow if tracking fails
+      }
+
       // Create Razorpay order
       const orderResponse = await prepaidOffersAPI.createRazorpayOrder(offerId);
       
@@ -89,6 +108,23 @@ const PrepaidOfferPaymentScreen = () => {
 
     } catch (error) {
       console.error('Error creating payment order:', error);
+      
+      // Track payment failure with Facebook SDK
+      try {
+        const trackingData = {
+          amount: offer.totalAmount,
+          currency: 'INR',
+          error: error.message || 'Failed to create payment order',
+          paymentType: 'prepaid_offer',
+          offerId: offerId
+        };
+
+        await facebookTrackingService.trackPaymentFailed(trackingData);
+        console.log('📊 [FB-TRACKING] Prepaid offer payment failure tracked');
+      } catch (trackingError) {
+        console.error('❌ [FB-TRACKING] Failed to track prepaid offer payment failure:', trackingError);
+      }
+
       Alert.alert(
         'Payment Error',
         error.message || 'Failed to initiate payment. Please try again.'

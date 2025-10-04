@@ -38,6 +38,7 @@ import EdgeToEdgeHandler from './src/components/EdgeToEdgeHandler';
 
 // Analytics service import (no-op implementation)
 import analyticsService from './src/services/analyticsService';
+import facebookTrackingService from './src/services/facebookTrackingService';
 import { Settings } from 'react-native-fbsdk-next';
 // Import version check hook
 import useVersionCheck from './src/hooks/useVersionCheck';
@@ -58,7 +59,7 @@ function AppContent() {
     // Minimal crash-safe initialization tracking
     const trackAppInitialization = () => {
       try {
-        console.log('📊 [APP] App initialization started - version 5.2.1');
+        console.log('📊 [APP] App initialization started - version 5.3.3');
         console.log('📊 [APP] Platform: android');
         console.log('📊 [APP] Timestamp:', new Date().toISOString());
       } catch (error) {
@@ -66,8 +67,23 @@ function AppContent() {
       }
     };
     
+    // Initialize Facebook tracking and track app install
+    const initializeFacebookTracking = async () => {
+      try {
+        await facebookTrackingService.initialize();
+        await facebookTrackingService.trackAppInstall();
+        console.log('📊 [FB-TRACKING] App install tracking initialized');
+      } catch (error) {
+        console.error('❌ [FB-TRACKING] Failed to initialize app install tracking:', error);
+        // Don't crash the app if tracking fails
+      }
+    };
+    
     // Immediate execution - no async operations
     trackAppInitialization();
+    
+    // Initialize Facebook tracking in background
+    initializeFacebookTracking();
   }, []);
 
   // Check for updates on app launch (completely non-blocking and crash-safe)
