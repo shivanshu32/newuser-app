@@ -878,7 +878,7 @@ const FixedFreeChatScreen = React.memo(({ route, navigation }) => {
     console.log('✏️ [FREE_CHAT_TYPING] Received typing_started:', data);
     
     // Only handle typing from astrologer in this free chat session
-    if (data.senderType === 'astrologer' && data.freeChatId === freeChatId) {
+    if (data.senderRole === 'astrologer' && (data.freeChatId === freeChatId || data.bookingId === sessionId)) {
       safeSetState(setAstrologerTyping, true);
       
       // Clear existing timeout
@@ -891,13 +891,13 @@ const FixedFreeChatScreen = React.memo(({ route, navigation }) => {
         safeSetState(setAstrologerTyping, false);
       }, 5000);
     }
-  }, [freeChatId, safeSetState]);
+  }, [freeChatId, sessionId, safeSetState]);
   
   const handleTypingStopped = useCallback((data) => {
     console.log('✏️ [FREE_CHAT_TYPING] Received typing_stopped:', data);
     
     // Only handle typing from astrologer in this free chat session
-    if (data.senderType === 'astrologer' && data.freeChatId === freeChatId) {
+    if (data.senderRole === 'astrologer' && (data.freeChatId === freeChatId || data.bookingId === sessionId)) {
       safeSetState(setAstrologerTyping, false);
       
       // Clear existing timeout
@@ -905,7 +905,7 @@ const FixedFreeChatScreen = React.memo(({ route, navigation }) => {
         clearTimeout(astrologerTypingTimeoutRef.current);
       }
     }
-  }, [freeChatId, safeSetState]);
+  }, [freeChatId, sessionId, safeSetState]);
   
   // Legacy handler for backward compatibility
   const handleTypingIndicator = useCallback((data) => {
@@ -1112,47 +1112,47 @@ const FixedFreeChatScreen = React.memo(({ route, navigation }) => {
     console.log('🛑 [FREE_CHAT_SESSION] Session ended by backend:', data);
     
     // Validate this session end event is for current free chat session
-    if (data.freeChatId && data.freeChatId !== freeChatId) {
-      console.log('⚠️ [FREE_CHAT_SESSION] Ignoring session end for different free chat:', data.freeChatId);
+    if (data.sessionId && data.sessionId !== sessionId) {
+      console.log('⚠️ [FREE_CHAT_SESSION] Ignoring session end for different session:', data.sessionId);
       return;
     }
     
     // Determine who ended the session and why
-    const reason = data.reason || 'unknown';
     const endedBy = data.endedBy || 'system';
+    const currentUserId = authUser?.id;
     
-    console.log('🛑 [FREE_CHAT_SESSION] Session end details - reason:', reason, 'endedBy:', endedBy);
+    console.log('🛑 [FREE_CHAT_SESSION] Session end details - endedBy:', endedBy, 'currentUser:', currentUserId);
     
-    // Update session end state using our new state management
-    if (endedBy === 'astrologer') {
-      handleAstrologerEndSession(data);
-    } else if (reason === 'timer_expired' || reason === 'time_expired') {
-      handleTimerExpiry();
+    // Stop local timer and update session state
+    safeSetState(setSessionActive, false);
+    safeSetState(setSessionEnded, true);
+    stopLocalTimer();
+    
+    // Handle different end scenarios
+    if (endedBy === currentUserId) {
+      // Current user ended the session - navigate back immediately
+      console.log('✅ [FREE_CHAT_SESSION] User ended session confirmed by backend, navigating back');
+      navigation.goBack();
+    } else if (endedBy && endedBy !== currentUserId) {
+      // Other participant ended the session
+      const duration = data.duration || 0;
+      Alert.alert(
+        'Session Ended',
+        `The other participant has ended the free chat session.\nDuration: ${formatTime(duration)}`,
+        [{ text: 'OK', onPress: () => navigation.goBack() }]
+      );
     } else {
-      // Generic session end
-      handleSessionEnd(reason, endedBy);
+      // Timer expired or system ended
+      const duration = data.duration || sessionDuration;
       
-      // Show prepaid offer or generic end message
+      // Show prepaid offer for timer expired sessions
       setTimeout(() => {
         if (mountedRef.current) {
-          const duration = data.duration || sessionDuration;
-          
-          // Create prepaid offer for timer expired sessions
-          if (reason === 'time_expired' || reason === 'timer_expired') {
-            createPrepaidOfferAndShowModal(data);
-          } else {
-            // Show generic end message for other reasons
-            const endReason = 'The free chat session has ended.';
-            Alert.alert(
-              'Free Chat Ended',
-              `${endReason}\nDuration: ${formatTime(duration)}`,
-              [{ text: 'OK', onPress: () => navigation.goBack() }]
-            );
-          }
+          createPrepaidOfferAndShowModal(data);
         }
       }, 500);
     }
-  }, [freeChatId, sessionDuration, formatTime, handleSessionEnd, handleTimerExpiry, handleAstrologerEndSession, createPrepaidOfferAndShowModal, navigation]);
+  }, [sessionId, authUser?.id, formatTime, safeSetState, stopLocalTimer, createPrepaidOfferAndShowModal, navigation, sessionDuration]);
 
   // ===== PREPAID OFFER FUNCTIONS =====
   const createPrepaidOfferAndShowModal = useCallback(async (sessionData) => {
@@ -1381,8 +1381,8 @@ const FixedFreeChatScreen = React.memo(({ route, navigation }) => {
     const events = [
       'connect', 'disconnect', 'connect_error',
       'free_chat_message', 'free_chat_message_delivered', 'free_chat_message_read',
-      'free_chat_typing_started', 'free_chat_typing_stopped',
-      'session_started', 'session_timer', 'session_end', // Fixed: backend emits 'session_end'
+      'typing_started', 'typing_stopped',
+      'session_started', 'session_timer', 'free_chat_session_ended', // Backend emits 'free_chat_session_ended'
       'free_chat_session_resumed', 'get_free_chat_message_history'
     ];
     
@@ -1453,13 +1453,13 @@ const FixedFreeChatScreen = React.memo(({ route, navigation }) => {
     });
     socket.on('free_chat_message_delivered', handleMessageDelivered);
     socket.on('free_chat_message_read', handleMessageRead);
-    socket.on('free_chat_typing_started', handleTypingStarted);
-    socket.on('free_chat_typing_stopped', handleTypingStopped);
+    socket.on('typing_started', handleTypingStarted);
+    socket.on('typing_stopped', handleTypingStopped);
     
     // Free chat session events
     socket.on('session_started', handleSessionStarted);
     socket.on('session_timer', handleTimerUpdate);
-    socket.on('session_end', handleSessionEnded); // Fixed: backend emits 'session_end', not 'session_ended'
+    socket.on('free_chat_session_ended', handleSessionEnded); // Backend emits 'free_chat_session_ended'
     
     // Handle free chat session resumption (for rejoining)
     socket.on('free_chat_session_resumed', handleSessionResumed);
@@ -1632,21 +1632,23 @@ const FixedFreeChatScreen = React.memo(({ route, navigation }) => {
     if (socket?.connected && sessionActive) {
       const isCurrentlyTyping = text.length > 0;
       
-      // Emit free chat typing indicator
+      // Emit typing indicator (backend expects 'typing_started/stopped')
       if (isCurrentlyTyping) {
-        socket.emit('free_chat_typing_started', {
+        socket.emit('typing_started', {
           freeChatId,
           sessionId,
+          bookingId: sessionId, // Use sessionId as bookingId for free chat
           userId: authUser?.id,
-          astrologerId,
+          senderRole: 'user',
           roomId: getCurrentRoomId()
         });
       } else {
-        socket.emit('free_chat_typing_stopped', {
+        socket.emit('typing_stopped', {
           freeChatId,
           sessionId,
+          bookingId: sessionId, // Use sessionId as bookingId for free chat
           userId: authUser?.id,
-          astrologerId,
+          senderRole: 'user',
           roomId: getCurrentRoomId()
         });
       }
@@ -1663,11 +1665,12 @@ const FixedFreeChatScreen = React.memo(({ route, navigation }) => {
       if (isCurrentlyTyping) {
         typingTimeoutRef.current = setTimeout(() => {
           if (socketRef.current?.connected && sessionActive) {
-            socketRef.current.emit('free_chat_typing_stopped', {
+            socketRef.current.emit('typing_stopped', {
               freeChatId,
               sessionId,
+              bookingId: sessionId,
               userId: authUser?.id,
-              astrologerId,
+              senderRole: 'user',
               roomId: getCurrentRoomId()
             });
           }
@@ -1675,7 +1678,7 @@ const FixedFreeChatScreen = React.memo(({ route, navigation }) => {
         }, 5000);
       }
     }
-  }, [safeSetState, sessionActive, freeChatId, sessionId, astrologerId, authUser?.id, getCurrentRoomId]);
+  }, [safeSetState, sessionActive, freeChatId, sessionId, authUser?.id, getCurrentRoomId]);
   
   const endSession = useCallback(async () => {
     Alert.alert(
@@ -1692,18 +1695,21 @@ const FixedFreeChatScreen = React.memo(({ route, navigation }) => {
               
               const socket = socketRef.current;
               if (socket?.connected) {
-                socket.emit('end_free_chat_session', {
-                  freeChatId,
+                // Emit correct event name that backend expects
+                socket.emit('end_free_chat', {
                   sessionId,
+                  freeChatId,
                   userId: authUser?.id,
                   astrologerId,
                   endedBy: 'user'
                 });
+                
+                console.log('🛑 [FREE_CHAT_SESSION] End session request sent, waiting for confirmation...');
+                // Don't navigate immediately - wait for backend confirmation
+              } else {
+                console.error('❌ [FREE_CHAT_SESSION] Socket not connected');
+                Alert.alert('Error', 'Connection lost. Please try again.');
               }
-              
-              safeSetState(setSessionActive, false);
-              stopLocalTimer();
-              navigation.goBack();
               
             } catch (error) {
               console.error('❌ [FREE_CHAT_SESSION] End session failed:', error);
@@ -1984,6 +1990,9 @@ const FixedFreeChatScreen = React.memo(({ route, navigation }) => {
   const getStatusInfo = () => {
     if (loading) {
       return { color: '#F59E0B', text: 'Connecting...' };
+    }
+    if (sessionEnded) {
+      return { color: '#6B7280', text: 'Session ended' };
     }
     if (connected && sessionActive) {
       return { color: '#10B981', text: 'Connected' };

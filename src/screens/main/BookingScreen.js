@@ -562,6 +562,16 @@ const BookingScreen = ({ route, navigation }) => {
                 <Text style={styles.bookingTypeText}>
                   {`${item.type.charAt(0).toUpperCase() + item.type.slice(1)} Consultation`}
                 </Text>
+                {item.isFreeChat ? (
+                  <View style={styles.freeChatBadge}>
+                    <Text style={styles.freeChatBadgeText}>FREE</Text>
+                  </View>
+                ) : null}
+                {item.isPrepaidOffer ? (
+                  <View style={styles.prepaidBadge}>
+                    <Text style={styles.prepaidBadgeText}>PREPAID</Text>
+                  </View>
+                ) : null}
               </View>
             </View>
           </View>
@@ -858,6 +868,18 @@ const styles = StyleSheet.create({
     marginLeft: 6,
   },
   freeChatBadgeText: {
+    fontSize: 10,
+    color: '#fff',
+    fontWeight: 'bold',
+  },
+  prepaidBadge: {
+    backgroundColor: '#FF9800',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 8,
+    marginLeft: 6,
+  },
+  prepaidBadgeText: {
     fontSize: 10,
     color: '#fff',
     fontWeight: 'bold',
