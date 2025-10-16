@@ -4,7 +4,7 @@ module.exports = ({ config }) => ({
   jsEngine: "hermes",
   name: "Jyotish Call",
   slug: "jyotishcall-user-app",
-  version: "5.3.6",
+  version: "5.4.3",
   // Remove global orientation restriction for Android 16+ large screen support
   // orientation: "portrait", // Commented out for large screen compatibility
   icon: "./assets/icon-square.png",
@@ -35,7 +35,7 @@ module.exports = ({ config }) => ({
       backgroundColor: "#ffffff"
     },
     package: "com.jyotishtalk",
-    versionCode: 61,
+    versionCode: 68,
     minSdkVersion: 24,
     compileSdkVersion: 36,
     targetSdkVersion: 36,

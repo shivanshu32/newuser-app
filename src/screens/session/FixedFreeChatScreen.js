@@ -13,6 +13,7 @@ import {
   StatusBar,
   AppState,
   Image,
+  BackHandler,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -125,6 +126,7 @@ const FixedFreeChatScreen = React.memo(({ route, navigation }) => {
   // Prepaid offer state
   const [showPrepaidOffer, setShowPrepaidOffer] = useState(false);
   const [prepaidOfferData, setPrepaidOfferData] = useState(null);
+  // REMOVED: waitingForPrepaidOffer state - no longer needed since we removed waiting UI
   
   // Component instance tracking for debugging
   const instanceId = useRef(Math.random().toString(36).substr(2, 9));
@@ -229,12 +231,8 @@ const FixedFreeChatScreen = React.memo(({ route, navigation }) => {
           style: 'destructive',
           onPress: () => {
             handleSessionEnd('user_ended', 'user');
-            // Navigate back after a short delay to show the end message
-            setTimeout(() => {
-              if (mountedRef.current) {
-                navigation.goBack();
-              }
-            }, 2000);
+            // CRITICAL FIX: Don't navigate back, let the session end handler show prepaid offer
+            console.log('💰 [USER_END_SESSION] User ended session, waiting for prepaid offer instead of navigating');
           }
         }
       ]
@@ -262,23 +260,9 @@ const FixedFreeChatScreen = React.memo(({ route, navigation }) => {
     console.log('🛑 [FREE_CHAT_END] Session ended by astrologer:', data);
     handleSessionEnd('astrologer_ended', 'astrologer');
     
-    // Show astrologer end message
-    setTimeout(() => {
-      if (mountedRef.current) {
-        Alert.alert(
-          'Session Ended',
-          'The astrologer has ended the free chat session. Thank you for using our service!',
-          [
-            {
-              text: 'OK',
-              onPress: () => navigation.goBack()
-            }
-          ],
-          { cancelable: false }
-        );
-      }
-    }, 500);
-  }, [handleSessionEnd, navigation]);
+    // CRITICAL FIX: Don't show alert or navigate - let the main session end handler show prepaid offer
+    console.log('💰 [FREE_CHAT_END] Astrologer ended session, waiting for prepaid offer instead of navigating');
+  }, [handleSessionEnd]);
 
   // ===== SESSION PERSISTENCE =====
   const saveSessionState = useCallback((startTime, duration) => {
@@ -345,22 +329,22 @@ const FixedFreeChatScreen = React.memo(({ route, navigation }) => {
           timerIntervalRef.current = null;
         }
         
-        // Show timer expiry message and navigate back
+        // UPDATED: Immediate fallback to show prepaid offer bottom sheet
+        console.log('💰 [TIMER_EXPIRED] Free chat timer expired, waiting for backend prepaid offer event');
+        
+        // Short timeout to wait for backend event, then show bottom sheet immediately
         setTimeout(() => {
-          if (mountedRef.current) {
-            Alert.alert(
-              'Time Up!',
-              'Your free 3-minute chat session has ended. Thank you for using our service!',
-              [
-                {
-                  text: 'OK',
-                  onPress: () => navigation.goBack()
-                }
-              ],
-              { cancelable: false }
-            );
+          if (mountedRef.current && !showPrepaidOffer) {
+            console.log('💰 [PREPAID_OFFER] Timeout reached - no backend offer received, creating manually and showing bottom sheet');
+            createPrepaidOfferAndShowModal({
+              reason: 'timer_expired_fallback',
+              duration: sessionDuration,
+              endedBy: 'system'
+            });
+          } else {
+            console.log('💰 [PREPAID_OFFER] Backend offer already received and bottom sheet shown');
           }
-        }, 500);
+        }, 2000); // Reduced timeout to 2 seconds for faster bottom sheet display
       }
     }
     
@@ -368,7 +352,7 @@ const FixedFreeChatScreen = React.memo(({ route, navigation }) => {
     if (timerData.timeRemaining > 0 && timerExpiryHandledRef.current) {
       timerExpiryHandledRef.current = false;
     }
-  }, [timerData, sessionActive, sessionEnded]); // Removed handleTimerExpiry dependency
+  }, [timerData, sessionActive, sessionEnded, createPrepaidOfferAndShowModal, sessionDuration]);
 
   // Get socket from context
   const { socket: contextSocket, isConnected: socketConnected } = useSocket();
@@ -465,11 +449,20 @@ const FixedFreeChatScreen = React.memo(({ route, navigation }) => {
           if (freeChatData.status === 'completed' || freeChatData.status === 'expired' || 
               freeChatData.sessionStatus === 'completed' || freeChatData.sessionStatus === 'expired') {
             console.log('❌ [FREE_CHAT_RECONNECT] Session already ended, navigating back');
-            Alert.alert(
-              'Free Chat Ended',
-              'Your free chat session has ended while the app was in background.',
-              [{ text: 'OK', onPress: () => navigation.goBack() }]
-            );
+            // CRITICAL FIX: Session ended in background, show prepaid offer instead of navigating back
+            console.log('💰 [BACKGROUND_END] Session ended in background, setting waiting state for prepaid offer');
+            safeSetState(setWaitingForPrepaidOffer, true);
+            
+            // Create prepaid offer manually since session ended in background
+            setTimeout(() => {
+              if (mountedRef.current && !showPrepaidOffer) {
+                createPrepaidOfferAndShowModal({
+                  reason: 'background_ended',
+                  duration: freeChatData.duration || sessionDuration,
+                  endedBy: 'system'
+                });
+              }
+            }, 1000);
             return;
           }
           
@@ -580,12 +573,19 @@ const FixedFreeChatScreen = React.memo(({ route, navigation }) => {
       
       // Check if the error is due to session being ended
       if (error.message.includes('session') || error.message.includes('ended') || error.message.includes('completed')) {
-        console.log('❌ [RECONNECT] Session ended during reconnection, navigating back');
-        Alert.alert(
-          'Session Ended',
-          'Your consultation session has ended.',
-          [{ text: 'OK', onPress: () => navigation.goBack() }]
-        );
+        console.log('💰 [RECONNECT_END] Session ended during reconnection, showing prepaid offer instead of navigating back');
+        safeSetState(setWaitingForPrepaidOffer, true);
+        
+        // Create prepaid offer manually since session ended during reconnection
+        setTimeout(() => {
+          if (mountedRef.current && !showPrepaidOffer) {
+            createPrepaidOfferAndShowModal({
+              reason: 'reconnect_ended',
+              duration: sessionDuration,
+              endedBy: 'system'
+            });
+          }
+        }, 1000);
         return;
       }
       
@@ -996,6 +996,16 @@ const FixedFreeChatScreen = React.memo(({ route, navigation }) => {
       return;
     }
     
+    // Clear typing indicator when message is received from astrologer
+    if (data.senderRole === 'astrologer' || data.senderType === 'astrologer') {
+      console.log('✏️ [TYPING_CLEAR] Clearing astrologer typing indicator on message received');
+      safeSetState(setAstrologerTyping, false);
+      if (astrologerTypingTimeoutRef.current) {
+        clearTimeout(astrologerTypingTimeoutRef.current);
+        astrologerTypingTimeoutRef.current = null;
+      }
+    }
+    
     const extractedText = data.message || data.content || data.text;
     console.log('📨 [DEBUG] Extracted message text:', extractedText);
     console.log('📨 [DEBUG] Text extraction order - message:', data.message, 'content:', data.content, 'text:', data.text);
@@ -1128,31 +1138,81 @@ const FixedFreeChatScreen = React.memo(({ route, navigation }) => {
     safeSetState(setSessionEnded, true);
     stopLocalTimer();
     
-    // Handle different end scenarios
-    if (endedBy === currentUserId) {
-      // Current user ended the session - navigate back immediately
-      console.log('✅ [FREE_CHAT_SESSION] User ended session confirmed by backend, navigating back');
-      navigation.goBack();
-    } else if (endedBy && endedBy !== currentUserId) {
-      // Other participant ended the session
-      const duration = data.duration || 0;
-      Alert.alert(
-        'Session Ended',
-        `The other participant has ended the free chat session.\nDuration: ${formatTime(duration)}`,
-        [{ text: 'OK', onPress: () => navigation.goBack() }]
-      );
-    } else {
-      // Timer expired or system ended
-      const duration = data.duration || sessionDuration;
-      
-      // Show prepaid offer for timer expired sessions
-      setTimeout(() => {
-        if (mountedRef.current) {
-          createPrepaidOfferAndShowModal(data);
-        }
-      }, 500);
-    }
+    // UPDATED: For free chat, ALWAYS show prepaid offer bottom sheet immediately
+    const duration = data.duration || sessionDuration;
+    
+    console.log('💰 [FREE_CHAT_SESSION] Session ended, waiting for backend prepaid offer event');
+    console.log('💰 [FREE_CHAT_SESSION] EndedBy:', endedBy, 'CurrentUser:', currentUserId, 'Duration:', duration);
+    
+    // Short timeout to wait for backend event, then show bottom sheet immediately
+    setTimeout(() => {
+      if (mountedRef.current && !showPrepaidOffer) {
+        console.log('💰 [SESSION_END] No backend offer received, creating manually and showing bottom sheet');
+        createPrepaidOfferAndShowModal({
+          reason: endedBy === currentUserId ? 'user_ended' : (endedBy && endedBy !== currentUserId ? 'astrologer_ended' : 'timer_expired'),
+          duration: duration,
+          endedBy: endedBy || 'system'
+        });
+      } else {
+        console.log('💰 [SESSION_END] Backend offer already received and bottom sheet shown');
+      }
+    }, 2000); // Reduced timeout to 2 seconds for faster bottom sheet display
   }, [sessionId, authUser?.id, formatTime, safeSetState, stopLocalTimer, createPrepaidOfferAndShowModal, navigation, sessionDuration]);
+
+  // ===== AUTOMATIC PREPAID OFFER HANDLER =====
+  const handlePrepaidOfferAvailable = useCallback((data) => {
+    console.log('💰 [PREPAID_OFFER_AUTO] Received automatic prepaid offer from backend:', data);
+    console.log('💰 [PREPAID_OFFER_AUTO] Current show offer state:', showPrepaidOffer);
+    console.log('💰 [PREPAID_OFFER_AUTO] Offer data:', {
+      offerId: data.offerId,
+      astrologerId: data.astrologerId,
+      basePrice: data.basePrice,
+      totalAmount: data.totalAmount,
+      duration: data.duration,
+      isExisting: data.isExisting,
+      isPaid: data.isPaid
+    });
+    
+    try {
+      // Backend event received - show bottom sheet immediately
+      console.log('✅ [PREPAID_OFFER_AUTO] Backend event received - showing bottom sheet immediately');
+      
+      // Prepare astrologer data for the modal
+      const astrologerData = {
+        id: data.astrologerId,
+        name: astrologer?.name || effectiveBookingDetails?.astrologer?.name || 'Astrologer',
+        profileImage: astrologer?.profileImage || effectiveBookingDetails?.astrologer?.profileImage,
+        specializations: astrologer?.specializations || effectiveBookingDetails?.astrologer?.specializations
+      };
+      
+      // Set up the prepaid offer data and show the modal
+      setPrepaidOfferData({
+        astrologer: astrologerData,
+        originalSessionId: sessionId || effectiveFreeChatId,
+        sessionData: data,
+        offerData: {
+          offerId: data.offerId,
+          basePrice: data.basePrice,
+          totalAmount: data.totalAmount,
+          duration: data.duration,
+          isExisting: data.isExisting || false,
+          isPaid: data.isPaid || false
+        }
+      });
+      
+      setShowPrepaidOffer(true);
+      console.log('✅ [PREPAID_OFFER_AUTO] Prepaid offer modal shown for auto-generated offer');
+      
+    } catch (error) {
+      console.error('❌ [PREPAID_OFFER_AUTO] Error handling automatic prepaid offer:', error);
+      // Fallback: Navigate to home
+      Alert.alert(
+        'Prepaid Offer Available',
+        'A prepaid offer has been created for you. Please check the home screen.',
+        [{ text: 'OK', onPress: () => navigation.navigate('Home') }]
+      );
+    }
+  }, [astrologer, effectiveBookingDetails, sessionId, effectiveFreeChatId, navigation, safeSetState]);
 
   // ===== PREPAID OFFER FUNCTIONS =====
   const createPrepaidOfferAndShowModal = useCallback(async (sessionData) => {
@@ -1183,7 +1243,7 @@ const FixedFreeChatScreen = React.memo(({ route, navigation }) => {
           offerData: response.data // Include the created offer data
         });
         
-        setShowPrepaidOffer(true);
+        setShowPrepaidOffer(true); // Show bottom sheet immediately
       } else {
         console.log('❌ [PREPAID_OFFER] Failed to create offer:', response.message);
         // Show error and navigate to home
@@ -1233,6 +1293,10 @@ const FixedFreeChatScreen = React.memo(({ route, navigation }) => {
       offerId: offerData.offerId
     });
     
+    // Close the modal without showing alert since user is proceeding
+    setShowPrepaidOffer(false);
+    setPrepaidOfferData(null);
+    
     // Check if this is an existing paid offer
     if (offerData.isExisting && offerData.isPaid) {
       console.log('💰 [PREPAID_OFFER] Existing offer is already paid, navigating to home to show offer');
@@ -1247,25 +1311,30 @@ const FixedFreeChatScreen = React.memo(({ route, navigation }) => {
     }
   }, [navigation]);
 
-  const handleOfferClosed = useCallback(() => {
-    console.log('💰 [PREPAID_OFFER] Offer modal closed by user');
+  const handleOfferClosed = useCallback((showAlert = true) => {
+    console.log('💰 [PREPAID_OFFER] Offer modal closed by user, showAlert:', showAlert);
     setShowPrepaidOffer(false);
     setPrepaidOfferData(null);
     
-    // Show helpful message and navigate to home
-    Alert.alert(
-      'Offer Saved',
-      'Your prepaid offer has been saved! You can find it on the home screen whenever you\'re ready to proceed.',
-      [
-        {
-          text: 'OK',
-          onPress: () => {
-            // Navigate to home where user can see the offer
-            navigation.navigate('Home');
+    // Only show alert if user actually cancelled/closed without proceeding
+    if (showAlert) {
+      Alert.alert(
+        'Offer Saved',
+        'Your prepaid offer has been saved! You can find it on the home screen whenever you\'re ready to proceed.',
+        [
+          {
+            text: 'OK',
+            onPress: () => {
+              // Navigate to home where user can see the offer
+              navigation.navigate('Home');
+            }
           }
-        }
-      ]
-    );
+        ]
+      );
+    } else {
+      // User proceeded to pay, just navigate to home without alert
+      navigation.navigate('Home');
+    }
   }, [navigation]);
 
   const handleSessionResumed = useCallback((data) => {
@@ -1335,6 +1404,49 @@ const FixedFreeChatScreen = React.memo(({ route, navigation }) => {
     console.log('🏠 [FREE_CHAT_ROOM] SessionId:', sessionId);
     console.log('🏠 [FREE_CHAT_ROOM] UserId:', authUser?.id);
     
+    // CRITICAL FIX: Join user notification room first to receive prepaid offer events
+    console.log('🔔 [NOTIFICATION_ROOM] Joining user notification room for user:', authUser?.id);
+    console.log('🔔 [NOTIFICATION_ROOM] Auth token status:', authUser?.token ? 'Present' : 'Missing');
+    console.log('🔔 [NOTIFICATION_ROOM] Socket connected:', currentSocket.connected);
+    
+    currentSocket.emit('join_user_notification_room', {
+      userId: authUser?.id,
+      role: 'user'
+    }, (notificationResponse) => {
+      console.log('🔔 [NOTIFICATION_ROOM] Join response:', notificationResponse);
+      if (notificationResponse?.success) {
+        console.log('✅ [NOTIFICATION_ROOM] Successfully joined user notification room:', notificationResponse.roomName);
+        console.log('✅ [NOTIFICATION_ROOM] Room membership verified:', notificationResponse.isInRoom);
+        console.log('✅ [NOTIFICATION_ROOM] Room client count:', notificationResponse.clientCount);
+        
+        // Verify room membership after joining
+        setTimeout(() => {
+          currentSocket.emit('verify_room_membership', {
+            userId: authUser?.id,
+            role: 'user'
+          }, (verifyResponse) => {
+            console.log('🔍 [ROOM_VERIFY] Membership verification:', verifyResponse);
+            if (!verifyResponse?.isInRoom) {
+              console.error('❌ [ROOM_VERIFY] User not in notification room after join attempt!');
+            }
+          });
+        }, 1000);
+        
+      } else {
+        console.error('❌ [NOTIFICATION_ROOM] Failed to join user notification room:', notificationResponse);
+        console.error('❌ [NOTIFICATION_ROOM] This will cause prepaid offer events to be missed!');
+        
+        // Try to rejoin after a delay
+        setTimeout(() => {
+          console.log('🔄 [NOTIFICATION_ROOM] Retrying room join...');
+          currentSocket.emit('join_user_notification_room', {
+            userId: authUser?.id,
+            role: 'user'
+          });
+        }, 2000);
+      }
+    });
+    
     console.log('📤 [EMIT] Emitting join_free_chat_room event...');
     currentSocket.emit('join_free_chat_room', {
       freeChatId,
@@ -1355,6 +1467,15 @@ const FixedFreeChatScreen = React.memo(({ route, navigation }) => {
           loadingStateSetRef.current = true;
           safeSetState(setLoading, false);
         }
+        
+        // CRITICAL FIX: Ensure user is in notification room to receive prepaid offer events
+        console.log('🔔 [NOTIFICATION_ROOM] Ensuring user is in notification room for prepaid offers');
+        currentSocket.emit('join_user_notification_room', {
+          userId: authUser?.id,
+          role: 'user'
+        }, (notificationResponse) => {
+          console.log('🔔 [NOTIFICATION_ROOM] Join notification room response:', notificationResponse);
+        });
         
         // Request message history after successful room join (for rejoin scenarios)
         setTimeout(() => {
@@ -1383,7 +1504,8 @@ const FixedFreeChatScreen = React.memo(({ route, navigation }) => {
       'free_chat_message', 'free_chat_message_delivered', 'free_chat_message_read',
       'typing_started', 'typing_stopped',
       'session_started', 'session_timer', 'free_chat_session_ended', // Backend emits 'free_chat_session_ended'
-      'free_chat_session_resumed', 'get_free_chat_message_history'
+      'free_chat_session_resumed', 'get_free_chat_message_history',
+      'prepaid_offer_available', 'prepaid_offer_creation_failed' // CRITICAL FIX: Added new events
     ];
     
     events.forEach(event => {
@@ -1463,6 +1585,23 @@ const FixedFreeChatScreen = React.memo(({ route, navigation }) => {
     
     // Handle free chat session resumption (for rejoining)
     socket.on('free_chat_session_resumed', handleSessionResumed);
+    
+    // CRITICAL FIX: Listen for automatic prepaid offer from backend
+    socket.on('prepaid_offer_available', handlePrepaidOfferAvailable);
+    
+    // CRITICAL FIX: Listen for prepaid offer creation failures
+    socket.on('prepaid_offer_creation_failed', (data) => {
+      console.log('❌ [PREPAID_OFFER_FAILED] Backend prepaid offer creation failed:', data);
+      
+      // Clear waiting state and show error
+      safeSetState(setWaitingForPrepaidOffer, false);
+      
+      Alert.alert(
+        'Free Chat Ended',
+        data.message || 'Your free chat session has ended. Please check the home screen for any available offers.',
+        [{ text: 'OK', onPress: () => navigation.navigate('Home') }]
+      );
+    });
     
     // Handle free chat message history recovery
     socket.on('get_free_chat_message_history', (data) => {
@@ -1555,6 +1694,26 @@ const FixedFreeChatScreen = React.memo(({ route, navigation }) => {
     
     safeSetState(setMessages, prev => [...prev, optimisticMessage]);
     safeSetState(setMessageText, '');
+    
+    // Clear own typing indicator when sending message
+    safeSetState(setIsTyping, false);
+    if (typingTimeoutRef.current) {
+      clearTimeout(typingTimeoutRef.current);
+      typingTimeoutRef.current = null;
+    }
+    
+    // Immediately notify astrologer that user stopped typing
+    const socket = socketRef.current;
+    if (socket?.connected) {
+      socket.emit('typing_stopped', {
+        freeChatId,
+        sessionId,
+        bookingId: sessionId,
+        userId: authUser?.id,
+        senderRole: 'user',
+        roomId: getCurrentRoomId()
+      });
+    }
     
     setTimeout(() => {
       flatListRef.current?.scrollToEnd({ animated: true });
@@ -1808,6 +1967,8 @@ const FixedFreeChatScreen = React.memo(({ route, navigation }) => {
     };
   }, []); // Remove all dependencies to prevent remounting
 
+  // REMOVED: Back handler for waiting state - no longer needed since we removed waiting UI
+
   // ===== MAIN COMPONENT INITIALIZATION =====
   useEffect(() => {
     // Skip initialization for duplicate mounts
@@ -1987,6 +2148,8 @@ const FixedFreeChatScreen = React.memo(({ route, navigation }) => {
     );
   }
 
+  // REMOVED: Waiting screen UI - now relying solely on prepaid offer bottom sheet
+
   const getStatusInfo = () => {
     if (loading) {
       return { color: '#F59E0B', text: 'Connecting...' };
@@ -2018,9 +2181,8 @@ const FixedFreeChatScreen = React.memo(({ route, navigation }) => {
         keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
       >
         <View style={styles.header}>
-          <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
-            <Ionicons name="arrow-back" size={24} color="#FFFFFF" />
-          </TouchableOpacity>
+          <View style={styles.headerLeft}>
+          </View>
           
           <View style={styles.headerCenter}>
             <View style={styles.astrologerInfo}>
@@ -2038,14 +2200,20 @@ const FixedFreeChatScreen = React.memo(({ route, navigation }) => {
                   {astrologer?.name || bookingDetails?.astrologer?.name || 'Astrologer'}
                 </Text>
                 <Text style={styles.headerSubtitle}>
-                  {consultationType === 'chat' ? 'Chat Consultation' : 'Consultation'}
+                  {consultationType === 'chat' ? 'Free Chat Consultation' : 'Free Consultation'}
                 </Text>
               </View>
             </View>
           </View>
           
           <View style={styles.headerRight}>
-            {/* Always show timer for testing - remove conditions temporarily */}
+            {/* Connection Status - Just dot */}
+            <View style={[
+              styles.connectionDot, 
+              { backgroundColor: connected ? '#4ADE80' : '#EF4444' }
+            ]} />
+            
+            {/* Timer */}
             {sessionActive && (
               <View style={styles.timerContainer}>
                 <Text style={styles.timerText}>
@@ -2054,10 +2222,10 @@ const FixedFreeChatScreen = React.memo(({ route, navigation }) => {
               </View>
             )}
             
+            {/* End Session Button - Icon only */}
             {sessionActive && !sessionEnded && (
               <TouchableOpacity style={styles.endSessionButton} onPress={handleUserEndSession}>
-                <Ionicons name="stop-circle" size={16} color="#FF4444" />
-                <Text style={styles.endSessionText}>End</Text>
+                <Ionicons name="stop-circle" size={20} color="#FF4444" />
               </TouchableOpacity>
             )}
           </View>
@@ -2162,16 +2330,33 @@ const styles = StyleSheet.create({
     backgroundColor: '#6B46C1',
     paddingTop: 10, // SafeAreaView now handles safe area properly
     paddingBottom: 15,
-    paddingHorizontal: 15,
+    paddingLeft: 5,
+    paddingRight: 15,
     elevation: 4,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 4,
   },
-  backButton: {
-    padding: 8,
-    marginRight: 8,
+  headerLeft: {
+    minWidth: 0,
+    alignItems: 'flex-start',
+  },
+  freeIndicator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.3)',
+  },
+  freeText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: 'bold',
+    marginLeft: 4,
   },
   headerCenter: {
     flex: 1,
@@ -2181,9 +2366,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   astrologerImage: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 60,
+    height: 60,
+    borderRadius: 30,
     marginRight: 12,
     borderWidth: 2,
     borderColor: 'rgba(255, 255, 255, 0.3)',
@@ -2204,36 +2389,42 @@ const styles = StyleSheet.create({
   headerRight: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'flex-end',
+  },
+  connectionDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    marginRight: 8,
   },
   timerContainer: {
-    alignItems: 'flex-end',
-    marginRight: 12,
+    alignItems: 'center',
+    marginRight: 8,
+    backgroundColor: 'rgba(255, 255, 255, 0.15)',
+    paddingHorizontal: 6,
+    paddingVertical: 3,
+    borderRadius: 6,
+    minWidth: 45,
   },
   timerText: {
     color: '#FFFFFF',
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: 'bold',
+  },
+  endSessionButton: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255, 68, 68, 0.2)',
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 68, 68, 0.3)',
   },
   amountText: {
     color: 'rgba(255, 255, 255, 0.9)',
     fontSize: 12,
     marginTop: 2,
-  },
-  endSessionButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(255, 68, 68, 0.2)',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#FF4444',
-  },
-  endSessionText: {
-    color: '#FF4444',
-    fontSize: 12,
-    fontWeight: 'bold',
-    marginLeft: 4,
   },
   statusBanner: {
     paddingVertical: 8,

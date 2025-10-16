@@ -47,7 +47,7 @@ const PrepaidOfferBottomSheet = ({
     if (offerData) {
       console.log('💰 [PREPAID_OFFER] Using existing offer data:', offerData);
       onOfferCreated && onOfferCreated(offerData);
-      onClose();
+      // Don't call onClose() here - let handleOfferCreated handle modal closing
       return;
     }
 
@@ -64,7 +64,7 @@ const PrepaidOfferBottomSheet = ({
       
       if (response.success) {
         onOfferCreated && onOfferCreated(response.data);
-        onClose();
+        // Don't call onClose() here - let handleOfferCreated handle modal closing
       } else {
         Alert.alert('Error', response.message || 'Failed to create offer');
       }
