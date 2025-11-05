@@ -384,8 +384,80 @@ export const ledgerAPI = {
   getUserTransactions: (userId, params) => API.get(`/ledger/users/${userId}/transactions`, { params }),
 };
 
-// E-Pooja API
-import { epoojaAPI } from './epoojaAPI';
-export { epoojaAPI };
+// Blog API
+export const blogAPI = {
+  // Get published blogs with optional filters
+  getBlogs: async (params = {}) => {
+    try {
+      const queryParams = new URLSearchParams({
+        status: 'published', // Only published blogs for users
+        ...params
+      });
+      
+      const response = await API.get(`/blogs?${queryParams}`);
+      return response;
+    } catch (error) {
+      console.error('❌ [BLOG_API] Error fetching blogs:', error);
+      throw error;
+    }
+  },
+
+  // Get featured blogs
+  getFeaturedBlogs: async (limit = 3) => {
+    try {
+      const response = await API.get(`/blogs?featured=true&limit=${limit}&status=published&sortBy=publishedAt&sortOrder=desc`);
+      return response;
+    } catch (error) {
+      console.error('❌ [BLOG_API] Error fetching featured blogs:', error);
+      throw error;
+    }
+  },
+
+  // Get single blog by slug or ID
+  getBlog: async (identifier, incrementView = true) => {
+    try {
+      const response = await API.get(`/blogs/${identifier}?incrementView=${incrementView}`);
+      return response;
+    } catch (error) {
+      console.error('❌ [BLOG_API] Error fetching blog:', error);
+      throw error;
+    }
+  },
+
+  // Search blogs
+  searchBlogs: async (query, params = {}) => {
+    try {
+      const queryParams = new URLSearchParams({
+        search: query,
+        status: 'published',
+        ...params
+      });
+      
+      const response = await API.get(`/blogs?${queryParams}`);
+      return response;
+    } catch (error) {
+      console.error('❌ [BLOG_API] Error searching blogs:', error);
+      throw error;
+    }
+  },
+
+  // Get blogs by category
+  getBlogsByCategory: async (category, params = {}) => {
+    try {
+      const queryParams = new URLSearchParams({
+        category,
+        status: 'published',
+        ...params
+      });
+      
+      const response = await API.get(`/blogs?${queryParams}`);
+      return response;
+    } catch (error) {
+      console.error('❌ [BLOG_API] Error fetching blogs by category:', error);
+      throw error;
+    }
+  }
+};
+
 
 export default API;

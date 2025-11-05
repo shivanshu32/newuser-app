@@ -70,6 +70,16 @@ const PrepaidOfferCard = ({ offer, onOfferUsed, onRefresh }) => {
   };
 
   const handleRemoveOffer = async () => {
+    // Prevent removal of paid offers
+    if (offer.isPaid) {
+      Alert.alert(
+        'Cannot Remove',
+        'This offer has been paid for and cannot be removed. Please contact support if you need assistance.',
+        [{ text: 'OK' }]
+      );
+      return;
+    }
+
     Alert.alert(
       'Remove Offer',
       'Are you sure you want to remove this offer? This action cannot be undone.',
@@ -84,7 +94,8 @@ const PrepaidOfferCard = ({ offer, onOfferUsed, onRefresh }) => {
               onRefresh && onRefresh();
             } catch (error) {
               console.error('Error removing offer:', error);
-              Alert.alert('Error', 'Failed to remove offer');
+              const errorMessage = error.response?.data?.message || 'Failed to remove offer';
+              Alert.alert('Error', errorMessage);
             }
           }
         }
@@ -138,9 +149,12 @@ const PrepaidOfferCard = ({ offer, onOfferUsed, onRefresh }) => {
           <MaterialIcons name="local-fire-department" size={20} color="#FF6B35" />
           <Text style={styles.offerBadgeText}>Special Offer</Text>
         </View>
-        <TouchableOpacity onPress={handleRemoveOffer} style={styles.closeButton}>
-          <MaterialIcons name="close" size={20} color="#666" />
-        </TouchableOpacity>
+        {/* Only show remove button for unpaid offers */}
+        {!offer.isPaid && (
+          <TouchableOpacity onPress={handleRemoveOffer} style={styles.closeButton}>
+            <MaterialIcons name="close" size={20} color="#666" />
+          </TouchableOpacity>
+        )}
       </View>
 
       {/* Astrologer Info */}
@@ -171,7 +185,7 @@ const PrepaidOfferCard = ({ offer, onOfferUsed, onRefresh }) => {
 
       {/* Offer Details */}
       <View style={styles.offerDetails}>
-        <Text style={styles.offerTitle}>Continue chat for 5 minutes</Text>
+        <Text style={styles.offerTitle}>Continue chat for {offer.durationMinutes} minutes</Text>
         <View style={styles.priceContainer}>
           <Text style={styles.priceText}>Just ₹{offer.basePrice}</Text>
           <Text style={styles.gstText}>(GST extra)</Text>

@@ -13,11 +13,12 @@ import { WebView } from 'react-native-webview';
 import { useAuth } from '../../context/AuthContext';
 import { walletAPI } from '../../services/api';
 import prepaidOffersAPI from '../../services/prepaidOffersAPI';
+import poojaAPI from '../../services/poojaAPI';
 import usePaymentTimeout from '../../hooks/usePaymentTimeout';
 import facebookTrackingService from '../../services/facebookTrackingService';
 
 const RazorpayPaymentScreen = ({ route, navigation }) => {
-  const { order, config, finalAmount, user, selectedPackage, paymentType, offerId, offerDetails } = route.params;
+  const { order, config, finalAmount, user, selectedPackage, paymentType, offerId, offerDetails, bookingId } = route.params;
   const { updateWalletBalance, updateUser } = useAuth();
   const [loading, setLoading] = useState(true);
   const [transactionId, setTransactionId] = useState(order?.transactionId || null);
@@ -163,6 +164,22 @@ const RazorpayPaymentScreen = ({ route, navigation }) => {
           data: verificationResponse?.data,
           fullResponse: verificationResponse
         });
+      } else if (paymentType === 'pooja_booking') {
+        // Handle pooja booking payment verification
+        console.log('Verifying pooja booking payment for bookingId:', bookingId);
+        const verificationData = {
+          razorpay_payment_id: paymentData.payment_id,
+          razorpay_order_id: paymentData.order_id,
+          razorpay_signature: paymentData.signature,
+          bookingId: bookingId
+        };
+        
+        verificationResponse = await poojaAPI.verifyPoojaPayment(verificationData);
+        console.log('📿 [POOJA_BOOKING_VERIFICATION] Response received:', {
+          success: verificationResponse?.success,
+          message: verificationResponse?.message,
+          data: verificationResponse?.data
+        });
       } else {
         // Handle wallet payment verification (existing logic)
         const verificationData = {
@@ -271,6 +288,10 @@ const RazorpayPaymentScreen = ({ route, navigation }) => {
         if (paymentType === 'prepaid_offer') {
           // Prepaid offer payment success message
           successMessage = `Payment Successful!\n\n${offerDetails?.description || 'Prepaid Chat Offer'}\n\nPayment Details:\n• Amount Paid: ₹${finalAmount}\n• Duration: ${offerDetails?.durationMinutes || 5} minutes\n• Astrologer: ${offerDetails?.astrologerName || 'Selected Astrologer'}\n\nYou can now start your prepaid chat session!\n\nPayment ID: ${paymentData.payment_id}`;
+        } else if (paymentType === 'pooja_booking') {
+          // Pooja booking payment success message
+          const bookingData = verificationResponse.data?.booking;
+          successMessage = `Pooja Booking Confirmed!\n\n${bookingData?.pooja?.mainHeading || 'Pooja Booking'}\n\nBooking Details:\n• Amount Paid: ₹${finalAmount}\n• Package: ${bookingData?.package?.name || 'Selected Package'}\n• Location: ${bookingData?.pooja?.location || 'TBD'}\n\nYour booking has been confirmed. You will receive further details soon.\n\nPayment ID: ${paymentData.payment_id}`;
         } else if (selectedPackage) {
           // Package payment success message
           const rechargeAmount = selectedPackage.minRechargeAmount || 0;

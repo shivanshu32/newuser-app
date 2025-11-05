@@ -28,7 +28,7 @@ import PrepaidOfferCard from '../../components/PrepaidOfferCard';
 import RejoinChatBottomSheet from '../../components/RejoinChatBottomSheet';
 import BannerCarousel from '../../components/BannerCarousel';
 import BlogSection from '../../components/BlogSection';
-import EPoojaHomeSection from '../../components/epooja/EPoojaHomeSection';
+import PoojaSection from '../../components/PoojaSection';
 
 // Hardcoded app version - update this when releasing new versions
 import APP_CONFIG from '../../config/appConfig';
@@ -2549,11 +2549,12 @@ const HomeScreen = ({ navigation }) => {
       });
     }
 
-    // Add e-pooja section - TEMPORARILY HIDDEN
-    // data.push({ type: 'epoojaSection', id: 'epoojaSection' });
 
     // Add blog section
     data.push({ type: 'blogSection', id: 'blogSection' });
+    
+    // Add pooja section
+    data.push({ type: 'poojaSection', id: 'poojaSection' });
     
     return data;
   };
@@ -2636,6 +2637,8 @@ const HomeScreen = ({ navigation }) => {
         );
       case 'blogSection':
         return <BlogSection navigation={navigation} />;
+      case 'poojaSection':
+        return <PoojaSection />;
       case 'pendingBookingsHeader':
         return (
           <View style={styles.section}>
@@ -2652,8 +2655,6 @@ const HomeScreen = ({ navigation }) => {
         return renderPendingBookingCard({ item });
       case 'astrologersSection':
         return renderAstrologersSection(item.data);
-      case 'epoojaSection':
-        return <EPoojaHomeSection />;
       default:
         return null;
     }

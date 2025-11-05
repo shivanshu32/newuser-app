@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -7,20 +7,76 @@ import {
   Image,
   StyleSheet,
   Dimensions,
+  ActivityIndicator,
 } from 'react-native';
 import { Ionicons, MaterialIcons, FontAwesome } from '@expo/vector-icons';
-import { getFeaturedBlogs } from '../data/blogData';
+import { blogAPI } from '../services/api';
 
 const { width } = Dimensions.get('window');
 
 const BlogSection = ({ navigation }) => {
-  // Get featured blog posts from local data
-  const blogPosts = getFeaturedBlogs();
+  const [blogPosts, setBlogPosts] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    fetchFeaturedBlogs();
+  }, []);
+
+  const fetchFeaturedBlogs = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      console.log('📚 [BLOG_SECTION] Fetching featured blogs from API...');
+      
+      const response = await blogAPI.getFeaturedBlogs(3);
+      console.log('✅ [BLOG_SECTION] Featured blogs fetched:', response);
+      
+      // Transform backend data to match component expectations
+      const transformedBlogs = (response.data || []).map(blog => ({
+        id: blog._id,
+        title: blog.title,
+        excerpt: blog.excerpt || blog.content?.substring(0, 150) + '...',
+        image: blog.coverImageUrl || 'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=400&h=250&fit=crop',
+        category: blog.category || 'General',
+        readTime: `${blog.readTime || 5} min read`,
+        publishedAt: formatDate(blog.publishedAt || blog.createdAt),
+        slug: blog.slug
+      }));
+      
+      console.log('✅ [BLOG_SECTION] Transformed blogs:', transformedBlogs.length);
+      setBlogPosts(transformedBlogs);
+    } catch (err) {
+      console.error('❌ [BLOG_SECTION] Error fetching featured blogs:', err);
+      setError(err.message);
+      // Don't show error to user, just hide the section
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const formatDate = (dateString) => {
+    if (!dateString) return 'Recently';
+    
+    const date = new Date(dateString);
+    const now = new Date();
+    const diffTime = Math.abs(now - date);
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    
+    if (diffDays === 0) return 'Today';
+    if (diffDays === 1) return 'Yesterday';
+    if (diffDays < 7) return `${diffDays} days ago`;
+    if (diffDays < 30) return `${Math.floor(diffDays / 7)} weeks ago`;
+    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  };
 
   const handleBlogPress = (blogPost) => {
-    console.log('Blog post pressed:', blogPost.title);
-    // Navigate to blog detail screen
-    navigation.navigate('BlogDetail', { blogId: blogPost.id });
+    console.log('📖 [BLOG_SECTION] Blog post pressed:', blogPost.title);
+    // Navigate with slug for better SEO and fallback to ID
+    navigation.navigate('BlogDetail', { 
+      blogSlug: blogPost.slug,
+      blogId: blogPost.id 
+    });
   };
 
   const handleViewAllBlogs = () => {
@@ -57,36 +113,47 @@ const BlogSection = ({ navigation }) => {
     </TouchableOpacity>
   );
 
+  // Don't render section if loading failed or no blogs
+  if (error || (!loading && blogPosts.length === 0)) {
+    console.log('🚫 [BLOG_SECTION] Not rendering section - error or no blogs');
+    return null;
+  }
+
   return (
     <View style={styles.container}>
       {/* Section Header */}
       <View style={styles.section}>
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>Latest from Blog</Text>
-          {/* TEMPORARILY DISABLED - BlogList screen not implemented */}
-          {/*
           <TouchableOpacity
             onPress={() => navigation.navigate('BlogList')}
             style={styles.viewAllButton}
           >
             <Text style={styles.viewAllText}>View All</Text>
-             <Ionicons name="chevron-forward" size={16} color="#F97316" />
+            <Ionicons name="chevron-forward" size={16} color="#F97316" />
           </TouchableOpacity>
-          */}
         </View>
       </View>
 
-      {/* Blog Posts Horizontal Scroll */}
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.scrollContainer}
-        decelerationRate="fast"
-        snapToInterval={280}
-        snapToAlignment="start"
-      >
-        {blogPosts.map((post, index) => renderBlogCard(post, index))}
-      </ScrollView>
+      {/* Loading State */}
+      {loading ? (
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color="#F97316" />
+          <Text style={styles.loadingText}>Loading blogs...</Text>
+        </View>
+      ) : (
+        /* Blog Posts Horizontal Scroll */
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.scrollContainer}
+          decelerationRate="fast"
+          snapToInterval={280}
+          snapToAlignment="start"
+        >
+          {blogPosts.map((post, index) => renderBlogCard(post, index))}
+        </ScrollView>
+      )}
     </View>
   );
 };
@@ -186,6 +253,17 @@ const styles = StyleSheet.create({
   publishedAt: {
     fontSize: 12,
     color: '#9CA3AF',
+    fontWeight: '500',
+  },
+  loadingContainer: {
+    paddingVertical: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  loadingText: {
+    marginTop: 12,
+    fontSize: 14,
+    color: '#6B7280',
     fontWeight: '500',
   },
 });
