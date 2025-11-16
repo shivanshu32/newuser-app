@@ -23,7 +23,8 @@ const PoojaSection = () => {
   const fetchFeaturedPoojas = async () => {
     try {
       setLoading(true);
-      const response = await poojaAPI.getFeaturedPoojas();
+      // Temporarily fetch all published poojas (not just featured) until featured flag is set
+      const response = await poojaAPI.getPublishedPoojas({ limit: 5 });
       if (response.success) {
         setPoojas(response.data || []);
       }
@@ -89,14 +90,36 @@ const PoojaSection = () => {
   
   if (loading) {
     return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#FF6B35" />
+      <View style={styles.container}>
+        <View style={styles.header}>
+          <View>
+            <Text style={styles.sectionTitle}>Sacred Poojas</Text>
+            <Text style={styles.sectionSubtitle}>Book divine ceremonies</Text>
+          </View>
+        </View>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color="#FF6B35" />
+          <Text style={styles.loadingText}>Loading poojas...</Text>
+        </View>
       </View>
     );
   }
   
   if (poojas.length === 0) {
-    return null;
+    console.log('🚫 [POOJA_SECTION] No poojas available');
+    return (
+      <View style={styles.container}>
+        <View style={styles.header}>
+          <View>
+            <Text style={styles.sectionTitle}>Sacred Poojas</Text>
+            <Text style={styles.sectionSubtitle}>Book divine ceremonies</Text>
+          </View>
+        </View>
+        <View style={styles.emptyContainer}>
+          <Text style={styles.emptyText}>No poojas available at the moment.</Text>
+        </View>
+      </View>
+    );
   }
   
   return (
@@ -219,6 +242,21 @@ const styles = StyleSheet.create({
   loadingContainer: {
     padding: 20,
     alignItems: 'center',
+  },
+  loadingText: {
+    marginTop: 8,
+    fontSize: 14,
+    color: '#666',
+  },
+  emptyContainer: {
+    padding: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  emptyText: {
+    fontSize: 14,
+    color: '#666',
+    textAlign: 'center',
   },
 });
 

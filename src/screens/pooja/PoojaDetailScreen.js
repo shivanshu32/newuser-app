@@ -11,7 +11,7 @@ import {
   Dimensions,
   TextInput
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import poojaAPI from '../../services/poojaAPI';
@@ -24,6 +24,7 @@ const PoojaDetailScreen = () => {
   const navigation = useNavigation();
   const route = useRoute();
   const { user } = useAuth();
+  const insets = useSafeAreaInsets();
   const { poojaId } = route.params;
   
   const [pooja, setPooja] = useState(null);
@@ -80,14 +81,23 @@ const PoojaDetailScreen = () => {
       return;
     }
     
+    // Validate required user details (only name and mobile are required)
+    if (!user.name || !user.mobile) {
+      Alert.alert(
+        'Incomplete Profile', 
+        'Please update your profile with name and mobile number before booking.'
+      );
+      return;
+    }
+    
     try {
       setBookingLoading(true);
       
-      // Prepare user details
+      // Prepare user details (use 'mobile' from user object, map to 'mobileNumber' for API)
       const userDetails = {
-        name: user.name || '',
-        email: user.email || '',
-        mobileNumber: user.mobileNumber || '',
+        name: user.name,
+        email: user.email,
+        mobileNumber: user.mobile, // User model has 'mobile', API expects 'mobileNumber'
         address: user.address || '',
         city: user.city || '',
         state: user.state || '',
@@ -103,7 +113,13 @@ const PoojaDetailScreen = () => {
       );
       
       if (response.success) {
-        const { order, booking, pooja: poojaData } = response.data;
+        const { order, booking, transaction, pooja: poojaData } = response.data;
+        
+        console.log('✅ [POOJA_BOOKING] Order created successfully:', {
+          orderId: order?.id,
+          bookingId: booking?.id,
+          transactionId: transaction?.id
+        });
         
         // Navigate to Razorpay payment screen
         navigation.navigate('RazorpayPayment', {
@@ -111,7 +127,7 @@ const PoojaDetailScreen = () => {
             id: order.id,
             amount: order.amount,
             currency: order.currency,
-            transactionId: booking.transaction.id
+            transactionId: transaction.id
           },
           config: {
             key: 'rzp_live_7EGPTOGoJ2TPWL',
@@ -121,7 +137,7 @@ const PoojaDetailScreen = () => {
             prefill: {
               name: user.name,
               email: user.email,
-              contact: user.mobileNumber
+              contact: user.mobile // Use 'mobile' from user object
             },
             theme: {
               color: '#FF6B35'
@@ -131,15 +147,22 @@ const PoojaDetailScreen = () => {
           user: {
             name: user.name,
             email: user.email,
-            mobileNumber: user.mobileNumber
+            mobileNumber: user.mobile // Use 'mobile' from user object
           },
           paymentType: 'pooja_booking',
           bookingId: booking.id
         });
       }
     } catch (error) {
-      console.error('Error creating booking:', error);
-      Alert.alert('Error', error.message || 'Failed to create booking. Please try again.');
+      console.error('❌ [POOJA_BOOKING] Error creating booking:', error);
+      console.error('❌ [POOJA_BOOKING] Error details:', {
+        message: error.message,
+        response: error.response?.data,
+        stack: error.stack
+      });
+      
+      const errorMessage = error.response?.data?.message || error.message || 'Failed to create booking. Please try again.';
+      Alert.alert('Booking Failed', errorMessage);
     } finally {
       setBookingLoading(false);
     }
@@ -316,7 +339,7 @@ const PoojaDetailScreen = () => {
       
       {/* Bottom Button */}
       {selectedPackage && (
-        <View style={styles.bottomBar}>
+        <View style={[styles.bottomBar, { paddingBottom: Math.max(insets.bottom, 12) }]}>
           <View style={styles.bottomBarContent}>
             <View>
               <Text style={styles.bottomBarLabel}>Total Amount</Text>

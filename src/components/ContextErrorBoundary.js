@@ -29,7 +29,8 @@ class ContextErrorBoundary extends React.Component {
 
   render() {
     if (this.state.hasError) {
-      // Fallback UI for this specific context
+      // Don't render children when there's an error - this prevents rendering loops
+      // Only show error UI without the failed context
       return (
         <View style={styles.errorContainer}>
           <Text style={styles.errorTitle}>
@@ -38,10 +39,12 @@ class ContextErrorBoundary extends React.Component {
           <Text style={styles.errorMessage}>
             {this.props.fallbackMessage || 'Something went wrong with this service'}
           </Text>
+          <Text style={styles.errorDetails}>
+            The app will continue without this feature.
+          </Text>
           <TouchableOpacity style={styles.retryButton} onPress={this.handleRetry}>
             <Text style={styles.retryText}>Retry</Text>
           </TouchableOpacity>
-          {this.props.children}
         </View>
       );
     }
@@ -68,7 +71,14 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#7F1D1D',
     textAlign: 'center',
+    marginBottom: 8,
+  },
+  errorDetails: {
+    fontSize: 12,
+    color: '#991B1B',
+    textAlign: 'center',
     marginBottom: 16,
+    fontStyle: 'italic',
   },
   retryButton: {
     backgroundColor: '#DC2626',

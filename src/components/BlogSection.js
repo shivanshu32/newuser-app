@@ -27,10 +27,11 @@ const BlogSection = ({ navigation }) => {
     try {
       setLoading(true);
       setError(null);
-      console.log('📚 [BLOG_SECTION] Fetching featured blogs from API...');
+      console.log('📚 [BLOG_SECTION] Fetching blogs from API...');
       
-      const response = await blogAPI.getFeaturedBlogs(3);
-      console.log('✅ [BLOG_SECTION] Featured blogs fetched:', response);
+      // Temporarily fetch all published blogs (not just featured) until featured flag is set
+      const response = await blogAPI.getBlogs({ limit: 3, status: 'published', sortBy: 'publishedAt', sortOrder: 'desc' });
+      console.log('✅ [BLOG_SECTION] Blogs fetched:', response);
       
       // Transform backend data to match component expectations
       const transformedBlogs = (response.data || []).map(blog => ({
@@ -113,10 +114,38 @@ const BlogSection = ({ navigation }) => {
     </TouchableOpacity>
   );
 
-  // Don't render section if loading failed or no blogs
-  if (error || (!loading && blogPosts.length === 0)) {
-    console.log('🚫 [BLOG_SECTION] Not rendering section - error or no blogs');
-    return null;
+  // Show section even with errors for debugging
+  if (error) {
+    console.log('🚫 [BLOG_SECTION] Error loading blogs:', error);
+    return (
+      <View style={styles.container}>
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>Latest from Blog</Text>
+          </View>
+        </View>
+        <View style={styles.errorContainer}>
+          <Text style={styles.errorText}>Unable to load blogs. Please try again later.</Text>
+        </View>
+      </View>
+    );
+  }
+  
+  // Don't render if no blogs after loading
+  if (!loading && blogPosts.length === 0) {
+    console.log('🚫 [BLOG_SECTION] No blogs available');
+    return (
+      <View style={styles.container}>
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>Latest from Blog</Text>
+          </View>
+        </View>
+        <View style={styles.errorContainer}>
+          <Text style={styles.errorText}>No blogs available at the moment.</Text>
+        </View>
+      </View>
+    );
   }
 
   return (
@@ -265,6 +294,17 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#6B7280',
     fontWeight: '500',
+  },
+  errorContainer: {
+    paddingVertical: 20,
+    paddingHorizontal: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  errorText: {
+    fontSize: 14,
+    color: '#6B7280',
+    textAlign: 'center',
   },
 });
 

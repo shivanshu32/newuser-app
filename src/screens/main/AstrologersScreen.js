@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -17,7 +17,7 @@ import { Ionicons, MaterialIcons, FontAwesome } from '@expo/vector-icons';
 import { useAuth } from '../../context/AuthContext';
 import { astrologersAPI } from '../../services/api';
 
-const AstrologersScreen = ({ navigation }) => {
+const AstrologersScreen = ({ navigation, route }) => {
   const { user } = useAuth();
   const [astrologers, setAstrologers] = useState([]);
   const [filteredAstrologers, setFilteredAstrologers] = useState([]);
@@ -25,6 +25,15 @@ const AstrologersScreen = ({ navigation }) => {
   const [refreshing, setRefreshing] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [filterType, setFilterType] = useState('all'); // 'all', 'online', 'offline'
+  const autoStartAttemptedRef = useRef(false);
+  
+  // Get prepaid recharge card params if navigated from home screen
+  const isPrepaidRechargeCard = route.params?.isPrepaidRechargeCard || false;
+  const purchaseId = route.params?.purchaseId;
+  const durationMinutes = route.params?.durationMinutes;
+  const cardName = route.params?.cardName;
+  const astrologerAssignment = route.params?.astrologerAssignment || 'all';
+  const assignedAstrologers = route.params?.assignedAstrologers || [];
 
   // Fetch all astrologers data with pagination
   const fetchAstrologers = useCallback(async () => {
@@ -70,7 +79,7 @@ const AstrologersScreen = ({ navigation }) => {
   }, []);
 
   // Filter astrologers based on search query and filter type
-  const filterAstrologers = useCallback(() => {
+  const filterAstrologers = () => {
     let filtered = astrologers;
 
     // Filter by online status
@@ -94,8 +103,17 @@ const AstrologersScreen = ({ navigation }) => {
       );
     }
 
+    // If this is a prepaid recharge card flow with restricted astrologers,
+    // limit the list to only those astrologers allowed by the card
+    if (isPrepaidRechargeCard && assignedAstrologers.length > 0 && astrologerAssignment !== 'all') {
+      const allowedIds = assignedAstrologers.map(id => id.toString());
+      filtered = filtered.filter(astrologer =>
+        allowedIds.includes((astrologer._id || astrologer.id || '').toString())
+      );
+    }
+
     setFilteredAstrologers(filtered);
-  }, [astrologers, searchQuery, filterType]);
+  };
 
   useEffect(() => {
     fetchAstrologers();
@@ -103,7 +121,28 @@ const AstrologersScreen = ({ navigation }) => {
 
   useEffect(() => {
     filterAstrologers();
-  }, [filterAstrologers]);
+  }, [astrologers, searchQuery, filterType]);
+
+  // Auto-start flow for prepaid recharge cards that are restricted to a single astrologer
+  useEffect(() => {
+    if (!isPrepaidRechargeCard) return;
+    if (astrologerAssignment === 'all') return;
+    if (autoStartAttemptedRef.current) return;
+    if (!filteredAstrologers || filteredAstrologers.length !== 1) return;
+
+    const onlyAstrologer = filteredAstrologers[0];
+    if (!onlyAstrologer || !purchaseId) return;
+
+    console.log('💳 [ASTROLOGERS_SCREEN] Auto-starting prepaid recharge card chat with single allowed astrologer:', onlyAstrologer.name);
+    autoStartAttemptedRef.current = true;
+    handleAstrologerPress(onlyAstrologer);
+  }, [
+    isPrepaidRechargeCard,
+    astrologerAssignment,
+    filteredAstrologers,
+    purchaseId,
+    handleAstrologerPress
+  ]);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -111,8 +150,57 @@ const AstrologersScreen = ({ navigation }) => {
     setRefreshing(false);
   }, [fetchAstrologers]);
 
-  const handleAstrologerPress = (astrologer) => {
-    navigation.navigate('AstrologerProfile', { astrologer });
+  const handleAstrologerPress = async (astrologer) => {
+    // If this is a prepaid recharge card flow, start the chat session directly
+    if (isPrepaidRechargeCard && purchaseId) {
+      console.log('💳 [ASTROLOGERS_SCREEN] Starting prepaid recharge card chat with:', astrologer.name);
+      
+      Alert.alert(
+        'Start Chat',
+        `Start ${durationMinutes} minute chat with ${astrologer.name}?\n\nUsing: ${cardName}`,
+        [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Start Chat',
+            onPress: async () => {
+              try {
+                setLoading(true);
+                
+                // Import the API
+                const prepaidRechargeCardsAPI = require('../../services/prepaidRechargeCardsAPI').default;
+                
+                // Create session
+                const response = await prepaidRechargeCardsAPI.startChatSession(
+                  purchaseId,
+                  astrologer._id
+                );
+
+                console.log('✅ [ASTROLOGERS_SCREEN] Session created:', response.data);
+
+                // Navigate to FixedChatScreen
+                navigation.navigate('FixedChatScreen', {
+                  sessionId: response.data.sessionId,
+                  astrologerId: astrologer._id,
+                  durationMinutes: response.data.durationMinutes,
+                  isPrepaidCard: true,
+                  purchaseId: purchaseId,
+                  cardName: cardName,
+                  consultationType: 'chat'
+                });
+              } catch (error) {
+                console.error('❌ [ASTROLOGERS_SCREEN] Error starting chat:', error);
+                Alert.alert('Error', error.message || 'Failed to start chat session');
+              } finally {
+                setLoading(false);
+              }
+            }
+          }
+        ]
+      );
+    } else {
+      // Normal flow - navigate to profile
+      navigation.navigate('AstrologerProfile', { astrologer });
+    }
   };
 
   // Get status outline color based on astrologer onlineStatus
@@ -215,6 +303,18 @@ const AstrologersScreen = ({ navigation }) => {
             </View>
           </View>
         </View>
+
+        {/* Prepaid card restriction badge */}
+        {isPrepaidRechargeCard && astrologerAssignment !== 'all' && (
+          <View style={styles.prepaidBadgeContainer}>
+            <Text style={styles.prepaidBadgeTitle} numberOfLines={1}>
+              {cardName || 'Prepaid Chat Pack'}
+            </Text>
+            <Text style={styles.prepaidBadgeText}>
+              This prepaid chat pack is valid only for selected astrologers.
+            </Text>
+          </View>
+        )}
 
         {/* Price and Quick Actions Section */}
         <View style={styles.cardFooter}>
@@ -343,6 +443,18 @@ const AstrologersScreen = ({ navigation }) => {
         <View style={styles.placeholder} />
       </View>
 
+      {/* Prepaid card restriction badge */}
+      {(isPrepaidRechargeCard && astrologerAssignment !== 'all') && (
+        <View style={styles.prepaidBadgeContainer}>
+          <Text style={styles.prepaidBadgeTitle} numberOfLines={1}>
+            {cardName || 'Prepaid Chat Pack'}
+          </Text>
+          <Text style={styles.prepaidBadgeText}>
+            This prepaid chat pack is valid only for selected astrologers.
+          </Text>
+        </View>
+      )}
+
       {/* Astrologers List */}
       <FlatList
         data={filteredAstrologers}
@@ -375,230 +487,22 @@ const AstrologersScreen = ({ navigation }) => {
 };
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#FFFFFF',
-  },
-  contentWrapper: {
-    flex: 1,
-    maxWidth: 500, // Responsive max width for tablets
-    alignSelf: 'center',
-    width: '100%',
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    paddingTop: 8, // SafeAreaView now handles safe area properly
-    borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
-  },
-  backButton: {
-    padding: 8,
-  },
-  headerTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#1F2937',
-  },
-  placeholder: {
-    width: 40,
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  loadingText: {
-    marginTop: 16,
-    fontSize: 16,
-    color: '#6B7280',
-  },
-  listContainer: {
-    paddingBottom: 20,
-  },
-  headerContainer: {
-    padding: 16,
-    backgroundColor: '#FFFFFF',
-  },
-  searchContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#F3F4F6',
-    borderRadius: 12,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    marginBottom: 16,
-  },
-  searchIcon: {
-    marginRight: 8,
-  },
-  searchInput: {
-    flex: 1,
-    fontSize: 16,
-    color: '#1F2937',
-  },
-  filterContainer: {
-    flexDirection: 'row',
-    marginBottom: 16,
-  },
-  filterButton: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
-    backgroundColor: '#F3F4F6',
-    marginRight: 8,
-  },
-  activeFilterButton: {
-    backgroundColor: '#F97316',
-  },
-  filterButtonText: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: '#6B7280',
-  },
-  activeFilterButtonText: {
-    color: '#FFFFFF',
-  },
-  resultsCount: {
-    fontSize: 14,
-    color: '#6B7280',
-    fontWeight: '500',
-  },
-  astrologerCard: {
-    backgroundColor: '#FFFFFF',
+  // ...
+  prepaidBadgeContainer: {
     marginHorizontal: 16,
-    marginVertical: 8,
-    borderRadius: 16,
-    elevation: 3,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
+    marginTop: 8,
+    marginBottom: 4,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    backgroundColor: '#EFF6FF',
     borderWidth: 1,
-    borderColor: '#F3F4F6',
+    borderColor: '#BFDBFE',
   },
-  cardHeader: {
-    flexDirection: 'row',
-    padding: 16,
-    paddingBottom: 12,
-  },
-  imageSection: {
-    marginRight: 12,
-  },
-  astrologerImageContainer: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    borderWidth: 3,
-    padding: 2,
-    position: 'relative',
-  },
-  astrologerImage: {
-    width: '100%',
-    height: '100%',
-    borderRadius: 37,
-    backgroundColor: '#F3F4F6',
-  },
-  statusBadge: {
-    position: 'absolute',
-    bottom: 2,
-    right: 2,
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 2,
-    borderColor: '#FFFFFF',
-  },
-  statusDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: '#FFFFFF',
-  },
-  astrologerMainInfo: {
-    flex: 1,
-    justifyContent: 'space-between',
-  },
-  nameAndStatus: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: 6,
-  },
-  astrologerName: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#1F2937',
-    flex: 1,
-    marginRight: 8,
-  },
-  statusChip: {
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 12,
-    minWidth: 70,
-    alignItems: 'center',
-  },
-  statusText: {
-    fontSize: 11,
-    fontWeight: '600',
-    textTransform: 'uppercase',
-  },
-  astrologerSpecialty: {
+  prepaidBadgeTitle: {
     fontSize: 13,
-    color: '#6B7280',
-    marginBottom: 8,
-    lineHeight: 18,
-  },
-  ratingSection: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  ratingContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  starContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginRight: 6,
-  },
-  rating: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#1F2937',
-    marginLeft: 4,
-  },
-  reviewCount: {
-    fontSize: 12,
-    color: '#6B7280',
-  },
-  experience: {
-    fontSize: 12,
-    color: '#6B7280',
-    fontWeight: '500',
-  },
-  cardFooter: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingBottom: 16,
-    paddingTop: 8,
-    borderTopWidth: 1,
-    borderTopColor: '#F3F4F6',
-  },
-  priceSection: {
-    flex: 1,
-  },
-  priceLabel: {
-    fontSize: 11,
+    fontWeight: '700',
+    color: '#1D4ED8',
     color: '#6B7280',
     marginBottom: 2,
   },

@@ -71,35 +71,45 @@ const OtpVerificationScreen = ({ route, navigation }) => {
     }
   }, [timer, canResend]); // Simple dependencies
 
-  // Enhanced OTP change handler with auto-fill support - completely optimized
+  // Enhanced OTP change handler with robust fast-typing and auto-fill support
   const handleOtpChange = useCallback((text, index) => {
-    // Check if the input contains multiple digits (auto-fill scenario)
-    if (text.length > 1) {
-      const digits = text.replace(/\D/g, '');
-      if (digits.length >= 4) {
-        const newOtp = digits.slice(0, 4).split('');
-        setOtp(newOtp);
-        setTimeout(() => inputRefs.current[3]?.focus(), 100);
-        return;
-      }
+    const digits = text.replace(/\D/g, '');
+
+    // If nothing was typed (clear), just clear this box
+    if (!digits) {
+      setOtp(prevOtp => {
+        if (!prevOtp[index]) return prevOtp;
+        const newOtp = [...prevOtp];
+        newOtp[index] = '';
+        return newOtp;
+      });
+      return;
     }
-    
-    // Handle single digit input - only update if different
-    const cleanText = text.replace(/\D/g, '');
+
+    // Distribute all digits starting from the current index
     setOtp(prevOtp => {
-      if (prevOtp[index] === cleanText) return prevOtp; // Prevent unnecessary re-render
-      
       const newOtp = [...prevOtp];
-      newOtp[index] = cleanText;
-      
-      // Auto-focus next input
-      if (cleanText && index < 3) {
-        setTimeout(() => inputRefs.current[index + 1]?.focus(), 100);
+      let cursorIndex = index;
+      let remaining = digits;
+
+      while (cursorIndex < 4 && remaining.length > 0) {
+        const nextDigit = remaining[0];
+        remaining = remaining.slice(1);
+        newOtp[cursorIndex] = nextDigit;
+        cursorIndex += 1;
       }
-      
+
+      // Move focus to the next empty or last filled box
+      const nextFocusIndex = Math.min(cursorIndex - 1, 3);
+      if (nextFocusIndex > index && nextFocusIndex < 4) {
+        setTimeout(() => inputRefs.current[nextFocusIndex]?.focus(), 50);
+      } else if (digits && index < 3) {
+        setTimeout(() => inputRefs.current[index + 1]?.focus(), 50);
+      }
+
       return newOtp;
     });
-  }, []); // Removed otp dependency to prevent re-renders
+  }, []); // No otp dependency to avoid extra re-renders
 
   const handleKeyPress = useCallback((e, index) => {
     if (e.nativeEvent.key === 'Backspace' && index > 0) {
@@ -189,73 +199,78 @@ const OtpVerificationScreen = ({ route, navigation }) => {
       <KeyboardAvoidingView
         style={styles.container}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 56 : 40}
       >
-        <View style={styles.content}>
-          <View style={styles.contentInner}>
-            <Text style={styles.title}>Enter OTP</Text>
-            
-            <View style={styles.subtitleContainer}>
-              <Text style={styles.subtitle}>Enter the 4-digit code sent to</Text>
-              <Text style={styles.phoneNumber}>+91 {phoneNumber}</Text>
-            </View>
+        <ScrollView
+          contentContainerStyle={styles.scrollContent}
+          keyboardShouldPersistTaps="handled"
+        >
+          <View style={styles.content}>
+            <View style={styles.contentInner}>
+              <Text style={styles.title}>Enter OTP</Text>
+              
+              <View style={styles.subtitleContainer}>
+                <Text style={styles.subtitle}>Enter the 4-digit code sent to</Text>
+                <Text style={styles.phoneNumber}>+91 {phoneNumber}</Text>
+              </View>
 
-            <View style={styles.otpContainer}>
-              {otp.map((digit, index) => (
-                <TextInput
-                  key={`otp-${index}`}
-                  ref={(ref) => (inputRefs.current[index] = ref)}
-                  style={styles.otpInput}
-                  keyboardType="number-pad"
-                  maxLength={index === 0 ? 4 : 1}
-                  value={digit}
-                  onChangeText={(text) => handleOtpChange(text, index)}
-                  onKeyPress={(e) => handleKeyPress(e, index)}
-                  placeholderTextColor="#9CA3AF"
-                  autoFocus={index === 0}
-                  textContentType={Platform.OS === 'ios' ? 'oneTimeCode' : undefined}
-                  autoComplete={Platform.OS === 'android' ? 'sms-otp' : 'one-time-code'}
-                  selectTextOnFocus={true}
-                  blurOnSubmit={false}
-                  returnKeyType="next"
-                  editable={!loading && !localLoading}
-                />
-              ))}
-            </View>
+              <View style={styles.otpContainer}>
+                {otp.map((digit, index) => (
+                  <TextInput
+                    key={`otp-${index}`}
+                    ref={(ref) => (inputRefs.current[index] = ref)}
+                    style={styles.otpInput}
+                    keyboardType="number-pad"
+                    maxLength={4}
+                    value={digit}
+                    onChangeText={(text) => handleOtpChange(text, index)}
+                    onKeyPress={(e) => handleKeyPress(e, index)}
+                    placeholderTextColor="#9CA3AF"
+                    autoFocus={index === 0}
+                    textContentType={Platform.OS === 'ios' ? 'oneTimeCode' : undefined}
+                    autoComplete={Platform.OS === 'android' ? 'sms-otp' : 'one-time-code'}
+                    selectTextOnFocus={true}
+                    blurOnSubmit={false}
+                    returnKeyType="next"
+                    editable={!loading && !localLoading}
+                  />
+                ))}
+              </View>
 
-            <View style={styles.buttonContainer}>
-              <TouchableOpacity
-                style={[styles.button, (loading || localLoading) && styles.buttonDisabled]}
-                onPress={handleVerifyOtp}
-                disabled={loading || localLoading}
-                activeOpacity={0.8}
-              >
-                {loading || localLoading ? (
-                  <ActivityIndicator color="#fff" size="small" />
-                ) : (
-                  <Text style={styles.buttonText}>Verify OTP</Text>
-                )}
-              </TouchableOpacity>
-
-              <View style={styles.resendContainer}>
-                <Text style={styles.resendText}>Didn't receive the code? </Text>
-                <View style={styles.resendActionContainer}>
-                  {canResend ? (
-                    <TouchableOpacity 
-                      onPress={handleResendOtp} 
-                      disabled={loading || localLoading}
-                      style={styles.resendButtonContainer}
-                    >
-                      <Text style={styles.resendButton}>Resend OTP</Text>
-                    </TouchableOpacity>
+              <View style={styles.buttonContainer}>
+                <TouchableOpacity
+                  style={[styles.button, (loading || localLoading) && styles.buttonDisabled]}
+                  onPress={handleVerifyOtp}
+                  disabled={loading || localLoading}
+                  activeOpacity={0.8}
+                >
+                  {loading || localLoading ? (
+                    <ActivityIndicator color="#fff" size="small" />
                   ) : (
-                    <Text style={styles.timer}>Resend in {timer}s</Text>
+                    <Text style={styles.buttonText}>Verify OTP</Text>
                   )}
+                </TouchableOpacity>
+
+                <View style={styles.resendContainer}>
+                  <Text style={styles.resendText}>Didn't receive the code? </Text>
+                  <View style={styles.resendActionContainer}>
+                    {canResend ? (
+                      <TouchableOpacity 
+                        onPress={handleResendOtp} 
+                        disabled={loading || localLoading}
+                        style={styles.resendButtonContainer}
+                      >
+                        <Text style={styles.resendButton}>Resend OTP</Text>
+                      </TouchableOpacity>
+                    ) : (
+                      <Text style={styles.timer}>Resend in {timer}s</Text>
+                    )}
+                  </View>
                 </View>
               </View>
             </View>
           </View>
-        </View>
+        </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
@@ -271,6 +286,10 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#ffffff',
+  },
+  scrollContent: {
+    flexGrow: 1,
+    justifyContent: 'center',
   },
   content: {
     flex: 1,

@@ -182,17 +182,17 @@ export default function App() {
                     onError={(error) => console.error('Socket context crashed:', error)}
                   >
                     <SocketProvider>
-                      <ContextErrorBoundary 
-                        contextName="FreeChat" 
-                        fallbackMessage="Free chat service failed. Free chat features may be unavailable."
-                        onError={(error) => console.error('FreeChat context crashed:', error)}
-                      >
-                        <FreeChatProvider>
-                          <NavigationContainer>
+                      <NavigationContainer>
+                        <ContextErrorBoundary 
+                          contextName="FreeChat" 
+                          fallbackMessage="Free chat service failed. Free chat features may be unavailable."
+                          onError={(error) => console.error('FreeChat context crashed:', error)}
+                        >
+                          <FreeChatProvider>
                             <AppContent />
-                          </NavigationContainer>
-                        </FreeChatProvider>
-                      </ContextErrorBoundary>
+                          </FreeChatProvider>
+                        </ContextErrorBoundary>
+                      </NavigationContainer>
                     </SocketProvider>
                   </ContextErrorBoundary>
                 </NotificationProvider>

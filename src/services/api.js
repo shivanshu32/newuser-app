@@ -405,10 +405,19 @@ export const blogAPI = {
   // Get featured blogs
   getFeaturedBlogs: async (limit = 3) => {
     try {
-      const response = await API.get(`/blogs?featured=true&limit=${limit}&status=published&sortBy=publishedAt&sortOrder=desc`);
+      const url = `/blogs?featured=true&limit=${limit}&status=published&sortBy=publishedAt&sortOrder=desc`;
+      console.log('📚 [BLOG_API] Fetching featured blogs from:', url);
+      const response = await API.get(url);
+      console.log('✅ [BLOG_API] Featured blogs response:', {
+        success: response.success,
+        count: response.count,
+        total: response.total,
+        dataLength: response.data?.length
+      });
       return response;
     } catch (error) {
       console.error('❌ [BLOG_API] Error fetching featured blogs:', error);
+      console.error('❌ [BLOG_API] Error details:', error.response?.data || error.message);
       throw error;
     }
   },

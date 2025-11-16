@@ -12,6 +12,8 @@ import BookingScreen from '../screens/main/BookingScreen';
 import WalletScreen from '../screens/main/WalletScreen';
 import WalletTopUpSummaryScreen from '../screens/main/WalletTopUpSummaryScreen';
 import PrepaidOfferPaymentScreen from '../screens/main/PrepaidOfferPaymentScreen';
+import PrepaidRechargeCardPaymentScreen from '../screens/main/PrepaidRechargeCardPaymentScreen';
+import PrepaidRechargeCardsListScreen from '../screens/main/PrepaidRechargeCardsListScreen';
 import RazorpayPaymentScreen from '../screens/main/RazorpayPaymentScreen';
 import ProfileScreen from '../screens/main/ProfileScreen';
 import AddUserProfile from '../screens/main/AddUserProfile';
@@ -72,6 +74,8 @@ const TabNavigator = () => {
             iconName = focused ? 'home' : 'home-outline';
           } else if (route.name === 'Bookings') {
             iconName = focused ? 'calendar' : 'calendar-outline';
+          } else if (route.name === 'Pooja') {
+            iconName = focused ? 'flame' : 'flame-outline';
           } else if (route.name === 'Wallet') {
             iconName = focused ? 'wallet' : 'wallet-outline';
           } else if (route.name === 'Profile') {
@@ -94,6 +98,14 @@ const TabNavigator = () => {
         name="Bookings" 
         component={BookingScreen} 
         options={{ headerShown: false }}
+      />
+      <Tab.Screen
+        name="Pooja"
+        component={PoojaListScreen}
+        options={{
+          headerShown: false,
+          tabBarLabel: 'Pooja',
+        }}
       />
       <Tab.Screen 
         name="Wallet" 
@@ -327,6 +339,16 @@ const MainNavigator = () => {
         <Stack.Screen 
           name="PrepaidOfferPayment" 
           component={PrepaidOfferPaymentScreen} 
+          options={{ headerShown: false }}
+        />
+        <Stack.Screen 
+          name="PrepaidRechargeCardPayment" 
+          component={PrepaidRechargeCardPaymentScreen} 
+          options={{ headerShown: false }}
+        />
+        <Stack.Screen 
+          name="PrepaidRechargeCardsList" 
+          component={PrepaidRechargeCardsListScreen} 
           options={{ headerShown: false }}
         />
         <Stack.Screen 

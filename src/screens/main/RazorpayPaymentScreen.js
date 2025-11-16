@@ -13,12 +13,13 @@ import { WebView } from 'react-native-webview';
 import { useAuth } from '../../context/AuthContext';
 import { walletAPI } from '../../services/api';
 import prepaidOffersAPI from '../../services/prepaidOffersAPI';
+import prepaidRechargeCardsAPI from '../../services/prepaidRechargeCardsAPI';
 import poojaAPI from '../../services/poojaAPI';
 import usePaymentTimeout from '../../hooks/usePaymentTimeout';
 import facebookTrackingService from '../../services/facebookTrackingService';
 
 const RazorpayPaymentScreen = ({ route, navigation }) => {
-  const { order, config, finalAmount, user, selectedPackage, paymentType, offerId, offerDetails, bookingId } = route.params;
+  const { order, config, finalAmount, user, selectedPackage, paymentType, offerId, offerDetails, bookingId, rechargeCardPurchaseId } = route.params;
   const { updateWalletBalance, updateUser } = useAuth();
   const [loading, setLoading] = useState(true);
   const [transactionId, setTransactionId] = useState(order?.transactionId || null);
@@ -164,6 +165,23 @@ const RazorpayPaymentScreen = ({ route, navigation }) => {
           data: verificationResponse?.data,
           fullResponse: verificationResponse
         });
+      } else if (paymentType === 'prepaid_recharge_card') {
+        // Handle prepaid recharge card payment verification
+        console.log('Verifying prepaid recharge card payment');
+        const verificationData = {
+          orderId: paymentData.order_id,
+          paymentId: paymentData.payment_id,
+          signature: paymentData.signature,
+          purchaseId: rechargeCardPurchaseId,
+        };
+
+        verificationResponse = await prepaidRechargeCardsAPI.verifyPayment(verificationData);
+        console.log('🎯 [PREPAID_RECHARGE_CARD_VERIFICATION] Response received:', {
+          success: verificationResponse?.success,
+          message: verificationResponse?.message,
+          data: verificationResponse?.data,
+          fullResponse: verificationResponse
+        });
       } else if (paymentType === 'pooja_booking') {
         // Handle pooja booking payment verification
         console.log('Verifying pooja booking payment for bookingId:', bookingId);
@@ -288,6 +306,9 @@ const RazorpayPaymentScreen = ({ route, navigation }) => {
         if (paymentType === 'prepaid_offer') {
           // Prepaid offer payment success message
           successMessage = `Payment Successful!\n\n${offerDetails?.description || 'Prepaid Chat Offer'}\n\nPayment Details:\n• Amount Paid: ₹${finalAmount}\n• Duration: ${offerDetails?.durationMinutes || 5} minutes\n• Astrologer: ${offerDetails?.astrologerName || 'Selected Astrologer'}\n\nYou can now start your prepaid chat session!\n\nPayment ID: ${paymentData.payment_id}`;
+        } else if (paymentType === 'prepaid_recharge_card') {
+          // Prepaid recharge card payment success message
+          successMessage = `Payment Successful!\n\nYour prepaid chat pack has been activated.\n\nYou can now see it under \"Your Prepaid Chat Packs\" on the home screen.\n\nPayment ID: ${paymentData.payment_id}`;
         } else if (paymentType === 'pooja_booking') {
           // Pooja booking payment success message
           const bookingData = verificationResponse.data?.booking;
@@ -316,8 +337,8 @@ const RazorpayPaymentScreen = ({ route, navigation }) => {
             {
               text: 'OK',
               onPress: async () => {
-                if (paymentType === 'prepaid_offer') {
-                  console.log('🔙 Navigating to Home screen after prepaid offer payment...');
+                if (paymentType === 'prepaid_offer' || paymentType === 'prepaid_recharge_card') {
+                  console.log('🔙 Navigating to Home screen after prepaid payment...');
                   // Small delay to ensure database update propagates
                   await new Promise(resolve => setTimeout(resolve, 1000));
                   navigation.navigate('Home');
@@ -447,27 +468,31 @@ const RazorpayPaymentScreen = ({ route, navigation }) => {
   // Safely escape user data for HTML
   const safeUserName = (user?.name || user?.displayName || 'User').replace(/["'<>&]/g, '');
   const safeUserEmail = (user?.email || '').replace(/["'<>&]/g, '');
-  const safeUserContact = (user?.mobileNumber || '').replace(/["'<>&]/g, '');
+  const safeUserContact = (user?.mobileNumber || user?.mobile || '').replace(/["'<>&]/g, '');
   
   const paymentHtml = `
 <!DOCTYPE html>
 <html>
 <head>
     <title>JyotishCall Payment</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <meta http-equiv="Content-Security-Policy" content="default-src 'self' 'unsafe-inline' 'unsafe-eval' https: data: blob:;">
     <script src="https://checkout.razorpay.com/v1/checkout.js" onerror="console.error('Failed to load Razorpay SDK')"></script>
     <style>
         body { 
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
             padding: 20px; 
+            padding-bottom: max(20px, env(safe-area-inset-bottom));
             text-align: center; 
             background: #f8f9fa;
             margin: 0;
+            min-height: 100vh;
+            box-sizing: border-box;
         }
         .container {
             max-width: 400px;
             margin: 0 auto;
+            margin-bottom: max(20px, env(safe-area-inset-bottom));
             background: white;
             border-radius: 12px;
             padding: 24px;
@@ -539,7 +564,7 @@ const RazorpayPaymentScreen = ({ route, navigation }) => {
         <h2>Wallet Top-up</h2>
         <div class="payment-info">
             <div class="amount">₹${finalAmount}</div>
-            <div class="order-id">Order ID: ${order.orderId}</div>
+            <div class="order-id">Order ID: ${order.id || order.orderId || 'N/A'}</div>
         </div>
         <button class="btn" onclick="startPayment()" id="payBtn">
             Pay ₹${finalAmount}
@@ -591,12 +616,12 @@ const RazorpayPaymentScreen = ({ route, navigation }) => {
             }
             
             var options = {
-                key: '${config.keyId}',
+                key: '${config.key || config.keyId}',
                 amount: ${order.amount},
                 currency: '${order.currency}',
                 name: 'JyotishCall',
                 description: 'Wallet Top-up',
-                order_id: '${order.orderId}',
+                order_id: '${order.id || order.orderId}',
                 theme: { color: '#F97316' },
                 prefill: {
                     name: '${safeUserName}',

@@ -24,12 +24,25 @@ const poojaAPI = {
   // Get featured poojas
   getFeaturedPoojas: async () => {
     try {
-      console.log('📿 [POOJA_API] Fetching featured poojas');
-      const response = await API.get('/poojas?status=published&featured=true&limit=5');
-      console.log('✅ [POOJA_API] Featured poojas fetched:', response.count);
+      const url = '/poojas?status=published&featured=true&limit=5';
+      console.log('🕊️ [POOJA_API] Fetching featured poojas from:', url);
+      const response = await API.get(url);
+      console.log('✅ [POOJA_API] Featured poojas response:', {
+        success: response.success,
+        count: response.count,
+        total: response.total,
+        dataLength: response.data?.length
+      });
+      console.log('🕊️ [POOJA_API] Pooja data:', response.data?.map(p => ({
+        id: p._id,
+        mainHeading: p.mainHeading,
+        status: p.status,
+        featured: p.featured
+      })));
       return response;
     } catch (error) {
       console.error('❌ [POOJA_API] Error fetching featured poojas:', error);
+      console.error('❌ [POOJA_API] Error details:', error.response?.data || error.message);
       throw error;
     }
   },

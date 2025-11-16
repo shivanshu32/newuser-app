@@ -239,7 +239,11 @@ const FreeChatContext = createContext();
 export function FreeChatProvider({ children }) {
   console.log('🚀 [FREE_CHAT_CONTEXT] FreeChatProvider rendering...');
   
+  // IMPORTANT: Do NOT wrap hooks in try-catch - this violates Rules of Hooks
+  // Hooks must be called unconditionally in the same order every render
+  // Any errors from the reducer are caught by the reducer's own try-catch and ContextErrorBoundary
   const [state, dispatch] = useReducer(freeChatReducer, initialState);
+  
   const persistenceRef = useRef({
     saveMessages: async () => { console.log('📦 [FREE_CHAT_CONTEXT] Persistence not initialized yet'); },
     loadMessages: async () => { console.log('📦 [FREE_CHAT_CONTEXT] Persistence not initialized yet'); return []; },
@@ -255,17 +259,33 @@ export function FreeChatProvider({ children }) {
   useEffect(() => {
     const initializePersistence = async () => {
       try {
+        console.log('🔄 [FREE_CHAT_CONTEXT] Starting persistence service initialization...');
+        
         // Dynamically import the persistence service to avoid import-time errors
         const { default: FreeChatMessagePersistence } = await import('../services/FreeChatMessagePersistence');
+        
+        if (!FreeChatMessagePersistence) {
+          throw new Error('FreeChatMessagePersistence module loaded but is undefined');
+        }
+        
         persistenceRef.current = FreeChatMessagePersistence;
         console.log('✅ [FREE_CHAT_CONTEXT] FreeChatMessagePersistence initialized successfully');
       } catch (error) {
         console.error('❌ [FREE_CHAT_CONTEXT] Failed to initialize FreeChatMessagePersistence:', error);
-        // Keep the fallback service
+        console.error('❌ [FREE_CHAT_CONTEXT] Error details:', error.message, error.stack);
+        console.log('ℹ️ [FREE_CHAT_CONTEXT] Continuing with fallback no-op persistence service');
+        // Keep the fallback service - app will continue without persistence
       }
     };
 
-    initializePersistence();
+    // Wrap in try-catch to prevent any synchronous errors from crashing the context
+    try {
+      initializePersistence().catch(error => {
+        console.error('❌ [FREE_CHAT_CONTEXT] Async initialization error:', error);
+      });
+    } catch (syncError) {
+      console.error('❌ [FREE_CHAT_CONTEXT] Synchronous initialization error:', syncError);
+    }
   }, []);
 
   // Auto-save messages to persistence when they change

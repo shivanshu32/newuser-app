@@ -6,29 +6,55 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
  */
 class FreeChatMessagePersistence {
   constructor() {
-    try {
-      // In-memory cache for immediate access
-      this.messageCache = new Map();
-      
-      // Session storage for current app session
-      this.sessionCache = new Map();
-      
-      // Debounce timers for storage operations
-      this.saveTimers = new Map();
-      
-      // Storage keys
-      this.STORAGE_PREFIX = 'freechat_messages_';
-      this.SESSION_PREFIX = 'freechat_session_';
-      
-      // Test AsyncStorage availability
-      this.asyncStorageAvailable = true;
-      this.testAsyncStorage();
-      
-      console.log('📦 [MESSAGE_PERSISTENCE] Service initialized successfully');
-    } catch (error) {
-      console.error('❌ [MESSAGE_PERSISTENCE] Failed to initialize service:', error);
-      this.asyncStorageAvailable = false;
+    // Don't call async methods in constructor - this causes crashes
+    // Initialize synchronously, test AsyncStorage lazily
+    this.messageCache = new Map();
+    this.sessionCache = new Map();
+    this.saveTimers = new Map();
+    
+    this.STORAGE_PREFIX = 'freechat_messages_';
+    this.SESSION_PREFIX = 'freechat_session_';
+    
+    // Lazy initialization flags
+    this.asyncStorageAvailable = false;
+    this.initialized = false;
+    this.initPromise = null;
+    
+    console.log('📦 [MESSAGE_PERSISTENCE] Service created (will initialize on first use)');
+  }
+
+  /**
+   * Initialize AsyncStorage on first use (lazy initialization)
+   * This prevents crashes during module load time
+   */
+  async initialize() {
+    // Already initialized
+    if (this.initialized) {
+      return true;
     }
+    
+    // Initialization in progress
+    if (this.initPromise) {
+      return this.initPromise;
+    }
+    
+    // Start initialization
+    this.initPromise = (async () => {
+      try {
+        console.log('🔄 [MESSAGE_PERSISTENCE] Initializing AsyncStorage...');
+        await this.testAsyncStorage();
+        this.initialized = true;
+        console.log('✅ [MESSAGE_PERSISTENCE] Service initialized successfully');
+        return true;
+      } catch (error) {
+        console.error('❌ [MESSAGE_PERSISTENCE] Failed to initialize:', error);
+        this.asyncStorageAvailable = false;
+        this.initialized = false;
+        return false;
+      }
+    })();
+    
+    return this.initPromise;
   }
 
   /**
@@ -63,6 +89,9 @@ class FreeChatMessagePersistence {
    * Save messages to all persistence layers
    */
   async saveMessages(freeChatId, messages, options = {}) {
+    // Ensure initialized before use
+    await this.initialize();
+    
     if (!freeChatId || !Array.isArray(messages)) {
       console.warn('📦 [MESSAGE_PERSISTENCE] Invalid parameters for saveMessages');
       return;
@@ -141,6 +170,9 @@ class FreeChatMessagePersistence {
    * Load messages from all persistence layers (fastest to slowest)
    */
   async loadMessages(freeChatId) {
+    // Ensure initialized before use
+    await this.initialize();
+    
     if (!freeChatId) {
       console.warn('📦 [MESSAGE_PERSISTENCE] Invalid freeChatId for loadMessages');
       return [];
@@ -204,6 +236,9 @@ class FreeChatMessagePersistence {
    * Add a single message to persistence
    */
   async addMessage(freeChatId, message) {
+    // Ensure initialized before use
+    await this.initialize();
+    
     try {
       const existingMessages = await this.loadMessages(freeChatId);
       
@@ -234,6 +269,9 @@ class FreeChatMessagePersistence {
    * Merge messages from backend with persisted messages
    */
   async mergeMessages(freeChatId, backendMessages) {
+    // Ensure initialized before use
+    await this.initialize();
+    
     try {
       const persistedMessages = await this.loadMessages(freeChatId);
       
@@ -280,6 +318,9 @@ class FreeChatMessagePersistence {
    * Clear messages for a specific session
    */
   async clearMessages(freeChatId) {
+    // Ensure initialized before use
+    await this.initialize();
+    
     try {
       // Clear from all caches
       this.messageCache.delete(freeChatId);
