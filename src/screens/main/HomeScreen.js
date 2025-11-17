@@ -230,13 +230,11 @@ const HomeScreen = ({ navigation }) => {
   const handleStartPrepaidRechargeChat = useCallback((offer) => {
     console.log('💳 [HOME_SCREEN] Starting prepaid recharge chat:', offer);
     
-    // Navigate to astrologer selection with prepaid card details
-    navigation.navigate('AstrologerList', {
-      isPrepaidRechargeCard: true,
+    // Navigate to prepaid chat pack astrologer selection screen
+    navigation.navigate('PrepaidChatPackAstrologers', {
       purchaseId: offer._id,
       durationMinutes: offer.purchaseDetails?.durationMinutes,
       cardName: offer.purchaseDetails?.displayName,
-      offerType: 'prepaid_recharge_card',
       astrologerAssignment: offer.card?.astrologerAssignment,
       assignedAstrologers: offer.card?.assignedAstrologers || []
     });
@@ -2724,7 +2722,11 @@ const HomeScreen = ({ navigation }) => {
       case 'header':
         return renderHeader();
       case 'bannerCarousel':
-        return <BannerCarousel onBannerPress={handleBannerPress} />;
+        return (
+          <View style={{ marginVertical: 0 }}>
+            <BannerCarousel onBannerPress={handleBannerPress} />
+          </View>
+        );
       case 'freeChat':
         return <FreeChatCard navigation={navigation} />;
       case 'prepaidOffersHeader':
@@ -2752,7 +2754,6 @@ const HomeScreen = ({ navigation }) => {
               <MaterialIcons name="card-giftcard" size={24} color="#4CAF50" />
               <Text style={styles.sectionHeaderTitle}>Your Prepaid Chat Packs</Text>
             </View>
-            <Text style={styles.sectionHeaderSubtitle}>Start your guaranteed chat session</Text>
           </View>
         );
       case 'prepaidRechargeOffer':

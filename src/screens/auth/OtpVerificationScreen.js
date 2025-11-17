@@ -11,6 +11,7 @@ import {
   Alert,
   StatusBar,
   Dimensions,
+  ScrollView,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -30,6 +31,8 @@ const OtpVerificationScreen = ({ route, navigation }) => {
   const inputRefs = useRef([]);
   const isMountedRef = useRef(true);
   const timerRef = useRef(null);
+  const scrollViewRef = useRef(null);
+  const buttonRef = useRef(null);
 
   // Handle navigation when token is set (successful verification)
   useEffect(() => {
@@ -198,12 +201,14 @@ const OtpVerificationScreen = ({ route, navigation }) => {
 
       <KeyboardAvoidingView
         style={styles.container}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 56 : 40}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 56 : 0}
       >
         <ScrollView
+          ref={scrollViewRef}
           contentContainerStyle={styles.scrollContent}
           keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
         >
           <View style={styles.content}>
             <View style={styles.contentInner}>
@@ -227,6 +232,21 @@ const OtpVerificationScreen = ({ route, navigation }) => {
                     onKeyPress={(e) => handleKeyPress(e, index)}
                     placeholderTextColor="#9CA3AF"
                     autoFocus={index === 0}
+                    onFocus={() => {
+                      // Scroll to button when keyboard appears
+                      setTimeout(() => {
+                        buttonRef.current?.measureLayout(
+                          scrollViewRef.current,
+                          (x, y) => {
+                            scrollViewRef.current?.scrollTo({
+                              y: y - 100,
+                              animated: true,
+                            });
+                          },
+                          () => {}
+                        );
+                      }, 300);
+                    }}
                     textContentType={Platform.OS === 'ios' ? 'oneTimeCode' : undefined}
                     autoComplete={Platform.OS === 'android' ? 'sms-otp' : 'one-time-code'}
                     selectTextOnFocus={true}
@@ -238,18 +258,20 @@ const OtpVerificationScreen = ({ route, navigation }) => {
               </View>
 
               <View style={styles.buttonContainer}>
-                <TouchableOpacity
-                  style={[styles.button, (loading || localLoading) && styles.buttonDisabled]}
-                  onPress={handleVerifyOtp}
-                  disabled={loading || localLoading}
-                  activeOpacity={0.8}
-                >
+                <View ref={buttonRef} collapsable={false}>
+                  <TouchableOpacity
+                    style={[styles.button, (loading || localLoading) && styles.buttonDisabled]}
+                    onPress={handleVerifyOtp}
+                    disabled={loading || localLoading}
+                    activeOpacity={0.8}
+                  >
                   {loading || localLoading ? (
                     <ActivityIndicator color="#fff" size="small" />
                   ) : (
                     <Text style={styles.buttonText}>Verify OTP</Text>
                   )}
-                </TouchableOpacity>
+                  </TouchableOpacity>
+                </View>
 
                 <View style={styles.resendContainer}>
                   <Text style={styles.resendText}>Didn't receive the code? </Text>
@@ -289,7 +311,7 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     flexGrow: 1,
-    justifyContent: 'center',
+    paddingBottom: 100,
   },
   content: {
     flex: 1,
@@ -297,11 +319,10 @@ const styles = StyleSheet.create({
     paddingVertical: 20,
   },
   contentInner: {
-    flex: 1,
-    justifyContent: 'center',
     maxWidth: 400,
     alignSelf: 'center',
     width: '100%',
+    paddingVertical: 40,
   },
   header: {
     flexDirection: 'row',
@@ -372,6 +393,7 @@ const styles = StyleSheet.create({
   },
   buttonContainer: {
     marginTop: 20,
+    paddingBottom: 30,
   },
   button: {
     backgroundColor: '#F97316',

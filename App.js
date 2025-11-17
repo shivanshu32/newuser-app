@@ -151,7 +151,20 @@ function AppContent() {
   }
 
   // Return the appropriate navigator based on auth state
-  return token ? <MainNavigator /> : <AuthNavigator />;
+  // Wrap MainNavigator with FreeChatProvider since free chat is only used when logged in
+  return token ? (
+    <ContextErrorBoundary 
+      contextName="FreeChat" 
+      fallbackMessage="Free chat service failed. Free chat features may be unavailable."
+      onError={(error) => console.error('FreeChat context crashed:', error)}
+    >
+      <FreeChatProvider>
+        <MainNavigator />
+      </FreeChatProvider>
+    </ContextErrorBoundary>
+  ) : (
+    <AuthNavigator />
+  );
 }
 
 export default function App() {
@@ -183,15 +196,7 @@ export default function App() {
                   >
                     <SocketProvider>
                       <NavigationContainer>
-                        <ContextErrorBoundary 
-                          contextName="FreeChat" 
-                          fallbackMessage="Free chat service failed. Free chat features may be unavailable."
-                          onError={(error) => console.error('FreeChat context crashed:', error)}
-                        >
-                          <FreeChatProvider>
-                            <AppContent />
-                          </FreeChatProvider>
-                        </ContextErrorBoundary>
+                        <AppContent />
                       </NavigationContainer>
                     </SocketProvider>
                   </ContextErrorBoundary>

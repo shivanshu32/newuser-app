@@ -130,7 +130,7 @@ const PoojaSection = () => {
           <Text style={styles.sectionSubtitle}>Book divine ceremonies</Text>
         </View>
         <TouchableOpacity onPress={() => navigation.navigate('PoojaList')}>
-          <Text style={styles.viewAll}>View All →</Text>
+          <Text style={styles.viewAll}>View All {'>'}</Text>
         </TouchableOpacity>
       </View>
       

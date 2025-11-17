@@ -21,6 +21,7 @@ import UpdateScreen from '../screens/UpdateScreen';
 import ProfileCompletionCheck from '../components/ProfileCompletionCheck';
 import AstrologerProfileScreen from '../screens/main/AstrologerProfileScreen';
 import AstrologersScreen from '../screens/main/AstrologersScreen';
+import PrepaidChatPackAstrologersScreen from '../screens/main/PrepaidChatPackAstrologersScreen';
 import BookingWaitingScreen from '../screens/main/BookingWaitingScreen';
 import PendingConsultationsScreen from '../screens/main/PendingConsultationsScreen';
 import ChatScreen from '../screens/session/ChatScreen';
@@ -274,6 +275,11 @@ const MainNavigator = () => {
         <Stack.Screen 
           name="Astrologers" 
           component={AstrologersScreen} 
+          options={{ headerShown: false }}
+        />
+        <Stack.Screen 
+          name="PrepaidChatPackAstrologers" 
+          component={PrepaidChatPackAstrologersScreen} 
           options={{ headerShown: false }}
         />
         <Stack.Screen 

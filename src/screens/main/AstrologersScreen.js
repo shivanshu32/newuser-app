@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import {
   View,
   Text,
@@ -20,8 +20,7 @@ import { astrologersAPI } from '../../services/api';
 const AstrologersScreen = ({ navigation, route }) => {
   const { user } = useAuth();
   const [astrologers, setAstrologers] = useState([]);
-  const [filteredAstrologers, setFilteredAstrologers] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [filterType, setFilterType] = useState('all'); // 'all', 'online', 'offline'
@@ -33,7 +32,11 @@ const AstrologersScreen = ({ navigation, route }) => {
   const durationMinutes = route.params?.durationMinutes;
   const cardName = route.params?.cardName;
   const astrologerAssignment = route.params?.astrologerAssignment || 'all';
-  const assignedAstrologers = route.params?.assignedAstrologers || [];
+  // Memoize array to prevent new reference on every render
+  const assignedAstrologers = useMemo(
+    () => route.params?.assignedAstrologers || [],
+    [route.params?.assignedAstrologers]
+  );
 
   // Fetch all astrologers data with pagination
   const fetchAstrologers = useCallback(async () => {
@@ -63,7 +66,6 @@ const AstrologersScreen = ({ navigation, route }) => {
       }
       
       setAstrologers(allAstrologers);
-      setFilteredAstrologers(allAstrologers);
       console.log(`📊 Total astrologers loaded: ${allAstrologers.length}`);
       
     } catch (error) {
@@ -78,8 +80,9 @@ const AstrologersScreen = ({ navigation, route }) => {
     }
   }, []);
 
-  // Filter astrologers based on search query and filter type
-  const filterAstrologers = () => {
+  // Filter astrologers based on search query and filter type using useMemo
+  const filteredAstrologers = useMemo(() => {
+    console.log('🔍 [FILTER] Starting filter with query:', searchQuery, 'filterType:', filterType);
     let filtered = astrologers;
 
     // Filter by online status
@@ -95,12 +98,30 @@ const AstrologersScreen = ({ navigation, route }) => {
 
     // Filter by search query
     if (searchQuery.trim()) {
-      filtered = filtered.filter(astrologer =>
-        astrologer.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        (Array.isArray(astrologer.specialization) && astrologer.specialization.some(spec => 
-          spec.toLowerCase().includes(searchQuery.toLowerCase())
-        ))
-      );
+      const query = searchQuery.toLowerCase();
+      filtered = filtered.filter(astrologer => {
+        // Check name
+        if (astrologer.name?.toLowerCase().includes(query)) {
+          return true;
+        }
+        // Check displayName
+        if (astrologer.displayName?.toLowerCase().includes(query)) {
+          return true;
+        }
+        // Check specialties array
+        if (Array.isArray(astrologer.specialties) && astrologer.specialties.some(spec => 
+          spec.toLowerCase().includes(query)
+        )) {
+          return true;
+        }
+        // Check specialization array (fallback)
+        if (Array.isArray(astrologer.specialization) && astrologer.specialization.some(spec => 
+          spec.toLowerCase().includes(query)
+        )) {
+          return true;
+        }
+        return false;
+      });
     }
 
     // If this is a prepaid recharge card flow with restricted astrologers,
@@ -112,45 +133,11 @@ const AstrologersScreen = ({ navigation, route }) => {
       );
     }
 
-    setFilteredAstrologers(filtered);
-  };
+    console.log('🔍 [FILTER] Filtered results:', filtered.length, 'out of', astrologers.length);
+    return filtered;
+  }, [astrologers, searchQuery, filterType, isPrepaidRechargeCard, assignedAstrologers, astrologerAssignment]);
 
-  useEffect(() => {
-    fetchAstrologers();
-  }, [fetchAstrologers]);
-
-  useEffect(() => {
-    filterAstrologers();
-  }, [astrologers, searchQuery, filterType]);
-
-  // Auto-start flow for prepaid recharge cards that are restricted to a single astrologer
-  useEffect(() => {
-    if (!isPrepaidRechargeCard) return;
-    if (astrologerAssignment === 'all') return;
-    if (autoStartAttemptedRef.current) return;
-    if (!filteredAstrologers || filteredAstrologers.length !== 1) return;
-
-    const onlyAstrologer = filteredAstrologers[0];
-    if (!onlyAstrologer || !purchaseId) return;
-
-    console.log('💳 [ASTROLOGERS_SCREEN] Auto-starting prepaid recharge card chat with single allowed astrologer:', onlyAstrologer.name);
-    autoStartAttemptedRef.current = true;
-    handleAstrologerPress(onlyAstrologer);
-  }, [
-    isPrepaidRechargeCard,
-    astrologerAssignment,
-    filteredAstrologers,
-    purchaseId,
-    handleAstrologerPress
-  ]);
-
-  const onRefresh = useCallback(async () => {
-    setRefreshing(true);
-    await fetchAstrologers();
-    setRefreshing(false);
-  }, [fetchAstrologers]);
-
-  const handleAstrologerPress = async (astrologer) => {
+  const handleAstrologerPress = useCallback(async (astrologer) => {
     // If this is a prepaid recharge card flow, start the chat session directly
     if (isPrepaidRechargeCard && purchaseId) {
       console.log('💳 [ASTROLOGERS_SCREEN] Starting prepaid recharge card chat with:', astrologer.name);
@@ -201,10 +188,41 @@ const AstrologersScreen = ({ navigation, route }) => {
       // Normal flow - navigate to profile
       navigation.navigate('AstrologerProfile', { astrologer });
     }
-  };
+  }, [isPrepaidRechargeCard, purchaseId, durationMinutes, cardName, navigation]);
+
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await fetchAstrologers();
+    setRefreshing(false);
+  }, [fetchAstrologers]);
+
+  useEffect(() => {
+    fetchAstrologers();
+  }, [fetchAstrologers]);
+
+  // Auto-start flow for prepaid recharge cards that are restricted to a single astrologer
+  useEffect(() => {
+    if (!isPrepaidRechargeCard) return;
+    if (astrologerAssignment === 'all') return;
+    if (autoStartAttemptedRef.current) return;
+    if (!filteredAstrologers || filteredAstrologers.length !== 1) return;
+
+    const onlyAstrologer = filteredAstrologers[0];
+    if (!onlyAstrologer || !purchaseId) return;
+
+    console.log('💳 [ASTROLOGERS_SCREEN] Auto-starting prepaid recharge card chat with single allowed astrologer:', onlyAstrologer.name);
+    autoStartAttemptedRef.current = true;
+    handleAstrologerPress(onlyAstrologer);
+  }, [
+    isPrepaidRechargeCard,
+    astrologerAssignment,
+    filteredAstrologers,
+    purchaseId,
+    handleAstrologerPress
+  ]);
 
   // Get status outline color based on astrologer onlineStatus
-  const getStatusOutlineColor = (astrologer) => {
+  const getStatusOutlineColor = useCallback((astrologer) => {
     // Check if astrologer is online based on onlineStatus field
     const isOnline = astrologer.onlineStatus?.chat === 1 || astrologer.onlineStatus?.call === 1;
     
@@ -216,10 +234,10 @@ const AstrologersScreen = ({ navigation, route }) => {
       return '#4CAF50'; // Green for online
     }
     return '#9E9E9E'; // Grey for offline
-  };
+  }, []);
 
   // Get status text
-  const getStatusText = (astrologer) => {
+  const getStatusText = useCallback((astrologer) => {
     const isOnline = astrologer.onlineStatus?.chat === 1 || astrologer.onlineStatus?.call === 1;
     
     if (isOnline) {
@@ -230,7 +248,7 @@ const AstrologersScreen = ({ navigation, route }) => {
       return 'Available';
     }
     return 'Offline';
-  };
+  }, []);
 
   const renderAstrologerCard = ({ item: astrologer }) => {
     return (
@@ -357,7 +375,7 @@ const AstrologersScreen = ({ navigation, route }) => {
     );
   };
 
-  const renderFilterButton = (type, label) => (
+  const renderFilterButton = useCallback((type, label) => (
     <TouchableOpacity
       style={[
         styles.filterButton,
@@ -372,40 +390,14 @@ const AstrologersScreen = ({ navigation, route }) => {
         {label}
       </Text>
     </TouchableOpacity>
-  );
+  ), [filterType]);
 
-  const renderHeader = () => (
-    <View style={styles.headerContainer}>
-      {/* Search Bar */}
-      <View style={styles.searchContainer}>
-        <Ionicons name="search" size={20} color="#9CA3AF" style={styles.searchIcon} />
-        <TextInput
-          style={styles.searchInput}
-          placeholder="Search astrologers..."
-          value={searchQuery}
-          onChangeText={setSearchQuery}
-          placeholderTextColor="#9CA3AF"
-        />
-        {searchQuery.length > 0 && (
-          <TouchableOpacity onPress={() => setSearchQuery('')}>
-            <Ionicons name="close-circle" size={20} color="#9CA3AF" />
-          </TouchableOpacity>
-        )}
-      </View>
-
-      {/* Filter Buttons */}
-      <View style={styles.filterContainer}>
-        {renderFilterButton('all', 'All')}
-        {renderFilterButton('online', 'Online')}
-        {renderFilterButton('offline', 'Offline')}
-      </View>
-
-      {/* Results Count */}
-      <Text style={styles.resultsCount}>
-        {filteredAstrologers.length} astrologer{filteredAstrologers.length !== 1 ? 's' : ''} found
-      </Text>
-    </View>
-  );
+  // Simple header for results count only
+  const renderListHeader = useCallback(() => (
+    <Text style={styles.resultsCount}>
+      {filteredAstrologers.length} astrologer{filteredAstrologers.length !== 1 ? 's' : ''} found
+    </Text>
+  ), [filteredAstrologers.length]);
 
   if (loading) {
     return (
@@ -455,12 +447,36 @@ const AstrologersScreen = ({ navigation, route }) => {
         </View>
       )}
 
+      {/* Search Bar - Outside FlatList */}
+      <View style={styles.searchContainer}>
+        <Ionicons name="search" size={20} color="#9CA3AF" style={styles.searchIcon} />
+        <TextInput
+          style={styles.searchInput}
+          placeholder="Search astrologers..."
+          value={searchQuery}
+          onChangeText={setSearchQuery}
+          placeholderTextColor="#9CA3AF"
+        />
+        {searchQuery.length > 0 && (
+          <TouchableOpacity onPress={() => setSearchQuery('')}>
+            <Ionicons name="close-circle" size={20} color="#9CA3AF" />
+          </TouchableOpacity>
+        )}
+      </View>
+
+      {/* Filter Buttons - Outside FlatList */}
+      <View style={styles.filterContainer}>
+        {renderFilterButton('all', 'All')}
+        {renderFilterButton('online', 'Online')}
+        {renderFilterButton('offline', 'Offline')}
+      </View>
+
       {/* Astrologers List */}
       <FlatList
         data={filteredAstrologers}
         renderItem={renderAstrologerCard}
         keyExtractor={(item) => item._id}
-        ListHeaderComponent={renderHeader}
+        ListHeaderComponent={renderListHeader}
         contentContainerStyle={styles.listContainer}
         showsVerticalScrollIndicator={false}
         refreshControl={
@@ -487,22 +503,222 @@ const AstrologersScreen = ({ navigation, route }) => {
 };
 
 const styles = StyleSheet.create({
-  // ...
-  prepaidBadgeContainer: {
+  container: {
+    flex: 1,
+    backgroundColor: '#F9FAFB',
+  },
+  contentWrapper: {
+    flex: 1,
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    backgroundColor: '#FFFFFF',
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E7EB',
+  },
+  backButton: {
+    padding: 8,
+  },
+  headerTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#1F2937',
+  },
+  placeholder: {
+    width: 40,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingText: {
+    marginTop: 12,
+    fontSize: 16,
+    color: '#6B7280',
+  },
+  listContainer: {
+    paddingBottom: 20,
+  },
+  headerContainer: {
+    paddingHorizontal: 16,
+    paddingTop: 16,
+    paddingBottom: 8,
+    backgroundColor: '#FFFFFF',
+  },
+  searchContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F3F4F6',
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    marginBottom: 12,
+  },
+  searchIcon: {
+    marginRight: 8,
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: 16,
+    color: '#1F2937',
+  },
+  filterContainer: {
+    flexDirection: 'row',
+    marginHorizontal: 16,
+    marginTop: 12,
+    marginBottom: 16,
+  },
+  filterButton: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    backgroundColor: '#F3F4F6',
+    marginRight: 8,
+  },
+  activeFilterButton: {
+    backgroundColor: '#F97316',
+  },
+  filterButtonText: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#6B7280',
+  },
+  activeFilterButtonText: {
+    color: '#FFFFFF',
+  },
+  resultsCount: {
+    fontSize: 14,
+    color: '#6B7280',
     marginHorizontal: 16,
     marginTop: 8,
-    marginBottom: 4,
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    borderRadius: 8,
-    backgroundColor: '#EFF6FF',
-    borderWidth: 1,
-    borderColor: '#BFDBFE',
+    marginBottom: 8,
   },
-  prepaidBadgeTitle: {
+  astrologerCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    marginHorizontal: 16,
+    marginVertical: 8,
+    padding: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  cardHeader: {
+    flexDirection: 'row',
+    marginBottom: 12,
+  },
+  imageSection: {
+    marginRight: 12,
+  },
+  astrologerImageContainer: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    borderWidth: 3,
+    padding: 2,
+  },
+  astrologerImage: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 37,
+  },
+  statusBadge: {
+    position: 'absolute',
+    bottom: 2,
+    right: 2,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    borderWidth: 2,
+    borderColor: '#FFFFFF',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  statusDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#FFFFFF',
+  },
+  astrologerMainInfo: {
+    flex: 1,
+  },
+  nameAndStatus: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  astrologerName: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#1F2937',
+    flex: 1,
+    marginRight: 8,
+  },
+  statusChip: {
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 12,
+  },
+  statusText: {
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  astrologerSpecialty: {
     fontSize: 13,
-    fontWeight: '700',
-    color: '#1D4ED8',
+    color: '#6B7280',
+    marginBottom: 8,
+  },
+  ratingSection: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  ratingContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  starContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginRight: 4,
+  },
+  rating: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#1F2937',
+    marginLeft: 4,
+  },
+  reviewCount: {
+    fontSize: 12,
+    color: '#6B7280',
+  },
+  experience: {
+    fontSize: 12,
+    color: '#6B7280',
+    fontWeight: '500',
+  },
+  cardFooter: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#F3F4F6',
+  },
+  priceSection: {
+    flex: 1,
+  },
+  priceLabel: {
+    fontSize: 12,
     color: '#6B7280',
     marginBottom: 2,
   },
@@ -537,6 +753,27 @@ const styles = StyleSheet.create({
     backgroundColor: '#EFF6FF',
     borderWidth: 1,
     borderColor: '#3B82F6',
+  },
+  prepaidBadgeContainer: {
+    marginHorizontal: 16,
+    marginTop: 8,
+    marginBottom: 4,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    backgroundColor: '#EFF6FF',
+    borderWidth: 1,
+    borderColor: '#BFDBFE',
+  },
+  prepaidBadgeTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#1D4ED8',
+    marginBottom: 2,
+  },
+  prepaidBadgeText: {
+    fontSize: 12,
+    color: '#6B7280',
   },
   emptyContainer: {
     flex: 1,

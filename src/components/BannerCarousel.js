@@ -25,8 +25,6 @@ const BannerCarousel = ({ onBannerPress }) => {
   const banners = [
     require('../../assets/appbanner1.webp'),
     require('../../assets/appbanner2.webp'),
-    require('../../assets/appbanner3.webp'),
-    require('../../assets/appbanner4.webp'),
   ];
 
   // Auto-scroll functionality
@@ -78,7 +76,7 @@ const BannerCarousel = ({ onBannerPress }) => {
             <Image
               source={banner}
               style={styles.bannerImage}
-              resizeMode="cover"
+              resizeMode="contain"
               onLoad={() => console.log(`🖼️ Banner ${index + 1} loaded successfully`)}
               onError={(error) => console.log(`❌ Banner ${index + 1} failed to load:`, error.nativeEvent.error)}
             />
@@ -104,8 +102,9 @@ const BannerCarousel = ({ onBannerPress }) => {
 
 const styles = StyleSheet.create({
   container: {
-    marginBottom: 16,
     position: 'relative',
+    marginTop: -15, // Eliminate header's paddingBottom space
+    marginBottom: 20, // Standard spacing below banner to match other sections
   },
   scrollView: {
     height: 180,
@@ -117,14 +116,6 @@ const styles = StyleSheet.create({
   bannerImage: {
     width: screenWidth,
     height: 180,
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.1,
-    shadowRadius: 3.84,
-    elevation: 5,
   },
   paginationOverlay: {
     position: 'absolute',

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import {
   StyleSheet,
   View,
@@ -13,6 +13,7 @@ import {
   ScrollView,
   StatusBar,
   SafeAreaView,
+  Keyboard,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { useAuth } from '../../context/AuthContext';
@@ -21,6 +22,8 @@ const LoginScreen = () => {
   const navigation = useNavigation();
   const [phoneNumber, setPhoneNumber] = useState('');
   const { requestOtp, loading } = useAuth();
+  const scrollViewRef = useRef(null);
+  const buttonRef = useRef(null);
 
   const handleRequestOtp = () => {
     // Validate phone number
@@ -49,11 +52,14 @@ const LoginScreen = () => {
       <StatusBar backgroundColor="#ffffff" barStyle="dark-content" />
       <KeyboardAvoidingView
         style={styles.container}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
       >
         <ScrollView
+          ref={scrollViewRef}
           contentContainerStyle={styles.scrollContent}
           keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
         >
           <View style={styles.logoContainer}>
             <Image
@@ -81,21 +87,38 @@ const LoginScreen = () => {
                 value={phoneNumber}
                 onChangeText={setPhoneNumber}
                 maxLength={10}
+                onFocus={() => {
+                  // Scroll to button when keyboard appears
+                  setTimeout(() => {
+                    buttonRef.current?.measureLayout(
+                      scrollViewRef.current,
+                      (x, y) => {
+                        scrollViewRef.current?.scrollTo({
+                          y: y - 100,
+                          animated: true,
+                        });
+                      },
+                      () => {}
+                    );
+                  }, 300);
+                }}
               />
             </View>
 
-            <TouchableOpacity
-              style={styles.button}
-              onPress={handleRequestOtp}
-              disabled={loading}
-              activeOpacity={0.8}
-            >
-              {loading ? (
-                <ActivityIndicator color="#fff" size="small" />
-              ) : (
-                <Text style={styles.buttonText}>Get OTP</Text>
-              )}
-            </TouchableOpacity>
+            <View ref={buttonRef} collapsable={false}>
+              <TouchableOpacity
+                style={styles.button}
+                onPress={handleRequestOtp}
+                disabled={loading}
+                activeOpacity={0.8}
+              >
+                {loading ? (
+                  <ActivityIndicator color="#fff" size="small" />
+                ) : (
+                  <Text style={styles.buttonText}>Get OTP</Text>
+                )}
+              </TouchableOpacity>
+            </View>
           </View>
 
           <View style={styles.footer}>
@@ -122,8 +145,7 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     flexGrow: 1,
-    justifyContent: 'center',
-    minHeight: '100%',
+    paddingBottom: 100,
   },
   logoContainer: {
     alignItems: 'center',
@@ -148,6 +170,7 @@ const styles = StyleSheet.create({
   },
   formContainer: {
     marginBottom: 40,
+    paddingBottom: 30,
   },
   title: {
     fontSize: 24,
@@ -208,7 +231,7 @@ const styles = StyleSheet.create({
   footer: {
     paddingHorizontal: 20,
     paddingBottom: 24,
-    marginTop: 'auto',
+    marginTop: 40,
   },
   footerText: {
     fontSize: 12,

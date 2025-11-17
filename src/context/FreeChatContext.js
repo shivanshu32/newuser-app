@@ -235,25 +235,63 @@ function freeChatReducer(state, action) {
 // Context
 const FreeChatContext = createContext();
 
-// Provider component
+// Provider component with comprehensive error tracking
 export function FreeChatProvider({ children }) {
-  console.log('🚀 [FREE_CHAT_CONTEXT] FreeChatProvider rendering...');
+  try {
+    console.log('🚀 [FREE_CHAT_CONTEXT] FreeChatProvider rendering...');
+    console.log('🚀 [FREE_CHAT_CONTEXT] Children type:', typeof children);
+    console.log('🚀 [FREE_CHAT_CONTEXT] Children:', children);
+  } catch (e) {
+    console.error('❌ [FREE_CHAT_CONTEXT] Error in initial console.log:', e);
+  }
   
   // IMPORTANT: Do NOT wrap hooks in try-catch - this violates Rules of Hooks
   // Hooks must be called unconditionally in the same order every render
   // Any errors from the reducer are caught by the reducer's own try-catch and ContextErrorBoundary
-  const [state, dispatch] = useReducer(freeChatReducer, initialState);
   
-  const persistenceRef = useRef({
-    saveMessages: async () => { console.log('📦 [FREE_CHAT_CONTEXT] Persistence not initialized yet'); },
-    loadMessages: async () => { console.log('📦 [FREE_CHAT_CONTEXT] Persistence not initialized yet'); return []; },
-    addMessage: async () => { console.log('📦 [FREE_CHAT_CONTEXT] Persistence not initialized yet'); return []; },
-    mergeMessages: async (freeChatId, messages) => { console.log('📦 [FREE_CHAT_CONTEXT] Persistence not initialized yet'); return messages || []; },
-    clearMessages: async () => { console.log('📦 [FREE_CHAT_CONTEXT] Persistence not initialized yet'); },
-    getCacheStats: () => ({ status: 'not_initialized' })
-  });
+  let state, dispatch;
+  try {
+    console.log('🔄 [FREE_CHAT_CONTEXT] About to call useReducer...');
+    console.log('🔄 [FREE_CHAT_CONTEXT] freeChatReducer:', typeof freeChatReducer);
+    console.log('🔄 [FREE_CHAT_CONTEXT] initialState:', JSON.stringify(initialState));
+  } catch (e) {
+    console.error('❌ [FREE_CHAT_CONTEXT] Error logging before useReducer:', e);
+  }
+  
+  // Call useReducer - if this throws, the error boundary will catch it
+  [state, dispatch] = useReducer(freeChatReducer, initialState);
+  
+  try {
+    console.log('✅ [FREE_CHAT_CONTEXT] useReducer succeeded');
+    console.log('✅ [FREE_CHAT_CONTEXT] State:', JSON.stringify(state));
+  } catch (e) {
+    console.error('❌ [FREE_CHAT_CONTEXT] Error logging after useReducer:', e);
+  }
+  
+  let persistenceRef;
+  try {
+    console.log('🔄 [FREE_CHAT_CONTEXT] About to call useRef...');
+    persistenceRef = useRef({
+      saveMessages: async () => { console.log('📦 [FREE_CHAT_CONTEXT] Persistence not initialized yet'); },
+      loadMessages: async () => { console.log('📦 [FREE_CHAT_CONTEXT] Persistence not initialized yet'); return []; },
+      addMessage: async () => { console.log('📦 [FREE_CHAT_CONTEXT] Persistence not initialized yet'); return []; },
+      mergeMessages: async (freeChatId, messages) => { console.log('📦 [FREE_CHAT_CONTEXT] Persistence not initialized yet'); return messages || []; },
+      clearMessages: async () => { console.log('📦 [FREE_CHAT_CONTEXT] Persistence not initialized yet'); },
+      getCacheStats: () => ({ status: 'not_initialized' })
+    });
+    console.log('✅ [FREE_CHAT_CONTEXT] useRef succeeded');
+  } catch (e) {
+    console.error('❌ [FREE_CHAT_CONTEXT] Error in useRef:', e);
+    console.error('❌ [FREE_CHAT_CONTEXT] Error stack:', e.stack);
+    throw e; // Re-throw to trigger error boundary
+  }
 
-  console.log('✅ [FREE_CHAT_CONTEXT] State and refs initialized successfully');
+  try {
+    console.log('✅ [FREE_CHAT_CONTEXT] State and refs initialized successfully');
+    console.log('✅ [FREE_CHAT_CONTEXT] About to setup useEffect hooks...');
+  } catch (e) {
+    console.error('❌ [FREE_CHAT_CONTEXT] Error in final console.log:', e);
+  }
 
   // Initialize persistence service with error handling
   useEffect(() => {
@@ -511,33 +549,49 @@ export function FreeChatProvider({ children }) {
     }
   }, []);
 
-  const contextValue = {
-    // State
-    sessions: state.sessions,
-    currentSessionId: state.currentSessionId,
-    loading: state.loading,
-    
-    // Actions
-    initializeSession,
-    addMessage,
-    mergeBackendMessages,
-    updateMessage,
-    setSessionStatus,
-    setTimerData,
-    clearSession,
-    
-    // Getters
-    getSession,
-    getMessages,
-    isSessionInitialized,
-    getPersistenceStats
-  };
+  let contextValue;
+  try {
+    console.log('🔄 [FREE_CHAT_CONTEXT] Creating context value...');
+    contextValue = {
+      // State
+      sessions: state.sessions,
+      currentSessionId: state.currentSessionId,
+      loading: state.loading,
+      
+      // Actions
+      initializeSession,
+      addMessage,
+      mergeBackendMessages,
+      updateMessage,
+      setSessionStatus,
+      setTimerData,
+      clearSession,
+      
+      // Getters
+      getSession,
+      getMessages,
+      isSessionInitialized,
+      getPersistenceStats
+    };
+    console.log('✅ [FREE_CHAT_CONTEXT] Context value created successfully');
+  } catch (e) {
+    console.error('❌ [FREE_CHAT_CONTEXT] Error creating context value:', e);
+    console.error('❌ [FREE_CHAT_CONTEXT] Error stack:', e.stack);
+    throw e;
+  }
 
-  return (
-    <FreeChatContext.Provider value={contextValue}>
-      {children}
-    </FreeChatContext.Provider>
-  );
+  try {
+    console.log('🔄 [FREE_CHAT_CONTEXT] About to return Provider...');
+    return (
+      <FreeChatContext.Provider value={contextValue}>
+        {children}
+      </FreeChatContext.Provider>
+    );
+  } catch (e) {
+    console.error('❌ [FREE_CHAT_CONTEXT] Error returning Provider:', e);
+    console.error('❌ [FREE_CHAT_CONTEXT] Error stack:', e.stack);
+    throw e;
+  }
 }
 
 // Hook to use the context
