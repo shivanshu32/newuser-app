@@ -331,9 +331,27 @@ const BookingWaitingScreen = () => {
         throw new Error('Authentication token not found');
       }
 
-      console.log(' [BookingWaiting] Cancelling booking:', bookingId);
+      // Use different endpoints based on session type
+      let cancelUrl;
+      let cancelId;
+      let cancelType;
       
-      const response = await fetch(`${bookingsAPI.baseURL}/bookings/${bookingId}/cancel`, {
+      if (isPrepaidOffer) {
+        // For prepaid offers, use session cancellation endpoint
+        // bookingId param actually contains the session MongoDB ObjectId
+        cancelId = bookingId;
+        cancelUrl = `${bookingsAPI.baseURL}/prepaid-offers/sessions/${cancelId}/cancel`;
+        cancelType = 'prepaid session';
+        console.log('🔄 [BookingWaiting] Cancelling prepaid session:', cancelId);
+      } else {
+        // For normal bookings, use booking cancellation endpoint
+        cancelId = bookingId;
+        cancelUrl = `${bookingsAPI.baseURL}/bookings/${cancelId}/cancel`;
+        cancelType = 'booking';
+        console.log('🔄 [BookingWaiting] Cancelling booking:', cancelId);
+      }
+      
+      const response = await fetch(cancelUrl, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -347,14 +365,20 @@ const BookingWaitingScreen = () => {
       const data = await response.json();
 
       if (!response.ok) {
-        throw new Error(data.message || 'Failed to cancel booking');
+        throw new Error(data.message || `Failed to cancel ${cancelType}`);
       }
 
-      console.log(' [BookingWaiting] Booking cancelled successfully:', data);
+      console.log(`✅ [BookingWaiting] ${cancelType} cancelled successfully:`, data);
+      
+      // Show appropriate message based on session type
+      const alertTitle = isPrepaidOffer ? 'Session Cancelled' : 'Booking Cancelled';
+      const alertMessage = isPrepaidOffer 
+        ? data.data?.message || 'Your prepaid chat request has been cancelled. Your prepaid offer is still available.'
+        : 'Your booking request has been cancelled successfully.';
       
       Alert.alert(
-        'Booking Cancelled',
-        'Your booking request has been cancelled successfully.',
+        alertTitle,
+        alertMessage,
         [
           {
             text: 'OK',
@@ -363,10 +387,10 @@ const BookingWaitingScreen = () => {
         ]
       );
     } catch (error) {
-      console.error(' [BookingWaiting] Error cancelling booking:', error);
+      console.error('❌ [BookingWaiting] Error cancelling:', error);
       Alert.alert(
         'Error',
-        error.message || 'Failed to cancel booking. Please try again.'
+        error.message || 'Failed to cancel. Please try again.'
       );
     } finally {
       setIsLoading(false);

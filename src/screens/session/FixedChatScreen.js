@@ -36,6 +36,9 @@ const FixedChatScreen = ({ route, navigation }) => {
     astrologerId,
     consultationType = 'chat',
     bookingDetails,
+    astrologer: routeAstrologer, // For prepaid recharge card flow
+    isPrepaidOffer, // Flag to identify prepaid offer sessions
+    isPrepaidCard, // Flag to identify prepaid card sessions
   } = route.params || {};
   
   const { user: authUser, refreshToken, getValidToken } = useAuth();
@@ -805,11 +808,19 @@ const FixedChatScreen = ({ route, navigation }) => {
       endReason,
       [{ text: 'OK', onPress: () => {
         if (mountedRef.current) {
-          navigation.goBack();
+          // For prepaid card sessions, navigate to Home instead of going back
+          // This prevents users from being redirected to the astrologer selection screen
+          if (isPrepaidCard || isPrepaidOffer) {
+            console.log('🏠 [SESSION] Prepaid session ended - navigating to Home');
+            navigation.navigate('Main', { screen: 'Home' });
+          } else {
+            console.log('🔙 [SESSION] Regular session ended - going back');
+            navigation.goBack();
+          }
         }
       }}]
     );
-  }, [safeSetState, stopLocalTimer, navigation, bookingId]);
+  }, [safeSetState, stopLocalTimer, navigation, bookingId, isPrepaidCard, isPrepaidOffer]);
 
   const joinConsultationRoom = useCallback(() => {
     const currentSocket = socketRef.current;
@@ -1486,7 +1497,9 @@ const FixedChatScreen = ({ route, navigation }) => {
             <View style={styles.astrologerInfo}>
               <Image 
                 source={{ 
-                  uri: bookingDetails?.astrologer?.profileImage || 
+                  uri: routeAstrologer?.profileImage || 
+                       routeAstrologer?.imageUrl || 
+                       bookingDetails?.astrologer?.profileImage || 
                        bookingDetails?.astrologer?.imageUrl || 
                        'https://via.placeholder.com/40x40.png?text=A' 
                 }}
@@ -1495,7 +1508,10 @@ const FixedChatScreen = ({ route, navigation }) => {
               />
               <View style={styles.astrologerDetails}>
                 <Text style={styles.headerTitle}>
-                  {bookingDetails?.astrologer?.name || 'Astrologer'}
+                  {routeAstrologer?.name || 
+                   routeAstrologer?.displayName || 
+                   bookingDetails?.astrologer?.name || 
+                   'Astrologer'}
                 </Text>
                 <Text style={styles.headerSubtitle}>
                   {consultationType === 'chat' ? 'Chat Consultation' : 'Consultation'}

@@ -2749,10 +2749,9 @@ const HomeScreen = ({ navigation }) => {
         );
       case 'prepaidRechargeOffersHeader':
         return (
-          <View style={styles.sectionHeader}>
-            <View style={styles.sectionHeaderContent}>
-              <MaterialIcons name="card-giftcard" size={24} color="#4CAF50" />
-              <Text style={styles.sectionHeaderTitle}>Your Prepaid Chat Packs</Text>
+          <View style={styles.astrologersSection}>
+            <View style={styles.astrologersHeader}>
+              <Text style={styles.sectionTitle}>Your Prepaid Chat Packs</Text>
             </View>
           </View>
         );
@@ -4243,17 +4242,6 @@ const styles = StyleSheet.create({
     opacity: 0.3,
   },
   // Prepaid offers section styles
-  sectionHeaderContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 4,
-  },
-  sectionHeaderTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#1a1a1a',
-    marginLeft: 8,
-  },
   sectionHeaderSubtitle: {
     fontSize: 14,
     color: '#666',
