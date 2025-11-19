@@ -735,7 +735,10 @@ const FixedFreeChatScreen = React.memo(({ route, navigation }) => {
         const existingTimestamp = new Date(existing.timestamp || existing.createdAt).getTime();
         
         const contentMatch = existingContent === serverContent;
-        const senderMatch = existingSenderId === serverSenderId || existing.senderType === serverMsg.senderType;
+        // CRITICAL FIX: Use AND logic for sender match, not OR
+        // The OR logic was causing self messages to be filtered out because senderType matched
+        // even when senderId was different (e.g., different user with same senderType)
+        const senderMatch = existingSenderId === serverSenderId && existing.senderType === serverMsg.senderType;
         
         // Extended tolerance: 60 seconds for backgrounding scenarios
         const timeDiff = Math.abs(existingTimestamp - serverTimestamp);

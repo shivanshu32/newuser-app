@@ -450,6 +450,12 @@ const FixedChatScreen = ({ route, navigation }) => {
   // Enhanced message processing with robust deduplication
   const processRecoveredMessages = useCallback((newMessages, source) => {
     console.log(`📨 [PROCESS_MESSAGES] Processing ${newMessages.length} messages from ${source}`);
+    console.log(`📨 [PROCESS_MESSAGES] Current authUser.id: ${authUser?.id}`);
+    
+    // CRITICAL DEBUG: Log each received message to trace filtering
+    newMessages.forEach((msg, index) => {
+      console.log(`📨 [RECEIVED_MSG_${index}] Content: "${msg.content?.substring(0, 50)}", SenderId: ${msg.senderId}, SenderType: ${msg.senderType}, IsOwnMessage: ${msg.senderId === authUser?.id || msg.senderType === 'user'}`);
+    });
     
     if (newMessages.length === 0) {
       console.log(`📨 [PROCESS_MESSAGES] No messages to process from ${source}`);
@@ -477,7 +483,10 @@ const FixedChatScreen = ({ route, navigation }) => {
         const existingTimestamp = new Date(existing.timestamp || existing.createdAt).getTime();
         
         const contentMatch = existingContent === serverContent;
-        const senderMatch = existingSenderId === serverSenderId || existing.senderType === serverMsg.senderType;
+        // CRITICAL FIX: Use AND logic for sender match, not OR
+        // The OR logic was causing self messages to be filtered out because senderType matched
+        // even when senderId was different (e.g., different user with same senderType)
+        const senderMatch = existingSenderId === serverSenderId && existing.senderType === serverMsg.senderType;
         
         // Extended tolerance: 60 seconds for backgrounding scenarios
         const timeDiff = Math.abs(existingTimestamp - serverTimestamp);
