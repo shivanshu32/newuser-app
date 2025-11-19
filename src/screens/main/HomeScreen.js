@@ -375,19 +375,26 @@ const HomeScreen = ({ navigation }) => {
           rejoin: true
         });
       } else {
-        // Navigate to enhanced chat screen for paid consultations and prepaid offers
+        // Navigate to enhanced chat screen for paid consultations, prepaid offers, and prepaid cards
         console.log('🔄 [REJOIN] Navigating to EnhancedChat with:', {
           bookingId: sessionData.bookingId,
           sessionId: sessionData.sessionId,
           isPrepaidOffer: sessionData.isPrepaidOffer,
-          astrologerName: sessionData.astrologer?.name
+          isPrepaidCard: sessionData.isPrepaidCard,
+          astrologer: sessionData.astrologer
         });
         
+        // CRITICAL FIX: Pass complete session data for prepaid cards
         navigation.navigate('EnhancedChat', {
           bookingId: sessionData.bookingId,
           sessionId: sessionData.sessionId,
+          astrologerId: sessionData.astrologer?.id,
           astrologerName: sessionData.astrologer?.name,
+          astrologerImage: sessionData.astrologer?.profileImage,
           isPrepaidOffer: sessionData.isPrepaidOffer || false,
+          isPrepaidCard: sessionData.isPrepaidCard || false, // CRITICAL: Pass prepaid card flag
+          durationMinutes: sessionData.durationMinutes, // CRITICAL: Pass duration for prepaid cards
+          remainingTime: sessionData.remainingTime, // Pass remaining time
           rejoin: true
         });
       }
