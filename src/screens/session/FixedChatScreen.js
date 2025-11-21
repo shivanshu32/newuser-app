@@ -75,7 +75,7 @@ const FixedChatScreen = ({ route, navigation }) => {
   const timerIntervalRef = useRef(null);
   const typingTimeoutRef = useRef(null);
   const astrologerTypingTimeoutRef = useRef(null);
-  const lastMessageTimestampRef = useRef(null);
+  const lastMessageTimestampRef = useRef(0); // CRITICAL FIX: Initialize to 0, not null, for proper comparison
   const appStateRef = useRef(AppState.currentState);
   const sessionStartTimeRef = useRef(null);
   const sessionDurationRef = useRef(null);
@@ -483,10 +483,20 @@ const FixedChatScreen = ({ route, navigation }) => {
         const existingTimestamp = new Date(existing.timestamp || existing.createdAt).getTime();
         
         const contentMatch = existingContent === serverContent;
-        // CRITICAL FIX: Use AND logic for sender match, not OR
-        // The OR logic was causing self messages to be filtered out because senderType matched
-        // even when senderId was different (e.g., different user with same senderType)
-        const senderMatch = existingSenderId === serverSenderId && existing.senderType === serverMsg.senderType;
+        
+        // CRITICAL FIX: Robust sender matching that handles missing IDs
+        // Match by ID if both exist, otherwise match by senderType only
+        let senderMatch = false;
+        if (existingSenderId && serverSenderId) {
+          // Both IDs exist - match by ID AND type for maximum accuracy
+          senderMatch = (existingSenderId === serverSenderId) && (existing.senderType === serverMsg.senderType);
+        } else if (!existingSenderId && !serverSenderId) {
+          // Neither has ID - match by type only (fallback for legacy messages)
+          senderMatch = existing.senderType === serverMsg.senderType;
+        } else {
+          // One has ID, one doesn't - not a match (different data structures)
+          senderMatch = false;
+        }
         
         // Extended tolerance: 60 seconds for backgrounding scenarios
         const timeDiff = Math.abs(existingTimestamp - serverTimestamp);
@@ -543,7 +553,8 @@ const FixedChatScreen = ({ route, navigation }) => {
       
       // Update last message timestamp
       const latestTimestamp = Math.max(...deduplicatedMessages.map(msg => new Date(msg.timestamp || msg.createdAt).getTime()));
-      if (latestTimestamp > lastMessageTimestampRef.current) {
+      // CRITICAL FIX: Use >= to handle initial 0 value and ensure timestamp is always updated
+      if (latestTimestamp >= (lastMessageTimestampRef.current || 0)) {
         lastMessageTimestampRef.current = latestTimestamp;
         console.log(`📨 [PROCESS_MESSAGES] Updated last message timestamp to: ${new Date(latestTimestamp).toISOString()}`);
       }
@@ -716,7 +727,8 @@ const FixedChatScreen = ({ route, navigation }) => {
     
     // Update last message timestamp for missed message tracking
     const messageTimestamp = new Date(newMessage.timestamp).getTime();
-    if (messageTimestamp > lastMessageTimestampRef.current) {
+    // CRITICAL FIX: Use >= to handle initial 0 value and ensure timestamp is always updated
+    if (messageTimestamp >= (lastMessageTimestampRef.current || 0)) {
       lastMessageTimestampRef.current = messageTimestamp;
     }
     
@@ -792,9 +804,18 @@ const FixedChatScreen = ({ route, navigation }) => {
   const handleSessionEnded = useCallback((data) => {
     console.log('🛑 [SESSION] Session ended:', data);
     
-    // Validate this session end event is for current session
-    if (data.bookingId && data.bookingId !== bookingId) {
-      console.log('⚠️ [SESSION] Ignoring session end for different booking:', data.bookingId);
+    // ENHANCED: Validate this session end event is for current session
+    // For prepaid sessions, also check sessionId match
+    const isOurSession = !data.bookingId || 
+                         (data.bookingId === bookingId) ||
+                         (data.sessionId === sessionId) ||
+                         (isPrepaidCard && data.sessionId === bookingId) ||
+                         (isPrepaidOffer && data.sessionId === bookingId);
+    
+    if (!isOurSession) {
+      console.log('⚠️ [SESSION] Ignoring session end for different session');
+      console.log('⚠️ [SESSION] Expected bookingId:', bookingId, 'Received:', data.bookingId);
+      console.log('⚠️ [SESSION] Expected sessionId:', sessionId, 'Received:', data.sessionId);
       return;
     }
     
@@ -833,10 +854,18 @@ const FixedChatScreen = ({ route, navigation }) => {
 
   const joinConsultationRoom = useCallback(() => {
     const currentSocket = socketRef.current;
-    if (!currentSocket || initializationCompleteRef.current) {
-      console.log('⚠️ [ROOM] Skipping room join - socket not available or already joined');
+    
+    // CRITICAL FIX: Check if socket exists AND is connected
+    if (!currentSocket || !currentSocket.connected) {
+      console.log('⚠️ [ROOM] Skipping room join - socket not available or not connected');
       console.log('⚠️ [ROOM] Socket available:', !!currentSocket);
-      console.log('⚠️ [ROOM] Already joined:', initializationCompleteRef.current);
+      console.log('⚠️ [ROOM] Socket connected:', currentSocket?.connected);
+      return;
+    }
+    
+    // CRITICAL FIX: Check if already joined
+    if (initializationCompleteRef.current) {
+      console.log('⚠️ [ROOM] Already joined room, skipping');
       return;
     }
     
@@ -870,7 +899,16 @@ const FixedChatScreen = ({ route, navigation }) => {
     
     initializationCompleteRef.current = true;
     console.log('🏠 [ROOM] Room join process completed');
-  }, [getCurrentRoomId, bookingId, sessionId, authUser?.id]);
+    
+    // CRITICAL FIX: Load message history after joining room (especially important for rejoin scenario)
+    // Delay slightly to ensure room join is processed on backend
+    setTimeout(() => {
+      if (mountedRef.current && currentSocket.connected) {
+        console.log('📨 [ROOM_JOIN] Requesting message history after joining room');
+        messageRecoveryCoordinator('room_join_initial_load');
+      }
+    }, 500);
+  }, [getCurrentRoomId, bookingId, sessionId, authUser?.id, messageRecoveryCoordinator]);
 
   const cleanupSocketListeners = useCallback(() => {
     const socket = socketRef.current;
@@ -965,9 +1003,25 @@ const FixedChatScreen = ({ route, navigation }) => {
     // Global session end listener for consultation_ended events
     socket.on('consultation_ended', (data) => {
       console.log('🏁 [GLOBAL] Consultation ended event received:', data);
-      if (data.bookingId === bookingId) {
+      console.log('🏁 [GLOBAL] Current bookingId:', bookingId);
+      console.log('🏁 [GLOBAL] Current sessionId:', sessionId);
+      console.log('🏁 [GLOBAL] isPrepaidCard:', isPrepaidCard);
+      console.log('🏁 [GLOBAL] isPrepaidOffer:', isPrepaidOffer);
+      
+      // ENHANCED: Check both bookingId AND sessionId for prepaid sessions
+      // For prepaid sessions, bookingId might actually be the sessionId
+      const isOurSession = (data.bookingId === bookingId) || 
+                           (data.sessionId === sessionId) ||
+                           (isPrepaidCard && data.sessionId === bookingId) ||
+                           (isPrepaidOffer && data.sessionId === bookingId);
+      
+      if (isOurSession) {
         console.log('🏁 [GLOBAL] Consultation ended for current session, handling...');
         handleSessionEnded(data);
+      } else {
+        console.log('⚠️ [GLOBAL] Consultation ended event not for our session');
+        console.log('⚠️ [GLOBAL] Expected bookingId:', bookingId, 'Received:', data.bookingId);
+        console.log('⚠️ [GLOBAL] Expected sessionId:', sessionId, 'Received:', data.sessionId);
       }
     });
     socket.on('session_timer', (data) => {
@@ -1031,7 +1085,8 @@ const FixedChatScreen = ({ route, navigation }) => {
           
           // Update last message timestamp
           const latestTimestamp = Math.max(...newMessages.map(msg => new Date(msg.timestamp).getTime()));
-          if (latestTimestamp > lastMessageTimestampRef.current) {
+          // CRITICAL FIX: Use >= to handle initial 0 value and ensure timestamp is always updated
+          if (latestTimestamp >= (lastMessageTimestampRef.current || 0)) {
             lastMessageTimestampRef.current = latestTimestamp;
             console.log(`📨 [AUTO_RECOVERY] Updated last message timestamp to:`, new Date(latestTimestamp));
           }
@@ -1203,17 +1258,21 @@ const FixedChatScreen = ({ route, navigation }) => {
               
               const socket = socketRef.current;
               if (socket?.connected) {
+                console.log('🛑 [SESSION] Emitting end_session event...');
                 socket.emit('end_session', {
                   bookingId,
                   sessionId,
                   userId: authUser?.id,
                   endedBy: 'user'
                 });
+                
+                // CRITICAL FIX: Wait for consultation_ended event - don't navigate immediately
+                // The consultation_ended handler will show alert and navigate after user confirmation
+                console.log('⏳ [SESSION] Waiting for backend confirmation via consultation_ended event...');
+              } else {
+                console.error('❌ [SESSION] Socket not connected, cannot end session');
+                Alert.alert('Error', 'Cannot end session - not connected to server');
               }
-              
-              safeSetState(setSessionActive, false);
-              stopLocalTimer();
-              navigation.goBack();
               
             } catch (error) {
               console.error('❌ [SESSION] End session failed:', error);
@@ -1356,13 +1415,8 @@ const FixedChatScreen = ({ route, navigation }) => {
         if (mountedRef.current) {
           console.log(`✅ [INIT] Initialization complete (Instance: ${instanceId.current})`);
           
-          // Join room after socket initialization
-          setTimeout(() => {
-            if (mountedRef.current && !initializationCompleteRef.current) {
-              console.log('🚀 [INIT] Joining consultation room');
-              joinConsultationRoom();
-            }
-          }, 500);
+          // REMOVED: Don't join room here - let the 'connect' event handler do it
+          // This prevents race conditions and duplicate join attempts
           
           // Clear loading state after successful initialization
           setTimeout(() => {

@@ -468,5 +468,7 @@ export const blogAPI = {
   }
 };
 
+// Export API_BASE for direct URL construction when needed
+export { API_BASE };
 
 export default API;

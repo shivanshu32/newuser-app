@@ -12,7 +12,7 @@ import {
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { useSocket } from '../../context/SocketContext';
-import { bookingsAPI } from '../../services/api';
+import { bookingsAPI, API_BASE } from '../../services/api';
 import { useBookingPopup } from '../../context/BookingPopupContext';
 
 const BookingWaitingScreen = () => {
@@ -30,6 +30,7 @@ const BookingWaitingScreen = () => {
     astrologer, 
     bookingType, 
     isPrepaidOffer,
+    isPrepaidCard,
     sessionType,
     duration,
     totalAmount 
@@ -45,6 +46,7 @@ const BookingWaitingScreen = () => {
     astrologer: astrologer ? { id: astrologer._id || astrologer.id, name: astrologer.displayName || astrologer.name } : null,
     bookingType,
     isPrepaidOffer,
+    isPrepaidCard,
     sessionType
   });
   
@@ -79,12 +81,13 @@ const BookingWaitingScreen = () => {
       socket.on('booking_auto_cancelled', handleBookingAutoCancelled);
       socket.on('booking_cancelled', handleBookingCancelled);
       
-      // Add prepaid offer specific listeners
-      if (isPrepaidOffer) {
-        console.log('🎯 [BookingWaiting] Setting up prepaid offer listeners for sessionId:', sessionId);
+      // Add prepaid offer/card specific listeners
+      if (isPrepaidOffer || isPrepaidCard) {
+        console.log('🎯 [BookingWaiting] Setting up prepaid listeners for sessionId:', sessionId, { isPrepaidOffer, isPrepaidCard });
         socket.on('prepaid_chat_accepted', handlePrepaidChatAccepted);
         socket.on('prepaid_chat_rejected', handlePrepaidChatRejected);
         socket.on('prepaid_chat_timeout', handlePrepaidChatTimeout);
+        socket.on('prepaid_chat_cancelled', handlePrepaidChatCancelled);
         
         // Test socket connection by emitting a test event
         socket.emit('test_connection', { 
@@ -120,15 +123,16 @@ const BookingWaitingScreen = () => {
         socket.off('booking_auto_cancelled', handleBookingAutoCancelled);
         socket.off('booking_cancelled', handleBookingCancelled);
         
-        // Remove prepaid offer specific listeners
-        if (isPrepaidOffer) {
+        // Remove prepaid offer/card specific listeners
+        if (isPrepaidOffer || isPrepaidCard) {
           socket.off('prepaid_chat_accepted', handlePrepaidChatAccepted);
           socket.off('prepaid_chat_rejected', handlePrepaidChatRejected);
           socket.off('prepaid_chat_timeout', handlePrepaidChatTimeout);
+          socket.off('prepaid_chat_cancelled', handlePrepaidChatCancelled);
         }
       }
     };
-  }, [waitingId, astrologer, navigation, isPrepaidOffer]);
+  }, [waitingId, astrologer, navigation, isPrepaidOffer, isPrepaidCard]);
 
   console.log('🔍 [BookingWaiting] Render state:', {
     timeLeft,
@@ -287,13 +291,14 @@ const BookingWaitingScreen = () => {
   const handlePrepaidChatTimeout = (data) => {
     console.log('⏰ [BookingWaiting] Prepaid chat timed out:', data);
     
-    if (data.sessionId === sessionId) {
+    if (data.sessionId === sessionId || data.sessionIdentifier === sessionId) {
       console.log('⏰ [BookingWaiting] Our prepaid session timed out');
       setBookingStatus('timeout');
       
+      const sessionTypeText = isPrepaidCard ? 'prepaid card' : 'prepaid offer';
       Alert.alert(
         'Request Timed Out',
-        'The astrologer did not respond in time. Your prepaid offer is still available - you can try again with the same or a different astrologer.',
+        `The astrologer did not respond in time. Your ${sessionTypeText} is still available - you can try again with the same or a different astrologer.`,
         [
           {
             text: 'Try Again',
@@ -301,6 +306,35 @@ const BookingWaitingScreen = () => {
           }
         ]
       );
+    }
+  };
+
+  const handlePrepaidChatCancelled = (data) => {
+    console.log('🚫 [BookingWaiting] Prepaid chat cancelled:', data);
+    
+    // Check if this cancellation is for our session
+    const isOurSession = (data.sessionId === bookingId) || (data.sessionIdentifier === sessionId);
+    
+    if (isOurSession) {
+      console.log('✅ [BookingWaiting] Our prepaid session cancellation confirmed');
+      setBookingStatus('cancelled');
+      
+      // If we have a message from backend, show it
+      if (data.message && data.canRetry) {
+        Alert.alert(
+          'Session Cancelled',
+          data.message,
+          [
+            {
+              text: 'OK',
+              onPress: () => navigation.goBack()
+            }
+          ]
+        );
+      } else {
+        // Just navigate back without alert since we already showed one
+        navigation.goBack();
+      }
     }
   };
 
@@ -336,19 +370,26 @@ const BookingWaitingScreen = () => {
       let cancelId;
       let cancelType;
       
-      if (isPrepaidOffer) {
-        // For prepaid offers, use session cancellation endpoint
-        // bookingId param actually contains the session MongoDB ObjectId
+      if (isPrepaidOffer || isPrepaidCard) {
+        // For prepaid offers/cards, use session cancellation endpoint
+        // bookingId param contains the session MongoDB ObjectId
         cancelId = bookingId;
-        cancelUrl = `${bookingsAPI.baseURL}/prepaid-offers/sessions/${cancelId}/cancel`;
-        cancelType = 'prepaid session';
-        console.log('🔄 [BookingWaiting] Cancelling prepaid session:', cancelId);
+        cancelUrl = `${API_BASE}/prepaid-offers/sessions/${cancelId}/cancel`;
+        cancelType = isPrepaidCard ? 'prepaid card session' : 'prepaid offer session';
+        console.log('🔄 [BookingWaiting] Cancelling prepaid session:', {
+          cancelId,
+          isPrepaidCard,
+          isPrepaidOffer,
+          sessionId,
+          bookingId,
+          cancelUrl
+        });
       } else {
         // For normal bookings, use booking cancellation endpoint
         cancelId = bookingId;
-        cancelUrl = `${bookingsAPI.baseURL}/bookings/${cancelId}/cancel`;
+        cancelUrl = `${API_BASE}/bookings/${cancelId}/cancel`;
         cancelType = 'booking';
-        console.log('🔄 [BookingWaiting] Cancelling booking:', cancelId);
+        console.log('🔄 [BookingWaiting] Cancelling booking:', { cancelId, cancelUrl });
       }
       
       const response = await fetch(cancelUrl, {
@@ -371,9 +412,9 @@ const BookingWaitingScreen = () => {
       console.log(`✅ [BookingWaiting] ${cancelType} cancelled successfully:`, data);
       
       // Show appropriate message based on session type
-      const alertTitle = isPrepaidOffer ? 'Session Cancelled' : 'Booking Cancelled';
-      const alertMessage = isPrepaidOffer 
-        ? data.data?.message || 'Your prepaid chat request has been cancelled. Your prepaid offer is still available.'
+      const alertTitle = (isPrepaidOffer || isPrepaidCard) ? 'Session Cancelled' : 'Booking Cancelled';
+      const alertMessage = (isPrepaidOffer || isPrepaidCard)
+        ? data.data?.message || `Your ${cancelType} request has been cancelled. Your ${isPrepaidCard ? 'prepaid card' : 'prepaid offer'} is still available.`
         : 'Your booking request has been cancelled successfully.';
       
       Alert.alert(
