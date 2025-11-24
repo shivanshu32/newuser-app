@@ -1257,6 +1257,43 @@ const HomeScreen = ({ navigation }) => {
     // This confirms that the astrologer has been notified
     // The actual session start will be handled by astrologer_ready_for_session event
   }, []);
+  
+  // Handle active prepaid session notification (when user connects and has a waiting session)
+  const handleActivePrepaidSession = useCallback((data) => {
+    console.log('🔔 [PREPAID] Active prepaid session detected:', data);
+    
+    const { sessionId, sessionIdentifier, astrologer, sessionDuration, isPrepaidCard, isPrepaidOffer, message } = data;
+    
+    Alert.alert(
+      'Active Chat Session! 💬',
+      `You have an active prepaid chat session with ${astrologer?.displayName || astrologer?.name || 'an astrologer'}. Would you like to join now?`,
+      [
+        {
+          text: 'Later',
+          style: 'cancel'
+        },
+        {
+          text: 'Join Now',
+          onPress: () => {
+            console.log('🔔 [PREPAID] Navigating to active prepaid session:', sessionId);
+            
+            navigation.navigate('EnhancedChat', {
+              bookingId: sessionId,
+              sessionId: sessionId,
+              astrologer: astrologer,
+              sessionType: isPrepaidCard ? 'prepaid_card' : 'prepaid_offer',
+              duration: sessionDuration || 300,
+              isPrepaid: true,
+              isPrepaidOffer: isPrepaidOffer || false,
+              isPrepaidCard: isPrepaidCard || false,
+              bookingType: 'chat',
+              consultationType: 'chat'
+            });
+          }
+        }
+      ]
+    );
+  }, [navigation]);
 
   // Handle join session from pending booking
   const handleJoinSession = useCallback(async (booking) => {
@@ -1849,6 +1886,7 @@ const HomeScreen = ({ navigation }) => {
       socket.off('astrologer_ready_for_session', handleAstrologerReadyForSession);
       socket.off('astrologer_declined_session', handleAstrologerDeclinedSession);
       socket.off('user_session_join_confirmed', handleUserSessionJoinConfirmed);
+      socket.off('active_prepaid_session', handleActivePrepaidSession);
       console.log('🔥 [DEBUG] Cleaned up existing listeners');
 
       // Listen for astrologer status updates
@@ -1874,6 +1912,10 @@ const HomeScreen = ({ navigation }) => {
       socket.on('astrologer_declined_session', handleAstrologerDeclinedSession);
       socket.on('user_session_join_confirmed', handleUserSessionJoinConfirmed);
       console.log('🔔 [SESSION_JOIN] Session join notification listeners registered');
+      
+      // Listen for active prepaid sessions (when user connects and has a waiting session)
+      socket.on('active_prepaid_session', handleActivePrepaidSession);
+      console.log('🔔 [PREPAID] Active prepaid session listener registered');
       
       // Add debugging for socket connection events
       socket.on('connect', () => {

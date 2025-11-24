@@ -177,8 +177,20 @@ const FixedChatScreen = ({ route, navigation }) => {
     // Set up socket event listeners
     setupSocketListeners();
     
+    // CRITICAL FIX: If socket is already connected, join room immediately
+    // This prevents the issue where socket disconnects before the 'connect' event fires
+    if (contextSocket.connected && !initializationCompleteRef.current) {
+      console.log('🚀 [SOCKET] Socket already connected, joining room immediately');
+      // Use setTimeout to ensure setupSocketListeners completes first
+      setTimeout(() => {
+        if (mountedRef.current && socketRef.current?.connected) {
+          joinConsultationRoom();
+        }
+      }, 100);
+    }
+    
     console.log('✅ [SOCKET] Socket initialized successfully');
-  }, [contextSocket, setupSocketListeners, cleanupSocketListeners]);
+  }, [contextSocket, setupSocketListeners, cleanupSocketListeners, joinConsultationRoom]);
 
   // ===== AUTO-RECONNECTION =====
   const handleReconnection = useCallback(async () => {

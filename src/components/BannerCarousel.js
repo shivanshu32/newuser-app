@@ -7,28 +7,65 @@ import {
   StyleSheet,
   TouchableOpacity,
   Text,
+  ActivityIndicator,
+  Linking
 } from 'react-native';
+import { useNavigation } from '@react-navigation/native';
+import bannerAPI from '../services/bannerAPI';
 
 const { width: screenWidth } = Dimensions.get('window');
 
 const BannerCarousel = ({ onBannerPress }) => {
   const [currentIndex, setCurrentIndex] = useState(0);
+  const [banners, setBanners] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   const scrollViewRef = useRef(null);
+  const impressionTracked = useRef(new Set());
+  const navigation = useNavigation();
 
-  // Debug: Log component mounting
+  // Fetch banners from API
   useEffect(() => {
-    console.log('🎠 BannerCarousel mounted, screen width:', screenWidth);
-    console.log('🎠 Banner count:', banners.length);
+    fetchBanners();
   }, []);
 
-  // Banner images from assets folder (fixed path for production)
-  const banners = [
-    require('../../assets/appbanner1.webp'),
-    require('../../assets/appbanner2.webp'),
-  ];
+  const fetchBanners = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const result = await bannerAPI.getActiveBanners();
+      
+      if (result.success && result.data.length > 0) {
+        setBanners(result.data);
+        console.log(`🎠 [CAROUSEL] Loaded ${result.data.length} banners ${result.fromCache ? '(cached)' : '(fresh)'}`);
+      } else {
+        console.log('🎠 [CAROUSEL] No banners available');
+        setBanners([]);
+      }
+    } catch (err) {
+      console.error('❌ [CAROUSEL] Error fetching banners:', err);
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Track impression when banner is viewed
+  useEffect(() => {
+    if (banners.length > 0 && !impressionTracked.current.has(currentIndex)) {
+      const banner = banners[currentIndex];
+      if (banner && banner._id) {
+        bannerAPI.trackImpression(banner._id);
+        impressionTracked.current.add(currentIndex);
+        console.log(`👁️ [CAROUSEL] Tracked impression for banner: ${banner.title}`);
+      }
+    }
+  }, [currentIndex, banners]);
 
   // Auto-scroll functionality
   useEffect(() => {
+    if (banners.length === 0) return;
+
     const interval = setInterval(() => {
       const nextIndex = (currentIndex + 1) % banners.length;
       setCurrentIndex(nextIndex);
@@ -50,11 +87,81 @@ const BannerCarousel = ({ onBannerPress }) => {
     setCurrentIndex(index);
   };
 
-  const handleBannerPress = (index) => {
+  const handleBannerPress = async (banner, index) => {
+    console.log(`🎯 [CAROUSEL] Banner pressed: ${banner.title}`);
+    
+    // Track click
+    if (banner._id) {
+      await bannerAPI.trackClick(banner._id);
+    }
+
+    // Handle navigation based on linkType
+    try {
+      switch (banner.linkType) {
+        case 'screen':
+          if (banner.linkValue && navigation) {
+            console.log(`📱 [CAROUSEL] Navigating to screen: ${banner.linkValue}`);
+            navigation.navigate(banner.linkValue);
+          }
+          break;
+
+        case 'url':
+          if (banner.linkValue) {
+            console.log(`🌐 [CAROUSEL] Opening URL: ${banner.linkValue}`);
+            const supported = await Linking.canOpenURL(banner.linkValue);
+            if (supported) {
+              await Linking.openURL(banner.linkValue);
+            } else {
+              console.error('❌ [CAROUSEL] Cannot open URL:', banner.linkValue);
+            }
+          }
+          break;
+
+        case 'offer':
+          // Navigate to specific offer or promotion
+          if (banner.linkValue && navigation) {
+            console.log(`🎁 [CAROUSEL] Navigating to offer: ${banner.linkValue}`);
+            // You can customize this based on your app's offer screen
+            navigation.navigate('Wallet', { offerId: banner.linkValue });
+          }
+          break;
+
+        case 'astrologer':
+          // Navigate to astrologer profile
+          if (banner.linkValue && navigation) {
+            console.log(`👤 [CAROUSEL] Navigating to astrologer: ${banner.linkValue}`);
+            navigation.navigate('AstrologerProfile', { astrologerId: banner.linkValue });
+          }
+          break;
+
+        case 'none':
+        default:
+          console.log('ℹ️ [CAROUSEL] Banner has no link configured');
+          break;
+      }
+    } catch (error) {
+      console.error('❌ [CAROUSEL] Error handling banner press:', error);
+    }
+
+    // Call parent callback if provided
     if (onBannerPress) {
       onBannerPress(index);
     }
   };
+
+  // Don't render if loading or no banners
+  if (loading) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="small" color="#F97316" />
+      </View>
+    );
+  }
+
+  if (error || banners.length === 0) {
+    // Silently hide carousel if no banners or error
+    return null;
+  }
 
   return (
     <View style={styles.container}>
@@ -68,34 +175,36 @@ const BannerCarousel = ({ onBannerPress }) => {
       >
         {banners.map((banner, index) => (
           <TouchableOpacity
-            key={index}
+            key={banner._id || index}
             style={styles.bannerContainer}
-            onPress={() => handleBannerPress(index)}
+            onPress={() => handleBannerPress(banner, index)}
             activeOpacity={0.9}
           >
             <Image
-              source={banner}
+              source={{ uri: banner.imageUrl }}
               style={styles.bannerImage}
               resizeMode="contain"
-              onLoad={() => console.log(`🖼️ Banner ${index + 1} loaded successfully`)}
-              onError={(error) => console.log(`❌ Banner ${index + 1} failed to load:`, error.nativeEvent.error)}
+              onLoad={() => console.log(`🖼️ [CAROUSEL] Banner loaded: ${banner.title}`)}
+              onError={(error) => console.log(`❌ [CAROUSEL] Banner failed to load: ${banner.title}`, error.nativeEvent.error)}
             />
           </TouchableOpacity>
         ))}
       </ScrollView>
       
       {/* Pagination dots - overlay at bottom of images */}
-      <View style={styles.paginationOverlay}>
-        {banners.map((_, index) => (
-          <View
-            key={index}
-            style={[
-              styles.paginationDot,
-              index === currentIndex && styles.paginationDotActive,
-            ]}
-          />
-        ))}
-      </View>
+      {banners.length > 1 && (
+        <View style={styles.paginationOverlay}>
+          {banners.map((_, index) => (
+            <View
+              key={index}
+              style={[
+                styles.paginationDot,
+                index === currentIndex && styles.paginationDotActive,
+              ]}
+            />
+          ))}
+        </View>
+      )}
     </View>
   );
 };
@@ -105,6 +214,14 @@ const styles = StyleSheet.create({
     position: 'relative',
     marginTop: -15, // Eliminate header's paddingBottom space
     marginBottom: 20, // Standard spacing below banner to match other sections
+  },
+  loadingContainer: {
+    height: 180,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#f0f0f0',
+    marginTop: -15,
+    marginBottom: 20,
   },
   scrollView: {
     height: 180,
