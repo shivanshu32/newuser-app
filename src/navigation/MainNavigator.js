@@ -14,6 +14,9 @@ import WalletTopUpSummaryScreen from '../screens/main/WalletTopUpSummaryScreen';
 import PrepaidOfferPaymentScreen from '../screens/main/PrepaidOfferPaymentScreen';
 import PrepaidRechargeCardPaymentScreen from '../screens/main/PrepaidRechargeCardPaymentScreen';
 import PrepaidRechargeCardsListScreen from '../screens/main/PrepaidRechargeCardsListScreen';
+import PrepaidVoiceCardsListScreen from '../screens/main/PrepaidVoiceCardsListScreen';
+import PrepaidVoiceCardPaymentScreen from '../screens/main/PrepaidVoiceCardPaymentScreen';
+import PrepaidVoicePackAstrologersScreen from '../screens/main/PrepaidVoicePackAstrologersScreen';
 import RazorpayPaymentScreen from '../screens/main/RazorpayPaymentScreen';
 import ProfileScreen from '../screens/main/ProfileScreen';
 import AddUserProfile from '../screens/main/AddUserProfile';
@@ -355,6 +358,21 @@ const MainNavigator = () => {
         <Stack.Screen 
           name="PrepaidRechargeCardsList" 
           component={PrepaidRechargeCardsListScreen} 
+          options={{ headerShown: false }}
+        />
+        <Stack.Screen 
+          name="PrepaidVoiceCardsList" 
+          component={PrepaidVoiceCardsListScreen} 
+          options={{ headerShown: false }}
+        />
+        <Stack.Screen 
+          name="PrepaidVoiceCardPayment" 
+          component={PrepaidVoiceCardPaymentScreen} 
+          options={{ headerShown: false }}
+        />
+        <Stack.Screen 
+          name="PrepaidVoicePackAstrologers" 
+          component={PrepaidVoicePackAstrologersScreen} 
           options={{ headerShown: false }}
         />
         <Stack.Screen 

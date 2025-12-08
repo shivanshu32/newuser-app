@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -13,17 +13,19 @@ import {
   KeyboardAvoidingView,
   Modal,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-// import { GooglePlacesAutocomplete } from 'react-native-google-places-autocomplete';
 import { useAuth } from '../../context/AuthContext';
 import { authAPI } from '../../services/api';
-import { GOOGLE_PLACES_CONFIG } from '../../config/googlePlaces';
+import GooglePlacesInput from '../../components/GooglePlacesInput';
 
 const AddUserProfile = ({ navigation, route }) => {
   const { user, setUser } = useAuth();
+  const insets = useSafeAreaInsets();
+  const scrollViewRef = useRef(null);
+  const birthLocationRef = useRef(null);
   const [loading, setLoading] = useState(false);
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [showTimePicker, setShowTimePicker] = useState(false);
@@ -36,6 +38,7 @@ const AddUserProfile = ({ navigation, route }) => {
     birthDate: new Date(),
     birthTime: new Date(),
     birthLocation: '',
+    birthLocationCoordinates: null, // { latitude, longitude }
     gender: '',
     isTimeOfBirthUnknown: false,
   });
@@ -50,6 +53,7 @@ const AddUserProfile = ({ navigation, route }) => {
         birthDate: user.birthDate ? new Date(user.birthDate) : new Date(),
         birthTime: isTimeUnknown ? null : (user.birthTime ? new Date(user.birthTime) : new Date()),
         birthLocation: user.birthLocation || '',
+        birthLocationCoordinates: user.birthLocationCoordinates || null,
         gender: user.gender || '',
         isTimeOfBirthUnknown: isTimeUnknown,
       };
@@ -115,25 +119,48 @@ const AddUserProfile = ({ navigation, route }) => {
     }
   };
 
+  // Handle birth location field focus - scroll to top
+  const handleBirthLocationFocus = () => {
+    // Scroll to bring birth location field to top of visible area
+    if (birthLocationRef.current && scrollViewRef.current) {
+      birthLocationRef.current.measureLayout(
+        scrollViewRef.current.getInnerViewNode?.() || scrollViewRef.current,
+        (x, y) => {
+          scrollViewRef.current?.scrollTo({ y: y - 20, animated: true });
+        },
+        () => {
+          // Fallback: scroll to a fixed position if measureLayout fails
+          scrollViewRef.current?.scrollTo({ y: 150, animated: true });
+        }
+      );
+    } else {
+      // Fallback scroll position
+      scrollViewRef.current?.scrollTo({ y: 150, animated: true });
+    }
+  };
+
   // Handle birth location selection from Google Places
-  const handleLocationSelect = (data, details = null) => {
+  const handleLocationSelect = (locationData) => {
     try {
-      if (!data) {
-        console.log('GooglePlacesAutocomplete: No data received');
+      if (!locationData) {
+        console.log('GooglePlacesInput: No data received');
         return;
       }
       
-      const locationName = data.description || 
-                          data.structured_formatting?.main_text || 
-                          data.formatted_address || 
-                          data.name || 
-                          '';
+      console.log('📍 Selected location:', locationData);
       
-      if (locationName) {
-        console.log('Selected location:', locationName);
-        handleInputChange('birthLocation', locationName);
+      // Update birth location name
+      handleInputChange('birthLocation', locationData.name || '');
+      
+      // Update coordinates if available
+      if (locationData.coordinates) {
+        handleInputChange('birthLocationCoordinates', {
+          latitude: locationData.coordinates.latitude,
+          longitude: locationData.coordinates.longitude,
+        });
+        console.log('📍 Coordinates:', locationData.coordinates);
       } else {
-        console.log('GooglePlacesAutocomplete: No valid location name found in data:', data);
+        handleInputChange('birthLocationCoordinates', null);
       }
     } catch (error) {
       console.error('Error handling location selection:', error);
@@ -195,6 +222,7 @@ const AddUserProfile = ({ navigation, route }) => {
         birthDate: formData.birthDate.toISOString(),
         birthTime: isTimeOfBirthUnknown ? null : formData.birthTime?.toISOString(),
         birthLocation: formData.birthLocation.trim(),
+        birthLocationCoordinates: formData.birthLocationCoordinates,
         gender: formData.gender,
         isTimeOfBirthUnknown: isTimeOfBirthUnknown,
       };
@@ -279,7 +307,13 @@ const AddUserProfile = ({ navigation, route }) => {
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
       >
-        <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+        <ScrollView 
+          ref={scrollViewRef}
+          style={styles.content} 
+          showsVerticalScrollIndicator={false} 
+          keyboardShouldPersistTaps="handled"
+          contentContainerStyle={{ paddingBottom: Math.max(insets.bottom, 20) + 20 }}
+        >
         {/* Info Message */}
         <View style={styles.infoCard}>
           <Ionicons name="information-circle" size={24} color="#3B82F6" />
@@ -315,6 +349,23 @@ const AddUserProfile = ({ navigation, route }) => {
               </Text>
               <Ionicons name="chevron-down" size={20} color="#6B7280" />
             </TouchableOpacity>
+          </View>
+
+          {/* Birth Location Field - Moved up for better keyboard handling */}
+          <View ref={birthLocationRef} style={[styles.inputGroup, { zIndex: 1000 }]}>
+            <Text style={styles.label}>Birth Location *</Text>
+            <GooglePlacesInput
+              value={formData.birthLocation}
+              onLocationSelect={handleLocationSelect}
+              onFocus={handleBirthLocationFocus}
+              placeholder="Search for your birth city/place"
+            />
+            {formData.birthLocationCoordinates && (
+              <Text style={styles.coordinatesText}>
+                📍 Lat: {formData.birthLocationCoordinates.latitude?.toFixed(4)}, 
+                Lng: {formData.birthLocationCoordinates.longitude?.toFixed(4)}
+              </Text>
+            )}
           </View>
 
           {/* Date of Birth Field */}
@@ -369,25 +420,6 @@ const AddUserProfile = ({ navigation, route }) => {
               </Text>
               <Ionicons name="chevron-down" size={20} color={isTimeOfBirthUnknown ? "#D1D5DB" : "#6B7280"} />
             </TouchableOpacity>
-          </View>
-
-          {/* Birth Location Field */}
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>Birth Location *</Text>
-            <View style={styles.googlePlacesContainer}>
-              {/* Fallback to TextInput if Google Places causes issues */}
-              <TextInput
-                style={styles.textInput}
-                value={formData.birthLocation}
-                onChangeText={(text) => handleInputChange('birthLocation', text)}
-                placeholder="Enter your birth city/place"
-                placeholderTextColor="#9CA3AF"
-                autoCapitalize="words"
-                autoCorrect={false}
-              />
-              {/* Note: Google Places Autocomplete temporarily disabled due to filter error */}
-              {/* Will be re-enabled once the react-native-google-places-autocomplete library issue is resolved */}
-            </View>
           </View>
         </View>
 
@@ -578,7 +610,8 @@ const styles = StyleSheet.create({
     backgroundColor: '#F97316',
     paddingVertical: 16,
     borderRadius: 12,
-    marginBottom: 32,
+    marginTop: 8,
+    marginBottom: 16,
   },
   saveButtonDisabled: {
     backgroundColor: '#D1D5DB',
@@ -626,6 +659,12 @@ const styles = StyleSheet.create({
   googlePlacesContainer: {
     flex: 1,
     zIndex: 1,
+  },
+  coordinatesText: {
+    fontSize: 12,
+    color: '#6B7280',
+    marginTop: 8,
+    fontStyle: 'italic',
   },
   modalOverlay: {
     flex: 1,

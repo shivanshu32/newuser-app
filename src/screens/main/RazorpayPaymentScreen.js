@@ -14,12 +14,13 @@ import { useAuth } from '../../context/AuthContext';
 import { walletAPI } from '../../services/api';
 import prepaidOffersAPI from '../../services/prepaidOffersAPI';
 import prepaidRechargeCardsAPI from '../../services/prepaidRechargeCardsAPI';
+import prepaidVoiceCardsAPI from '../../services/prepaidVoiceCardsAPI';
 import poojaAPI from '../../services/poojaAPI';
 import usePaymentTimeout from '../../hooks/usePaymentTimeout';
 import facebookTrackingService from '../../services/facebookTrackingService';
 
 const RazorpayPaymentScreen = ({ route, navigation }) => {
-  const { order, config, finalAmount, user, selectedPackage, paymentType, offerId, offerDetails, bookingId, rechargeCardPurchaseId } = route.params;
+  const { order, config, finalAmount, user, selectedPackage, paymentType, offerId, offerDetails, bookingId, rechargeCardPurchaseId, voiceCardPurchaseId, voiceCardDetails } = route.params;
   const { updateWalletBalance, updateUser } = useAuth();
   const [loading, setLoading] = useState(true);
   const [transactionId, setTransactionId] = useState(order?.transactionId || null);
@@ -182,6 +183,23 @@ const RazorpayPaymentScreen = ({ route, navigation }) => {
           data: verificationResponse?.data,
           fullResponse: verificationResponse
         });
+      } else if (paymentType === 'prepaid_voice_card') {
+        // Handle prepaid voice card payment verification
+        console.log('Verifying prepaid voice card payment');
+        const verificationData = {
+          orderId: paymentData.order_id,
+          paymentId: paymentData.payment_id,
+          signature: paymentData.signature,
+          purchaseId: voiceCardPurchaseId,
+        };
+
+        verificationResponse = await prepaidVoiceCardsAPI.verifyPayment(verificationData);
+        console.log('📞 [PREPAID_VOICE_CARD_VERIFICATION] Response received:', {
+          success: verificationResponse?.success,
+          message: verificationResponse?.message,
+          data: verificationResponse?.data,
+          fullResponse: verificationResponse
+        });
       } else if (paymentType === 'pooja_booking') {
         // Handle pooja booking payment verification
         console.log('Verifying pooja booking payment for bookingId:', bookingId);
@@ -309,6 +327,9 @@ const RazorpayPaymentScreen = ({ route, navigation }) => {
         } else if (paymentType === 'prepaid_recharge_card') {
           // Prepaid recharge card payment success message
           successMessage = `Payment Successful!\n\nYour prepaid chat pack has been activated.\n\nYou can now see it under \"Your Prepaid Chat Packs\" on the home screen.\n\nPayment ID: ${paymentData.payment_id}`;
+        } else if (paymentType === 'prepaid_voice_card') {
+          // Prepaid voice card payment success message
+          successMessage = `Payment Successful!\n\nYour prepaid voice pack has been activated.\n\nDuration: ${voiceCardDetails?.durationMinutes || 'N/A'} minutes\n\nYou can now see it under \"Your Prepaid Voice Packs\" on the home screen.\n\nPayment ID: ${paymentData.payment_id}`;
         } else if (paymentType === 'pooja_booking') {
           // Pooja booking payment success message
           const bookingData = verificationResponse.data?.booking;
@@ -337,7 +358,7 @@ const RazorpayPaymentScreen = ({ route, navigation }) => {
             {
               text: 'OK',
               onPress: async () => {
-                if (paymentType === 'prepaid_offer' || paymentType === 'prepaid_recharge_card') {
+                if (paymentType === 'prepaid_offer' || paymentType === 'prepaid_recharge_card' || paymentType === 'prepaid_voice_card') {
                   console.log('🔙 Navigating to Home screen after prepaid payment...');
                   // Small delay to ensure database update propagates
                   await new Promise(resolve => setTimeout(resolve, 1000));

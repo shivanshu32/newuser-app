@@ -21,6 +21,9 @@ const BookingWaitingScreen = () => {
   const { socket } = useSocket();
   const { showBookingAcceptedPopup } = useBookingPopup();
   
+  // Ref to track intentional navigation (prevents back warning on programmatic navigation)
+  const isNavigatingAwayRef = React.useRef(false);
+  
   console.log(' [BookingWaiting] Component mounting...');
   console.log(' [BookingWaiting] Route params:', JSON.stringify(route.params, null, 2));
   
@@ -53,6 +56,83 @@ const BookingWaitingScreen = () => {
   const [timeLeft, setTimeLeft] = useState(120); // 2 minutes in seconds
   const [isLoading, setIsLoading] = useState(false);
   const [bookingStatus, setBookingStatus] = useState('pending');
+
+  // Prevent back navigation with warning alert
+  useEffect(() => {
+    const unsubscribe = navigation.addListener('beforeRemove', (e) => {
+      // Allow navigation if we're intentionally navigating away (e.g., after acceptance)
+      if (isNavigatingAwayRef.current) {
+        console.log('✅ [BookingWaiting] Allowing intentional navigation');
+        return;
+      }
+      
+      // Only show warning if booking is still pending
+      if (bookingStatus !== 'pending') {
+        // Allow navigation if booking is not pending
+        return;
+      }
+
+      // Prevent default behavior of leaving the screen
+      e.preventDefault();
+
+      // Show confirmation dialog
+      Alert.alert(
+        'Cancel Booking Request?',
+        'If you leave this screen, your ongoing booking request will be cancelled. Are you sure you want to go back?',
+        [
+          {
+            text: 'Stay',
+            style: 'cancel',
+            onPress: () => {}
+          },
+          {
+            text: 'Leave & Cancel',
+            style: 'destructive',
+            onPress: async () => {
+              console.log('⚠️ [BookingWaiting] User confirmed leaving - cancelling booking');
+              
+              // Cancel the booking before leaving
+              try {
+                const token = await AsyncStorage.getItem('userToken');
+                if (token) {
+                  let cancelUrl;
+                  let cancelId;
+                  
+                  if (isPrepaidOffer || isPrepaidCard) {
+                    cancelId = bookingId;
+                    cancelUrl = `${API_BASE}/prepaid-offers/sessions/${cancelId}/cancel`;
+                  } else {
+                    cancelId = bookingId;
+                    cancelUrl = `${API_BASE}/bookings/${cancelId}/cancel`;
+                  }
+                  
+                  await fetch(cancelUrl, {
+                    method: 'PUT',
+                    headers: {
+                      'Content-Type': 'application/json',
+                      'Authorization': `Bearer ${token}`,
+                    },
+                    body: JSON.stringify({
+                      reason: 'User left waiting screen'
+                    })
+                  });
+                  
+                  console.log('✅ [BookingWaiting] Booking cancelled due to user leaving');
+                }
+              } catch (error) {
+                console.error('❌ [BookingWaiting] Error cancelling on leave:', error);
+              }
+              
+              // Allow navigation after cancellation
+              navigation.dispatch(e.data.action);
+            }
+          }
+        ]
+      );
+    });
+
+    return unsubscribe;
+  }, [navigation, bookingStatus, bookingId, isPrepaidOffer, isPrepaidCard]);
 
   useEffect(() => {
     console.log(' [BookingWaiting] useEffect running...');
@@ -192,6 +272,9 @@ const BookingWaitingScreen = () => {
         // Optional: Navigate away from waiting screen since booking is accepted
         // navigation.goBack(); // Uncomment if you want to auto-navigate
       } else if (data.status === 'rejected') {
+        // Mark that we're intentionally navigating away
+        isNavigatingAwayRef.current = true;
+        
         Alert.alert(
           'Booking Rejected',
           'Unfortunately, the astrologer is not available at the moment. Please try again later or choose a different astrologer.',
@@ -210,6 +293,9 @@ const BookingWaitingScreen = () => {
     console.log(' [BookingWaiting] Received auto-cancellation:', data);
     
     if (data.bookingId === bookingId) {
+      // Mark that we're intentionally navigating away
+      isNavigatingAwayRef.current = true;
+      
       Alert.alert(
         'Booking Timed Out',
         'Your booking request has been automatically cancelled as the astrologer did not respond within 2 minutes. Please try again or choose a different astrologer.',
@@ -225,6 +311,8 @@ const BookingWaitingScreen = () => {
 
   const handleBookingCancelled = (data) => {
     console.log(' [BookingWaiting] Received cancellation confirmation:', data);
+    // Mark that we're intentionally navigating away
+    isNavigatingAwayRef.current = true;
     navigation.goBack();
   };
 
@@ -243,6 +331,9 @@ const BookingWaitingScreen = () => {
     if (isOurSession) {
       console.log('✅ [BookingWaiting] Our prepaid session was accepted - navigating to chat');
       setBookingStatus('accepted');
+      
+      // Mark that we're intentionally navigating away
+      isNavigatingAwayRef.current = true;
       
       // Navigate to EnhancedChatScreen for prepaid offers (uses consultation room system)
       const navigationParams = {
@@ -275,6 +366,9 @@ const BookingWaitingScreen = () => {
       console.log('❌ [BookingWaiting] Our prepaid session was rejected');
       setBookingStatus('rejected');
       
+      // Mark that we're intentionally navigating away
+      isNavigatingAwayRef.current = true;
+      
       Alert.alert(
         'Session Unavailable',
         'The astrologer is currently unavailable for your prepaid chat session. Please try again later.',
@@ -294,6 +388,9 @@ const BookingWaitingScreen = () => {
     if (data.sessionId === sessionId || data.sessionIdentifier === sessionId) {
       console.log('⏰ [BookingWaiting] Our prepaid session timed out');
       setBookingStatus('timeout');
+      
+      // Mark that we're intentionally navigating away
+      isNavigatingAwayRef.current = true;
       
       const sessionTypeText = isPrepaidCard ? 'prepaid card' : 'prepaid offer';
       Alert.alert(
@@ -318,6 +415,9 @@ const BookingWaitingScreen = () => {
     if (isOurSession) {
       console.log('✅ [BookingWaiting] Our prepaid session cancellation confirmed');
       setBookingStatus('cancelled');
+      
+      // Mark that we're intentionally navigating away
+      isNavigatingAwayRef.current = true;
       
       // If we have a message from backend, show it
       if (data.message && data.canRetry) {

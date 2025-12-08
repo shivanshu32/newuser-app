@@ -282,6 +282,12 @@ export const astrologersAPI = {
   getAvailability: (id) => API.get(`/astrologers/${id}/availability`),
 };
 
+// Categories API
+export const categoriesAPI = {
+  getAll: (params) => API.get('/categories', { params }),
+  getById: (id) => API.get(`/categories/${id}`),
+};
+
 // Bookings API
 export const bookingsAPI = {
   create(bookingData) {
@@ -466,6 +472,12 @@ export const blogAPI = {
       throw error;
     }
   }
+};
+
+// Home Popup API
+export const homePopupAPI = {
+  getActivePopup: () => API.get('/home-popup/active'),
+  trackInteraction: (popupId, action) => API.post(`/home-popup/${popupId}/track`, { action }),
 };
 
 // Export API_BASE for direct URL construction when needed

@@ -10,6 +10,13 @@ const AstrologerListItem = ({ item, onPress }) => {
       accessible={true}
       accessibilityLabel={`${item.name}, ${item.specialization}, ${item.rating} stars, ${item.experience} years experience, ₹${item.price} per minute. ${item.status === 'online' ? 'Online' : 'Offline'}`}
     >
+      {/* Premium Badge for Premium Astrologers */}
+      {(item.isPremium || item.rating?.average >= 4.8 || (typeof item.rating === 'number' && item.rating >= 4.8)) && (
+        <View style={styles.premiumBadge}>
+          <Text style={styles.premiumText}>PREMIUM</Text>
+        </View>
+      )}
+      
       {item.status === 'online' && (
         <View style={styles.liveIndicator}>
           <Text style={styles.liveText}>LIVE</Text>
@@ -55,6 +62,26 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 2,
     position: 'relative',
+  },
+  premiumBadge: {
+    position: 'absolute',
+    top: 8,
+    left: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 215, 0, 0.15)',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 215, 0, 0.3)',
+    zIndex: 10,
+  },
+  premiumText: {
+    fontSize: 8,
+    fontWeight: '700',
+    color: '#FFD700',
+    letterSpacing: 0.5,
   },
   liveIndicator: {
     position: 'absolute',

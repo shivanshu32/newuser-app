@@ -21,9 +21,10 @@ import { LinearGradient } from 'expo-linear-gradient';
 import Toast from 'react-native-toast-message';
 import { useAuth } from '../../context/AuthContext';
 import { useSocket } from '../../context/SocketContext';
-import { astrologersAPI, walletAPI, versionAPI, freeChatAPI, sessionsAPI } from '../../services/api';
+import { astrologersAPI, walletAPI, versionAPI, freeChatAPI, sessionsAPI, categoriesAPI } from '../../services/api';
 import prepaidOffersAPI from '../../services/prepaidOffersAPI';
 import prepaidRechargeCardsAPI from '../../services/prepaidRechargeCardsAPI';
+import prepaidVoiceCardsAPI from '../../services/prepaidVoiceCardsAPI';
 import BookingAcceptedModal from '../../components/BookingAcceptedModal';
 import FreeChatCard from '../../components/FreeChatCard';
 import PrepaidOfferCard from '../../components/PrepaidOfferCard';
@@ -33,6 +34,7 @@ import BannerCarousel from '../../components/BannerCarousel';
 import BlogSection from '../../components/BlogSection';
 import PoojaSection from '../../components/PoojaSection';
 import RechargePackagesSection from '../../components/RechargePackagesSection';
+import HomePopup from '../../components/HomePopup';
 
 // Hardcoded app version - update this when releasing new versions
 import APP_CONFIG from '../../config/appConfig';
@@ -41,6 +43,8 @@ const HomeScreen = ({ navigation }) => {
   const { user } = useAuth();
   const { socket } = useSocket();
   const [astrologers, setAstrologers] = useState([]);
+  const [categories, setCategories] = useState([]);
+  const [selectedCategory, setSelectedCategory] = useState('all');
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [walletBalance, setWalletBalance] = useState(0);
@@ -71,7 +75,34 @@ const HomeScreen = ({ navigation }) => {
   const [prepaidRechargeCards, setPrepaidRechargeCards] = useState([]);
   const [loadingRechargeCards, setLoadingRechargeCards] = useState(false);
 
+  // Prepaid Voice Cards State (buyable voice packs from admin)
+  const [prepaidVoiceCards, setPrepaidVoiceCards] = useState([]);
+  const [loadingVoiceCards, setLoadingVoiceCards] = useState(false);
 
+  // Prepaid Voice Card Offers State (user-owned, available to use)
+  const [prepaidVoiceOffers, setPrepaidVoiceOffers] = useState([]);
+  const [loadingVoiceOffers, setLoadingVoiceOffers] = useState(false);
+
+  // Home Popup State
+  const [showHomePopup, setShowHomePopup] = useState(false);
+
+  // Fetch categories from backend
+  const fetchCategories = useCallback(async () => {
+    try {
+      console.log('🔄 [HOME] Fetching categories from backend...');
+      const response = await categoriesAPI.getAll({ active: 'true' });
+      console.log('🔄 [HOME] Categories API response:', response);
+      if (response.success && response.data) {
+        setCategories(response.data);
+        console.log(`✅ [HOME] Categories loaded: ${response.data.length}`, response.data);
+      } else {
+        console.warn('⚠️ [HOME] Categories API returned no data or success: false');
+      }
+    } catch (error) {
+      console.error('❌ [HOME] Error fetching categories:', error);
+      // Silently fail - categories are optional
+    }
+  }, []);
 
   // Fetch all astrologers data with pagination
   const fetchAstrologers = useCallback(async () => {
@@ -214,6 +245,55 @@ const HomeScreen = ({ navigation }) => {
     }
   }, []);
 
+  // Fetch active prepaid voice cards catalog (buyable voice packs from admin)
+  const fetchPrepaidVoiceCards = useCallback(async () => {
+    try {
+      setLoadingVoiceCards(true);
+      console.log('🔄 Fetching active prepaid voice cards catalog...');
+
+      const data = await prepaidVoiceCardsAPI.getActiveCards();
+      console.log('✅ Active prepaid voice cards fetched:', data);
+
+      if (data.success) {
+        setPrepaidVoiceCards(data.data || []);
+      } else {
+        setPrepaidVoiceCards([]);
+      }
+    } catch (error) {
+      console.error('❌ Error fetching active prepaid voice cards:', error);
+      setPrepaidVoiceCards([]);
+    } finally {
+      setLoadingVoiceCards(false);
+    }
+  }, []);
+
+  // Fetch prepaid voice card offers (already purchased, available to use)
+  const fetchPrepaidVoiceOffers = useCallback(async () => {
+    try {
+      setLoadingVoiceOffers(true);
+      console.log('🔄 Fetching prepaid voice card offers...');
+      
+      const data = await prepaidVoiceCardsAPI.getMyAvailableOffers();
+      console.log('✅ Prepaid voice offers fetched:', data);
+      
+      if (data.success) {
+        console.log('📞 [HOME_SCREEN] Voice offers details:', data.data?.map(offer => ({
+          id: offer._id,
+          cardName: offer.purchaseDetails?.cardName,
+          durationMinutes: offer.purchaseDetails?.durationMinutes,
+          isAvailableToUse: offer.isAvailableToUse,
+          isUsed: offer.isUsed
+        })));
+        setPrepaidVoiceOffers(data.data || []);
+      }
+    } catch (error) {
+      console.error('❌ Error fetching prepaid voice offers:', error);
+      setPrepaidVoiceOffers([]);
+    } finally {
+      setLoadingVoiceOffers(false);
+    }
+  }, []);
+
   // Handle offer used (remove from list)
   // Refresh prepaid offers
   const refreshPrepaidOffers = useCallback(async () => {
@@ -240,6 +320,20 @@ const HomeScreen = ({ navigation }) => {
     });
   }, [navigation]);
 
+  // Handle start prepaid voice call
+  const handleStartPrepaidVoiceCall = useCallback((offer) => {
+    console.log('📞 [HOME_SCREEN] Starting prepaid voice call:', offer);
+    
+    // Navigate to prepaid voice pack astrologer selection screen
+    navigation.navigate('PrepaidVoicePackAstrologers', {
+      purchaseId: offer._id,
+      durationMinutes: offer.purchaseDetails?.durationMinutes,
+      cardName: offer.purchaseDetails?.cardName,
+      astrologerAssignment: offer.card?.astrologerAssignment,
+      assignedAstrologers: offer.card?.assignedAstrologers || []
+    });
+  }, [navigation]);
+
   // Handle buy prepaid recharge card (catalog -> payment summary)
   const handleBuyPrepaidRechargeCard = useCallback((card) => {
     try {
@@ -257,6 +351,27 @@ const HomeScreen = ({ navigation }) => {
       });
     } catch (error) {
       console.error('❌ [HOME_SCREEN] Error navigating to prepaid recharge card payment summary:', error);
+      Alert.alert('Payment Error', 'Failed to open payment summary. Please try again.');
+    }
+  }, [navigation]);
+
+  // Handle buy prepaid voice card (catalog -> payment summary)
+  const handleBuyPrepaidVoiceCard = useCallback((card) => {
+    try {
+      console.log('📞 [HOME_SCREEN] Buying prepaid voice card (summary):', card);
+
+      const cardId = card.id || card._id;
+      if (!cardId) {
+        console.error('❌ [HOME_SCREEN] Missing card id for prepaid voice card:', card);
+        Alert.alert('Payment Error', 'Invalid card details. Please try again later.');
+        return;
+      }
+
+      navigation.navigate('PrepaidVoiceCardPayment', {
+        card,
+      });
+    } catch (error) {
+      console.error('❌ [HOME_SCREEN] Error navigating to prepaid voice card payment summary:', error);
       Alert.alert('Payment Error', 'Failed to open payment summary. Please try again.');
     }
   }, [navigation]);
@@ -1473,11 +1588,12 @@ const HomeScreen = ({ navigation }) => {
   const loadInitialData = useCallback(async () => {
     await Promise.all([
       fetchAstrologers(),
+      fetchCategories(),
       fetchWalletBalance(),
       fetchUserPendingBookings(),
       fetchPrepaidOffers()
     ]);
-  }, [fetchAstrologers, fetchWalletBalance, fetchUserPendingBookings, fetchPrepaidOffers]);
+  }, [fetchAstrologers, fetchCategories, fetchWalletBalance, fetchUserPendingBookings, fetchPrepaidOffers]);
 
   // Handle refresh
   const onRefresh = useCallback(async () => {
@@ -1531,6 +1647,9 @@ const HomeScreen = ({ navigation }) => {
             fetchAstrologers().catch(error => {
               console.error('❌ [FOCUS_EFFECT] Error fetching astrologers:', error);
             }),
+            fetchCategories().catch(error => {
+              console.error('❌ [FOCUS_EFFECT] Error fetching categories:', error);
+            }),
             fetchWalletBalance().catch(error => {
               console.error('❌ [FOCUS_EFFECT] Error fetching wallet balance:', error);
             }),
@@ -1542,6 +1661,12 @@ const HomeScreen = ({ navigation }) => {
             }),
             fetchPrepaidRechargeCards().catch(error => {
               console.error('❌ [FOCUS_EFFECT] Error fetching prepaid recharge cards catalog:', error);
+            }),
+            fetchPrepaidVoiceCards().catch(error => {
+              console.error('❌ [FOCUS_EFFECT] Error fetching prepaid voice cards catalog:', error);
+            }),
+            fetchPrepaidVoiceOffers().catch(error => {
+              console.error('❌ [FOCUS_EFFECT] Error fetching prepaid voice offers:', error);
             }),
             checkActiveSession().catch(error => {
               console.error('❌ [FOCUS_EFFECT] Error checking active session:', error);
@@ -1555,7 +1680,17 @@ const HomeScreen = ({ navigation }) => {
       };
       
       refreshData();
-    }, [fetchUserPendingBookings, fetchAstrologers, fetchWalletBalance, fetchPrepaidOffers, fetchPrepaidRechargeOffers, socket])
+      
+      // Show home popup after a short delay (to ensure user sees home screen first)
+      const popupTimer = setTimeout(() => {
+        console.log('🎯 [HOME_SCREEN] Triggering home popup display');
+        setShowHomePopup(true);
+      }, 1000);
+      
+      return () => {
+        clearTimeout(popupTimer);
+      };
+    }, [fetchUserPendingBookings, fetchAstrologers, fetchCategories, fetchWalletBalance, fetchPrepaidOffers, fetchPrepaidRechargeOffers, socket])
   );
   
   // Additional navigation listener to ensure pending bookings are refreshed
@@ -2211,13 +2346,56 @@ const HomeScreen = ({ navigation }) => {
     }
   };
 
+  // Render category button
+  const renderCategoryButton = (category) => {
+    const isSelected = selectedCategory === category;
+    const displayLabel = category === 'all' ? 'All' : category;
+    
+    return (
+      <TouchableOpacity
+        key={category}
+        style={[
+          styles.homeCategoryButton,
+          isSelected && styles.homeActiveCategoryButton
+        ]}
+        onPress={() => setSelectedCategory(category)}
+        activeOpacity={0.7}
+      >
+        <Text style={[
+          styles.homeCategoryButtonText,
+          isSelected && styles.homeActiveCategoryButtonText
+        ]}>
+          {displayLabel}
+        </Text>
+      </TouchableOpacity>
+    );
+  };
+
   // Render horizontal astrologers section
   const renderAstrologersSection = (onlineAstrologers) => {
+    // Build available categories list
+    const availableCategories = ['all', ...categories.map(cat => cat.name)];
+    console.log('🏠 [HOME] Available categories:', availableCategories);
+    console.log('🏠 [HOME] Categories state:', categories);
+    
+    // Filter astrologers by selected category
+    const filteredAstrologers = selectedCategory === 'all' 
+      ? onlineAstrologers 
+      : onlineAstrologers.filter(astrologer => {
+          if (Array.isArray(astrologer.categoryRefs) && astrologer.categoryRefs.length > 0) {
+            return astrologer.categoryRefs.some(categoryRef => {
+              const categoryName = categoryRef?.name || categoryRef;
+              return categoryName && categoryName.trim().toLowerCase() === selectedCategory.toLowerCase();
+            });
+          }
+          return false;
+        });
+    
     return (
       <View style={styles.astrologersSection}>
         {/* Section Header */}
         <View style={styles.astrologersHeader}>
-          <Text style={styles.sectionTitle}>All Astrologers ({onlineAstrologers.length})</Text>
+          <Text style={styles.sectionTitle}>All Astrologers ({filteredAstrologers.length})</Text>
           <TouchableOpacity
             onPress={() => navigation.navigate('Astrologers')}
             style={styles.viewAllButton}
@@ -2227,13 +2405,25 @@ const HomeScreen = ({ navigation }) => {
           </TouchableOpacity>
         </View>
         
+        {/* Category Filter Buttons */}
+        {availableCategories.length > 0 && (
+          <ScrollView 
+            horizontal 
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.homeCategoryFilterContainer}
+            style={styles.homeCategoryFilterScroll}
+          >
+            {availableCategories.map(renderCategoryButton)}
+          </ScrollView>
+        )}
+        
         {/* Horizontal Scrollable List */}
         <FlatList
-          data={onlineAstrologers}
+          data={filteredAstrologers}
           renderItem={({ item, index }) => (
             <View style={{
               marginLeft: index === 0 ? 20 : 0,
-              marginRight: index === onlineAstrologers.length - 1 ? 20 : 12
+              marginRight: index === filteredAstrologers.length - 1 ? 20 : 12
             }}>
               {renderHorizontalAstrologerCard(item)}
             </View>
@@ -2429,22 +2619,10 @@ const HomeScreen = ({ navigation }) => {
           </View>
           
           <View style={styles.astrologerMainInfo}>
-            <View style={styles.nameAndStatus}>
-              <Text style={styles.astrologerName} numberOfLines={1}>
-                {item.displayName || item.name}
-              </Text>
-              <View style={[
-                styles.statusChip,
-                { backgroundColor: getStatusOutlineColor(item) + '20' }
-              ]}>
-                <Text style={[
-                  styles.statusText,
-                  { color: getStatusOutlineColor(item) }
-                ]}>
-                  {getStatusText(item)}
-                </Text>
-              </View>
-            </View>
+            {/* Name Row */}
+            <Text style={styles.astrologerName} numberOfLines={1}>
+              {item.displayName || item.name}
+            </Text>
             
             <Text style={styles.astrologerSpecialty} numberOfLines={2}>
               {item.specialties?.join(', ') || item.specialization || 'Vedic Astrology, Numerology'}
@@ -2464,6 +2642,26 @@ const HomeScreen = ({ navigation }) => {
                 </Text>
               </View>
               <Text style={styles.experience}>{item.experience || '8'}+ years exp</Text>
+            </View>
+            
+            {/* Badges Row - Premium and Status */}
+            <View style={styles.badgesRow}>
+              {(item.isPremium || item.rating?.average >= 4.8) && (
+                <View style={styles.premiumBadgeInline}>
+                  <Text style={styles.premiumText}>PREMIUM</Text>
+                </View>
+              )}
+              <View style={[
+                styles.statusChip,
+                { backgroundColor: getStatusOutlineColor(item) + '20' }
+              ]}>
+                <Text style={[
+                  styles.statusText,
+                  { color: getStatusOutlineColor(item) }
+                ]}>
+                  {getStatusText(item)}
+                </Text>
+              </View>
             </View>
           </View>
         </View>
@@ -2721,6 +2919,18 @@ const HomeScreen = ({ navigation }) => {
       })));
     }
 
+    // Add prepaid voice card offers section if there are any (user-owned)
+    console.log('📞 [HOME_SCREEN] Prepaid voice offers count:', prepaidVoiceOffers.length, prepaidVoiceOffers);
+    if (prepaidVoiceOffers.length > 0) {
+      console.log('📞 [HOME_SCREEN] Adding prepaid voice offers to data array');
+      data.push({ type: 'prepaidVoiceOffersHeader', id: 'prepaidVoiceOffersHeader' });
+      data.push(...prepaidVoiceOffers.map((offer, index) => ({
+        type: 'prepaidVoiceOffer',
+        id: `prepaid_voice_offer_${offer._id || index}`,
+        data: offer
+      })));
+    }
+
     // Add prepaid recharge cards catalog section (buyable cards) if there are any
     console.log('💳 [HOME_SCREEN] Prepaid recharge cards catalog count:', prepaidRechargeCards.length, prepaidRechargeCards);
     if (prepaidRechargeCards.length > 0) {
@@ -2731,6 +2941,18 @@ const HomeScreen = ({ navigation }) => {
         type: 'prepaidRechargeCardsGrid',
         id: 'prepaidRechargeCardsGrid',
         data: prepaidRechargeCards,
+      });
+    }
+
+    // Add prepaid voice cards catalog section (buyable voice packs) if there are any
+    console.log('📞 [HOME_SCREEN] Prepaid voice cards catalog count:', prepaidVoiceCards.length, prepaidVoiceCards);
+    if (prepaidVoiceCards.length > 0) {
+      console.log('📞 [HOME_SCREEN] Adding prepaid voice cards catalog to data array');
+      data.push({ type: 'prepaidVoiceCardsHeader', id: 'prepaidVoiceCardsHeader' });
+      data.push({
+        type: 'prepaidVoiceCardsGrid',
+        id: 'prepaidVoiceCardsGrid',
+        data: prepaidVoiceCards,
       });
     }
 
@@ -2812,6 +3034,50 @@ const HomeScreen = ({ navigation }) => {
             onStartChat={() => handleStartPrepaidRechargeChat(item.data)}
           />
         );
+      case 'prepaidVoiceOffersHeader':
+        return (
+          <View style={styles.astrologersSection}>
+            <View style={styles.astrologersHeader}>
+              <Text style={styles.sectionTitle}>Your Prepaid Voice Packs</Text>
+            </View>
+          </View>
+        );
+      case 'prepaidVoiceOffer':
+        console.log('📞 [HOME_SCREEN] Rendering PrepaidVoiceOfferCard with data:', item.data);
+        return (
+          <TouchableOpacity
+            style={[styles.prepaidRechargeOfferCard, { borderLeftColor: '#8B5CF6' }]}
+            onPress={() => handleStartPrepaidVoiceCall(item.data)}
+            activeOpacity={0.8}
+          >
+            <View style={styles.prepaidRechargeOfferContent}>
+              <View style={styles.prepaidRechargeOfferHeader}>
+                <View style={[styles.prepaidRechargeOfferIcon, { backgroundColor: 'rgba(139, 92, 246, 0.1)' }]}>
+                  <Ionicons name="call" size={24} color="#8B5CF6" />
+                </View>
+                <View style={styles.prepaidRechargeOfferInfo}>
+                  <Text style={styles.prepaidRechargeOfferTitle} numberOfLines={1}>
+                    {item.data.purchaseDetails?.cardName || 'Voice Pack'}
+                  </Text>
+                  <Text style={[styles.prepaidRechargeOfferDuration, { color: '#8B5CF6' }]}>
+                    {item.data.purchaseDetails?.durationMinutes || 0} min voice call
+                  </Text>
+                </View>
+              </View>
+              <View style={styles.prepaidRechargeOfferAction}>
+                <LinearGradient
+                  colors={['#8B5CF6', '#A855F7']}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                  style={styles.prepaidRechargeOfferButton}
+                >
+                  <Text style={styles.prepaidRechargeOfferButtonText}>Start Call</Text>
+                  <Ionicons name="call" size={16} color="#fff" />
+                </LinearGradient>
+              </View>
+            </View>
+          </TouchableOpacity>
+        );
       case 'prepaidRechargeCardsHeader':
         return (
           <View style={styles.astrologersSection}>
@@ -2830,18 +3096,21 @@ const HomeScreen = ({ navigation }) => {
         );
       case 'prepaidRechargeCardsGrid': {
         const cards = Array.isArray(item.data) ? item.data : [];
-        const isFewCards = cards.length <= 2;
 
         return (
           <View style={styles.prepaidRechargeGridContainer}>
-            <View style={styles.prepaidRechargeGridInner}>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.prepaidRechargeScrollContent}
+              decelerationRate="fast"
+              snapToInterval={232} // Card width (220) + margin (12)
+              snapToAlignment="start"
+            >
               {cards.map((card, index) => (
                 <View
                   key={card.id || card._id || index}
-                  style={[
-                    styles.prepaidRechargeGridItem,
-                    isFewCards && styles.prepaidRechargeGridItemLarge,
-                  ]}
+                  style={styles.prepaidRechargeGridItem}
                 >
                   <View style={styles.prepaidRechargeCard}>
                     {card.badge ? (
@@ -2935,7 +3204,137 @@ const HomeScreen = ({ navigation }) => {
                   </View>
                 </View>
               ))}
+            </ScrollView>
+          </View>
+        );
+      }
+      case 'prepaidVoiceCardsHeader':
+        return (
+          <View style={styles.astrologersSection}>
+            <View style={styles.astrologersHeader}>
+              <Text style={styles.sectionTitle}>Prepaid Voice Packs</Text>
+              <TouchableOpacity 
+                style={styles.viewAllButton} 
+                activeOpacity={0.8}
+                onPress={() => navigation.navigate('PrepaidVoiceCardsList')}
+              >
+                <Text style={styles.viewAllText}>View All</Text>
+                <Ionicons name="chevron-forward" size={16} color="#F97316" />
+              </TouchableOpacity>
             </View>
+          </View>
+        );
+      case 'prepaidVoiceCardsGrid': {
+        const cards = Array.isArray(item.data) ? item.data : [];
+
+        return (
+          <View style={styles.prepaidRechargeGridContainer}>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.prepaidRechargeScrollContent}
+              decelerationRate="fast"
+              snapToInterval={232}
+              snapToAlignment="start"
+            >
+              {cards.map((card, index) => (
+                <View
+                  key={card.id || card._id || index}
+                  style={styles.prepaidRechargeGridItem}
+                >
+                  <View style={[styles.prepaidRechargeCard, { borderColor: '#8B5CF6' }]}>
+                    {card.badge ? (
+                      <View style={styles.ribbonContainer}>
+                        <LinearGradient
+                          colors={['#8B5CF6', '#A855F7']}
+                          start={{ x: 0, y: 0 }}
+                          end={{ x: 1, y: 1 }}
+                          style={styles.ribbonBadge}
+                        >
+                          <Text style={styles.ribbonBadgeText}>
+                            {card.badge.toUpperCase()}
+                          </Text>
+                        </LinearGradient>
+                      </View>
+                    ) : null}
+
+                    <View style={styles.prepaidRechargeContent}>
+                      <Text style={styles.prepaidRechargeTitle} numberOfLines={2}>
+                        {card.displayName}
+                      </Text>
+
+                      <View style={styles.prepaidRechargeDurationRow}>
+                        <Ionicons name="call-outline" size={16} color="#8B5CF6" />
+                        <Text style={[styles.prepaidRechargeDuration, { color: '#8B5CF6' }]} numberOfLines={1}>
+                          {card.durationMinutes} min call
+                        </Text>
+                      </View>
+
+                      <View style={styles.prepaidRechargeApplicabilityRow}>
+                        <Ionicons name="people-outline" size={14} color="#FF6B35" />
+                        <Text style={styles.prepaidRechargeApplicability} numberOfLines={1}>
+                          {card.astrologerAssignment === 'specific'
+                            ? 'Selected astrologers'
+                            : 'Any Astrologer'}
+                        </Text>
+                      </View>
+
+                      {card.usageType === 'single_use' && (
+                        <View style={styles.prepaidRechargeSingleUseBadge}>
+                          <Ionicons name="alert-circle-outline" size={12} color="#8B5CF6" />
+                          <Text style={styles.prepaidRechargeSingleUseText}>Single Use Only</Text>
+                        </View>
+                      )}
+
+                      {Array.isArray(card.features) && card.features.length > 0 && (
+                        <View style={styles.prepaidRechargeFeatures}>
+                          {card.features.slice(0, 2).map((feature, fIndex) => (
+                            <View key={fIndex} style={styles.prepaidRechargeFeatureRow}>
+                              <Ionicons name="checkmark-circle" size={14} color="#8B5CF6" />
+                              <Text
+                                style={styles.prepaidRechargeFeatureText}
+                                numberOfLines={1}
+                              >
+                                {feature}
+                              </Text>
+                            </View>
+                          ))}
+                        </View>
+                      )}
+                    </View>
+
+                    <View style={styles.prepaidRechargeFooter}>
+                      <View style={styles.prepaidRechargePriceContainer}>
+                        <Text style={styles.prepaidRechargePriceLabel}>Price</Text>
+                        <Text style={styles.prepaidRechargePriceValue}>
+                          ₹{card.basePrice ?? card.totalAmount ?? '--'}
+                        </Text>
+                        {card.durationMinutes && (card.basePrice || card.totalAmount) ? (
+                          <Text style={styles.prepaidRechargePerMinute}>
+                            ₹{Math.round((card.basePrice ?? card.totalAmount) / card.durationMinutes)}/min
+                          </Text>
+                        ) : null}
+                      </View>
+
+                      <TouchableOpacity
+                        style={styles.prepaidRechargeButton}
+                        onPress={() => handleBuyPrepaidVoiceCard(card)}
+                        activeOpacity={0.85}
+                      >
+                        <LinearGradient
+                          colors={['#8B5CF6', '#A855F7']}
+                          start={{ x: 0, y: 0 }}
+                          end={{ x: 1, y: 0 }}
+                          style={styles.prepaidRechargeButtonGradient}
+                        >
+                          <Text style={styles.prepaidRechargeButtonText}>Buy</Text>
+                        </LinearGradient>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                </View>
+              ))}
+            </ScrollView>
           </View>
         );
       }
@@ -3093,10 +3492,17 @@ const HomeScreen = ({ navigation }) => {
       {/* Rejoin Chat Bottom Sheet */}
       <RejoinChatBottomSheet
         visible={showRejoinBottomSheet}
-        onClose={handleBottomSheetClose}
+        onClose={() => setShowRejoinBottomSheet(false)}
+        onRejoin={handleRejoinChat}
         sessionData={activeSessionData}
-        onRejoinPress={handleRejoinChat}
         remainingTime={remainingTime}
+      />
+
+      {/* Home Popup */}
+      <HomePopup
+        visible={showHomePopup}
+        onClose={() => setShowHomePopup(false)}
+        navigation={navigation}
       />
     </SafeAreaView>
   );
@@ -3203,7 +3609,35 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 20,
+    marginBottom: 12,
+  },
+  homeCategoryFilterScroll: {
     marginBottom: 16,
+  },
+  homeCategoryFilterContainer: {
+    paddingHorizontal: 20,
+  },
+  homeCategoryButton: {
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    borderRadius: 16,
+    backgroundColor: '#FFFFFF',
+    marginRight: 8,
+    borderWidth: 1.5,
+    borderColor: '#E5E7EB',
+  },
+  homeActiveCategoryButton: {
+    backgroundColor: '#F97316',
+    borderColor: '#F97316',
+  },
+  homeCategoryButtonText: {
+    fontSize: 13,
+    fontWeight: '500',
+    color: '#6B7280',
+  },
+  homeActiveCategoryButtonText: {
+    color: '#FFFFFF',
+    fontWeight: '600',
   },
   sectionHeader: {
     flexDirection: 'row',
@@ -3349,18 +3783,17 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'space-between',
   },
-  nameAndStatus: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: 6,
-  },
   astrologerName: {
     fontSize: 18,
     fontWeight: '700',
     color: '#1F2937',
-    flex: 1,
-    marginRight: 8,
+    marginBottom: 6,
+  },
+  badgesRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 8,
+    flexWrap: 'wrap',
   },
   statusChip: {
     paddingHorizontal: 8,
@@ -3464,20 +3897,15 @@ const styles = StyleSheet.create({
   },
   // Buy Prepaid Chat Packs grid styles
   prepaidRechargeGridContainer: {
-    paddingHorizontal: 16,
     marginBottom: 8,
   },
-  prepaidRechargeGridInner: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'space-between',
+  prepaidRechargeScrollContent: {
+    paddingHorizontal: 16,
+    paddingRight: 8,
   },
   prepaidRechargeGridItem: {
-    width: '31%', // roughly 3 items per row with small gaps
-    marginBottom: 12,
-  },
-  prepaidRechargeGridItemLarge: {
-    width: '48%', // for 1-2 cards, use almost half width each
+    width: 220, // fixed width for 1.5 cards visible at once
+    marginRight: 12,
   },
   prepaidRechargeCard: {
     backgroundColor: '#fff',
@@ -4050,7 +4478,7 @@ const styles = StyleSheet.create({
   premiumBadge: {
     position: 'absolute',
     top: 8,
-    right: 8,
+    left: 8,
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: 'rgba(255, 215, 0, 0.15)',
@@ -4061,11 +4489,21 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(255, 215, 0, 0.3)',
     zIndex: 10,
   },
+  premiumBadgeInline: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 215, 0, 0.15)',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 215, 0, 0.3)',
+    marginRight: 8,
+  },
   premiumText: {
     fontSize: 8,
     fontWeight: '700',
     color: '#FFD700',
-    marginLeft: 2,
     letterSpacing: 0.5,
   },
   onlineGlowEffect: {
@@ -4295,6 +4733,70 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#666',
     marginLeft: 32,
+  },
+  // Prepaid voice offer card styles
+  prepaidRechargeOfferCard: {
+    backgroundColor: '#fff',
+    marginHorizontal: 16,
+    marginVertical: 8,
+    borderRadius: 12,
+    padding: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+    borderLeftWidth: 4,
+    borderLeftColor: '#4CAF50',
+  },
+  prepaidRechargeOfferContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  prepaidRechargeOfferHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  prepaidRechargeOfferIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: 'rgba(76, 175, 80, 0.1)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+  prepaidRechargeOfferInfo: {
+    flex: 1,
+  },
+  prepaidRechargeOfferTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#1F2937',
+    marginBottom: 4,
+  },
+  prepaidRechargeOfferDuration: {
+    fontSize: 14,
+    color: '#4CAF50',
+    fontWeight: '500',
+  },
+  prepaidRechargeOfferAction: {
+    marginLeft: 12,
+  },
+  prepaidRechargeOfferButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 20,
+  },
+  prepaidRechargeOfferButtonText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '600',
+    marginRight: 6,
   },
 });
 
