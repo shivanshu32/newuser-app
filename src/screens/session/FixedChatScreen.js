@@ -57,6 +57,8 @@ const FixedChatScreen = ({ route, navigation }) => {
     isActive: false,
     startTime: null
   });
+  // Reply-to functionality state
+  const [replyingTo, setReplyingTo] = useState(null); // Message being replied to
   
   // Component instance tracking for debugging
   const instanceId = useRef(Math.random().toString(36).substr(2, 9));
@@ -1128,17 +1130,27 @@ const FixedChatScreen = ({ route, navigation }) => {
     const messageContent = messageText.trim();
     const messageId = generateMessageId();
     
+    // Prepare reply-to data if replying to a message
+    const replyToData = replyingTo ? {
+      messageId: replyingTo.id,
+      content: replyingTo.content?.substring(0, 100) + (replyingTo.content?.length > 100 ? '...' : ''),
+      senderName: replyingTo.senderType === 'user' ? 'You' : 'Astrologer',
+      senderType: replyingTo.senderType
+    } : null;
+    
     const optimisticMessage = {
       id: messageId,
       content: messageContent,
       senderId: authUser?.id,
       senderType: 'user',
       timestamp: new Date().toISOString(),
-      status: 'sending'
+      status: 'sending',
+      replyTo: replyToData
     };
     
     safeSetState(setMessages, prev => [...prev, optimisticMessage]);
     safeSetState(setMessageText, '');
+    setReplyingTo(null); // Clear reply state after sending
     
     setTimeout(() => {
       flatListRef.current?.scrollToEnd({ animated: true });
@@ -1159,7 +1171,8 @@ const FixedChatScreen = ({ route, navigation }) => {
           bookingId,
           sessionId,
           roomId: getCurrentRoomId(),
-          timestamp: new Date().toISOString()
+          timestamp: new Date().toISOString(),
+          replyTo: replyToData
         };
         
         socket.emit('send_message', messagePayload, (acknowledgment) => {
@@ -1487,13 +1500,41 @@ const FixedChatScreen = ({ route, navigation }) => {
     };
   }, []); // Empty dependency array to prevent remounting
 
+  // ===== REPLY HANDLER =====
+  const handleReplyToMessage = useCallback((message) => {
+    setReplyingTo(message);
+  }, []);
+
+  const cancelReply = useCallback(() => {
+    setReplyingTo(null);
+  }, []);
+
   // ===== RENDER =====
   const renderMessage = useCallback(({ item }) => {
     const isOwnMessage = item.senderType === 'user';
     
     return (
-      <View style={[styles.messageContainer, isOwnMessage ? styles.ownMessage : styles.otherMessage]}>
+      <TouchableOpacity 
+        style={[styles.messageContainer, isOwnMessage ? styles.ownMessage : styles.otherMessage]}
+        onLongPress={() => handleReplyToMessage(item)}
+        delayLongPress={300}
+        activeOpacity={0.7}
+      >
         <View style={[styles.messageBubble, isOwnMessage ? styles.ownBubble : styles.otherBubble]}>
+          {/* Reply preview if this message is a reply */}
+          {item.replyTo && (
+            <View style={[styles.replyPreview, isOwnMessage ? styles.ownReplyPreview : styles.otherReplyPreview]}>
+              <View style={[styles.replyBar, isOwnMessage ? styles.ownReplyBar : styles.otherReplyBar]} />
+              <View style={styles.replyContent}>
+                <Text style={[styles.replySenderName, isOwnMessage ? styles.ownReplySenderName : styles.otherReplySenderName]}>
+                  {item.replyTo.senderName || (item.replyTo.senderType === 'user' ? 'You' : 'Astrologer')}
+                </Text>
+                <Text style={[styles.replyText, isOwnMessage ? styles.ownReplyText : styles.otherReplyText]} numberOfLines={2}>
+                  {item.replyTo.content}
+                </Text>
+              </View>
+            </View>
+          )}
           <Text style={[styles.messageText, isOwnMessage ? styles.ownMessageText : styles.otherMessageText]}>
             {item.content}
           </Text>
@@ -1521,9 +1562,9 @@ const FixedChatScreen = ({ route, navigation }) => {
             )}
           </View>
         </View>
-      </View>
+      </TouchableOpacity>
     );
-  }, []);
+  }, [handleReplyToMessage]);
 
   if (loading) {
     return (
@@ -1632,6 +1673,24 @@ const FixedChatScreen = ({ route, navigation }) => {
         {astrologerTyping && (
           <View style={styles.typingContainer}>
             <Text style={styles.typingText}>Astrologer is typing...</Text>
+          </View>
+        )}
+
+        {/* Reply preview bar */}
+        {replyingTo && (
+          <View style={styles.replyingToContainer}>
+            <View style={styles.replyingToBar} />
+            <View style={styles.replyingToContent}>
+              <Text style={styles.replyingToLabel}>
+                Replying to {replyingTo.senderType === 'user' ? 'yourself' : 'Astrologer'}
+              </Text>
+              <Text style={styles.replyingToText} numberOfLines={1}>
+                {replyingTo.content}
+              </Text>
+            </View>
+            <TouchableOpacity style={styles.cancelReplyButton} onPress={cancelReply}>
+              <Ionicons name="close" size={20} color="#666" />
+            </TouchableOpacity>
           </View>
         )}
 
@@ -1898,6 +1957,87 @@ const styles = StyleSheet.create({
   readTick2: {
     position: 'absolute',
     left: 3,
+  },
+  // Reply preview styles (inside message bubble)
+  replyPreview: {
+    flexDirection: 'row',
+    marginBottom: 8,
+    paddingBottom: 8,
+    borderBottomWidth: 1,
+  },
+  ownReplyPreview: {
+    borderBottomColor: 'rgba(255, 255, 255, 0.3)',
+  },
+  otherReplyPreview: {
+    borderBottomColor: 'rgba(0, 0, 0, 0.1)',
+  },
+  replyBar: {
+    width: 3,
+    borderRadius: 2,
+    marginRight: 8,
+  },
+  ownReplyBar: {
+    backgroundColor: 'rgba(255, 255, 255, 0.6)',
+  },
+  otherReplyBar: {
+    backgroundColor: '#6B46C1',
+  },
+  replyContent: {
+    flex: 1,
+  },
+  replySenderName: {
+    fontSize: 12,
+    fontWeight: 'bold',
+    marginBottom: 2,
+  },
+  ownReplySenderName: {
+    color: 'rgba(255, 255, 255, 0.9)',
+  },
+  otherReplySenderName: {
+    color: '#6B46C1',
+  },
+  replyText: {
+    fontSize: 13,
+  },
+  ownReplyText: {
+    color: 'rgba(255, 255, 255, 0.8)',
+  },
+  otherReplyText: {
+    color: '#666',
+  },
+  // Replying-to bar styles (above input)
+  replyingToContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F5F5F5',
+    paddingHorizontal: 15,
+    paddingVertical: 10,
+    borderTopWidth: 1,
+    borderTopColor: '#E0E0E0',
+  },
+  replyingToBar: {
+    width: 4,
+    height: '100%',
+    minHeight: 35,
+    backgroundColor: '#6B46C1',
+    borderRadius: 2,
+    marginRight: 10,
+  },
+  replyingToContent: {
+    flex: 1,
+  },
+  replyingToLabel: {
+    fontSize: 12,
+    fontWeight: 'bold',
+    color: '#6B46C1',
+    marginBottom: 2,
+  },
+  replyingToText: {
+    fontSize: 14,
+    color: '#666',
+  },
+  cancelReplyButton: {
+    padding: 5,
   },
 });
 

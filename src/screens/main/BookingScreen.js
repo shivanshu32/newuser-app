@@ -572,6 +572,11 @@ const BookingScreen = ({ route, navigation }) => {
                     <Text style={styles.prepaidBadgeText}>PREPAID</Text>
                   </View>
                 ) : null}
+                {item.isPrepaidCard ? (
+                  <View style={styles.prepaidCardBadge}>
+                    <Text style={styles.prepaidCardBadgeText}>RECHARGE PACK</Text>
+                  </View>
+                ) : null}
               </View>
             </View>
           </View>
@@ -880,6 +885,18 @@ const styles = StyleSheet.create({
     marginLeft: 6,
   },
   prepaidBadgeText: {
+    fontSize: 10,
+    color: '#fff',
+    fontWeight: 'bold',
+  },
+  prepaidCardBadge: {
+    backgroundColor: '#9C27B0',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 8,
+    marginLeft: 6,
+  },
+  prepaidCardBadgeText: {
     fontSize: 10,
     color: '#fff',
     fontWeight: 'bold',

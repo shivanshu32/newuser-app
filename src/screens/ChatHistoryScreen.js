@@ -117,6 +117,21 @@ const ChatHistoryScreen = ({ navigation, route }) => {
         isUser ? styles.userMessage : styles.astrologerMessage,
         isLastMessage && styles.lastMessage
       ]}>
+        {/* Reply preview if this message is a reply */}
+        {item.replyTo && (
+          <View style={[styles.replyPreview, isUser ? styles.userReplyPreview : styles.astrologerReplyPreview]}>
+            <View style={[styles.replyBar, isUser ? styles.userReplyBar : styles.astrologerReplyBar]} />
+            <View style={styles.replyContent}>
+              <Text style={[styles.replySenderName, isUser ? styles.userReplySenderName : styles.astrologerReplySenderName]}>
+                {item.replyTo.senderName || (item.replyTo.senderType === 'user' ? 'You' : 'Astrologer')}
+              </Text>
+              <Text style={[styles.replyText, isUser ? styles.userReplyText : styles.astrologerReplyText]} numberOfLines={2}>
+                {item.replyTo.content}
+              </Text>
+            </View>
+          </View>
+        )}
+        
         <View style={styles.messageHeader}>
           <Text style={[
             styles.senderName,
@@ -203,6 +218,8 @@ const ChatHistoryScreen = ({ navigation, route }) => {
           <Text style={styles.summaryLabel}>Amount:</Text>
           <Text style={styles.summaryValue}>
             {session.isFreeChat ? 'Free Chat' : 
+             session.isPrepaidOffer ? `₹${booking?.amount || 0} (Prepaid)` :
+             session.isPrepaidCard ? `₹${booking?.amount || 0} (Recharge Pack)` :
              (booking?.amount !== undefined ? `₹${booking.amount}` : 'N/A')}
           </Text>
         </View>
@@ -492,6 +509,53 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#666',
     textAlign: 'center',
+  },
+  // Reply preview styles
+  replyPreview: {
+    flexDirection: 'row',
+    marginBottom: 8,
+    paddingBottom: 8,
+    borderBottomWidth: 1,
+  },
+  userReplyPreview: {
+    borderBottomColor: 'rgba(255, 255, 255, 0.3)',
+  },
+  astrologerReplyPreview: {
+    borderBottomColor: 'rgba(0, 0, 0, 0.1)',
+  },
+  replyBar: {
+    width: 3,
+    borderRadius: 2,
+    marginRight: 8,
+  },
+  userReplyBar: {
+    backgroundColor: 'rgba(255, 255, 255, 0.6)',
+  },
+  astrologerReplyBar: {
+    backgroundColor: '#4A90E2',
+  },
+  replyContent: {
+    flex: 1,
+  },
+  replySenderName: {
+    fontSize: 11,
+    fontWeight: 'bold',
+    marginBottom: 2,
+  },
+  userReplySenderName: {
+    color: 'rgba(255, 255, 255, 0.9)',
+  },
+  astrologerReplySenderName: {
+    color: '#4A90E2',
+  },
+  replyText: {
+    fontSize: 12,
+  },
+  userReplyText: {
+    color: 'rgba(255, 255, 255, 0.8)',
+  },
+  astrologerReplyText: {
+    color: '#666',
   },
 });
 
