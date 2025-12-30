@@ -12,7 +12,7 @@ import {
   ScrollView
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { chatHistoryAPI } from '../services/api';
+import { chatHistoryAPI, followUpMessagesAPI } from '../services/api';
 
 const ChatHistoryScreen = ({ navigation, route }) => {
   const { sessionId, bookingId } = route.params;
@@ -21,6 +21,7 @@ const ChatHistoryScreen = ({ navigation, route }) => {
   const [chatData, setChatData] = useState(null);
   const [messages, setMessages] = useState([]);
   const [error, setError] = useState(null);
+  const [followUpMessages, setFollowUpMessages] = useState([]);
 
   useEffect(() => {
     fetchChatHistory();
@@ -79,6 +80,28 @@ const ChatHistoryScreen = ({ navigation, route }) => {
       setLoading(false);
     }
   };
+
+  // Fetch follow-up messages for this session
+  const fetchFollowUpMessages = async () => {
+    try {
+      console.log('📨 [FOLLOW_UP] Fetching follow-up messages for session:', sessionId);
+      const response = await followUpMessagesAPI.getSessionMessages(sessionId);
+      
+      if (response.success) {
+        setFollowUpMessages(response.data || []);
+        console.log('📨 [FOLLOW_UP] Fetched follow-up messages:', response.data?.length || 0);
+      }
+    } catch (error) {
+      console.error('📨 [FOLLOW_UP] Error fetching follow-up messages:', error);
+    }
+  };
+
+  // Fetch follow-up messages when chat data is loaded
+  useEffect(() => {
+    if (chatData) {
+      fetchFollowUpMessages();
+    }
+  }, [chatData]);
 
   const formatTimestamp = (timestamp) => {
     const date = new Date(timestamp);
@@ -144,19 +167,32 @@ const ChatHistoryScreen = ({ navigation, route }) => {
           </Text>
         </View>
         
-        <Text style={[
-          styles.messageContent,
-          isUser ? styles.userMessageContent : styles.astrologerMessageContent
-        ]}>
-          {item.content}
-        </Text>
+        {/* Image attachments */}
+        {item.attachments && item.attachments.length > 0 && item.attachments[0].type === 'image' && (
+          <Image
+            source={{ uri: item.attachments[0].url }}
+            style={styles.messageImage}
+            resizeMode="cover"
+          />
+        )}
         
-        {item.attachments && item.attachments.length > 0 && (
+        {/* Text content (only show if there's content) */}
+        {item.content ? (
+          <Text style={[
+            styles.messageContent,
+            isUser ? styles.userMessageContent : styles.astrologerMessageContent
+          ]}>
+            {item.content}
+          </Text>
+        ) : null}
+        
+        {/* Non-image attachments */}
+        {item.attachments && item.attachments.length > 0 && item.attachments[0].type !== 'image' && (
           <View style={styles.attachmentsContainer}>
             {item.attachments.map((attachment, idx) => (
               <View key={idx} style={styles.attachment}>
                 <Ionicons 
-                  name={attachment.type === 'image' ? 'image' : 'document'} 
+                  name="document" 
                   size={16} 
                   color="#666" 
                 />
@@ -305,6 +341,34 @@ const ChatHistoryScreen = ({ navigation, route }) => {
             showsVerticalScrollIndicator={false}
             contentContainerStyle={styles.messagesList}
           />
+
+          {/* Follow-up Messages (Remedies) Section */}
+          {followUpMessages.length > 0 && (
+            <View style={styles.followUpSection}>
+              <View style={styles.followUpSectionHeader}>
+                <Ionicons name="medical" size={18} color="#4CAF50" />
+                <Text style={styles.followUpSectionTitle}>
+                  Remedies from Astrologer ({followUpMessages.length})
+                </Text>
+              </View>
+              {followUpMessages.map((msg, idx) => (
+                <View key={msg._id || idx} style={styles.followUpMessageContainer}>
+                  <View style={styles.followUpMessageBubble}>
+                    <View style={styles.followUpMessageHeader}>
+                      <View style={styles.followUpBadge}>
+                        <Ionicons name="medical" size={12} color="#fff" />
+                        <Text style={styles.followUpBadgeText}>REMEDY</Text>
+                      </View>
+                      <Text style={styles.followUpTimestamp}>
+                        {formatTimestamp(msg.createdAt)}
+                      </Text>
+                    </View>
+                    <Text style={styles.followUpMessageContent}>{msg.content}</Text>
+                  </View>
+                </View>
+              ))}
+            </View>
+          )}
         </ScrollView>
       )}
     </SafeAreaView>
@@ -492,6 +556,12 @@ const styles = StyleSheet.create({
     color: '#666',
     marginLeft: 4,
   },
+  messageImage: {
+    width: 200,
+    height: 200,
+    borderRadius: 10,
+    marginVertical: 8,
+  },
   emptyContainer: {
     flex: 1,
     justifyContent: 'center',
@@ -556,6 +626,62 @@ const styles = StyleSheet.create({
   },
   astrologerReplyText: {
     color: '#666',
+  },
+  // Follow-up Messages Section
+  followUpSection: {
+    marginHorizontal: 16,
+    marginTop: 16,
+    marginBottom: 16,
+  },
+  followUpSectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  followUpSectionTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#4CAF50',
+    marginLeft: 8,
+  },
+  followUpMessageContainer: {
+    marginBottom: 8,
+  },
+  followUpMessageBubble: {
+    backgroundColor: '#E8F5E9',
+    borderRadius: 12,
+    padding: 12,
+    borderLeftWidth: 4,
+    borderLeftColor: '#4CAF50',
+  },
+  followUpMessageHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  followUpBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#4CAF50',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 10,
+  },
+  followUpBadgeText: {
+    color: '#fff',
+    fontSize: 10,
+    fontWeight: '700',
+    marginLeft: 4,
+  },
+  followUpTimestamp: {
+    fontSize: 11,
+    color: '#666',
+  },
+  followUpMessageContent: {
+    fontSize: 14,
+    color: '#333',
+    lineHeight: 20,
   },
 });
 

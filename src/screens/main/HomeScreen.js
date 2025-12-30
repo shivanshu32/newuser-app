@@ -35,6 +35,7 @@ import BlogSection from '../../components/BlogSection';
 import PoojaSection from '../../components/PoojaSection';
 import RechargePackagesSection from '../../components/RechargePackagesSection';
 import HomePopup from '../../components/HomePopup';
+import FollowUpMessagesSection from '../../components/FollowUpMessagesSection';
 
 // Hardcoded app version - update this when releasing new versions
 import APP_CONFIG from '../../config/appConfig';
@@ -2865,6 +2866,7 @@ const HomeScreen = ({ navigation }) => {
   const getFlatListData = () => {
     const data = [
       { type: 'header', id: 'header' },
+      { type: 'followUpMessages', id: 'followUpMessages' },
       { type: 'bannerCarousel', id: 'bannerCarousel' }
     ];
     
@@ -2992,6 +2994,8 @@ const HomeScreen = ({ navigation }) => {
     switch (item.type) {
       case 'header':
         return renderHeader();
+      case 'followUpMessages':
+        return <FollowUpMessagesSection navigation={navigation} />;
       case 'bannerCarousel':
         return (
           <View style={{ marginVertical: 0 }}>

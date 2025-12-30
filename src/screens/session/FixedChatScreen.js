@@ -13,11 +13,15 @@ import {
   StatusBar,
   AppState,
   Image,
+  Modal,
+  Dimensions,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import * as ImagePicker from 'expo-image-picker';
 import { useAuth } from '../../context/AuthContext';
 import { useSocket } from '../../context/SocketContext';
+import { uploadChatImage } from '../../services/cloudinaryService';
 
 const API_BASE_URL = 'https://jyotishcallbackend-2uxrv.ondigitalocean.app/api/v1';
 
@@ -59,6 +63,12 @@ const FixedChatScreen = ({ route, navigation }) => {
   });
   // Reply-to functionality state
   const [replyingTo, setReplyingTo] = useState(null); // Message being replied to
+  
+  // Image sending state
+  const [uploadingImage, setUploadingImage] = useState(false);
+  const [selectedImage, setSelectedImage] = useState(null);
+  const [imagePreviewVisible, setImagePreviewVisible] = useState(false);
+  const [fullScreenImage, setFullScreenImage] = useState(null);
   
   // Component instance tracking for debugging
   const instanceId = useRef(Math.random().toString(36).substr(2, 9));
@@ -1218,6 +1228,189 @@ const FixedChatScreen = ({ route, navigation }) => {
       );
     }
   }, [messageText, sessionActive, generateMessageId, authUser?.id, bookingId, sessionId, getCurrentRoomId, safeSetState]);
+
+  // ===== IMAGE SENDING =====
+  const pickImage = useCallback(async () => {
+    try {
+      // Request permission
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Permission Required', 'Please allow access to your photo library to send images.');
+        return;
+      }
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        quality: 0.8,
+        base64: true,
+      });
+
+      if (!result.canceled && result.assets[0]) {
+        const asset = result.assets[0];
+        setSelectedImage({
+          uri: asset.uri,
+          base64: asset.base64,
+          width: asset.width,
+          height: asset.height,
+        });
+        setImagePreviewVisible(true);
+      }
+    } catch (error) {
+      console.error('📷 [IMAGE] Error picking image:', error);
+      Alert.alert('Error', 'Failed to pick image. Please try again.');
+    }
+  }, []);
+
+  const takePhoto = useCallback(async () => {
+    try {
+      // Request camera permission
+      const { status } = await ImagePicker.requestCameraPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Permission Required', 'Please allow access to your camera to take photos.');
+        return;
+      }
+
+      const result = await ImagePicker.launchCameraAsync({
+        allowsEditing: true,
+        quality: 0.8,
+        base64: true,
+      });
+
+      if (!result.canceled && result.assets[0]) {
+        const asset = result.assets[0];
+        setSelectedImage({
+          uri: asset.uri,
+          base64: asset.base64,
+          width: asset.width,
+          height: asset.height,
+        });
+        setImagePreviewVisible(true);
+      }
+    } catch (error) {
+      console.error('📷 [IMAGE] Error taking photo:', error);
+      Alert.alert('Error', 'Failed to take photo. Please try again.');
+    }
+  }, []);
+
+  const cancelImagePreview = useCallback(() => {
+    setSelectedImage(null);
+    setImagePreviewVisible(false);
+  }, []);
+
+  const sendImage = useCallback(async () => {
+    if (!selectedImage?.base64 || !sessionActive) {
+      console.log('⚠️ [IMAGE] Cannot send - no image or session inactive');
+      return;
+    }
+
+    setUploadingImage(true);
+    const messageId = generateMessageId();
+
+    try {
+      console.log('📷 [IMAGE] Uploading image to Cloudinary...');
+      
+      // Upload directly to Cloudinary from frontend
+      const uploadResponse = await uploadChatImage(selectedImage.base64);
+
+      if (!uploadResponse.success) {
+        throw new Error(uploadResponse.message || 'Upload failed');
+      }
+
+      console.log('📷 [IMAGE] Upload successful:', uploadResponse.data.url);
+
+      const imageAttachment = {
+        type: 'image',
+        url: uploadResponse.data.url,
+        publicId: uploadResponse.data.publicId,
+        width: uploadResponse.data.width,
+        height: uploadResponse.data.height,
+        size: uploadResponse.data.size,
+      };
+
+      // Create optimistic message with image
+      const optimisticMessage = {
+        id: messageId,
+        content: '',
+        senderId: authUser?.id,
+        senderType: 'user',
+        timestamp: new Date().toISOString(),
+        status: 'sending',
+        attachments: [imageAttachment],
+      };
+
+      safeSetState(setMessages, prev => [...prev, optimisticMessage]);
+      setImagePreviewVisible(false);
+      setSelectedImage(null);
+
+      setTimeout(() => {
+        flatListRef.current?.scrollToEnd({ animated: true });
+      }, 100);
+
+      // Send via socket
+      const socket = socketRef.current;
+      if (socket?.connected) {
+        const messagePayload = {
+          id: messageId,
+          content: '',
+          type: 'image',
+          senderId: authUser?.id,
+          senderType: 'user',
+          bookingId,
+          sessionId,
+          roomId: getCurrentRoomId(),
+          timestamp: new Date().toISOString(),
+          attachments: [imageAttachment],
+        };
+
+        socket.emit('send_message', messagePayload, (acknowledgment) => {
+          if (acknowledgment?.success) {
+            console.log('✅ [IMAGE] Socket send acknowledged');
+            safeSetState(setMessages, prev =>
+              prev.map(msg =>
+                msg.id === messageId ? { ...msg, status: 'sent' } : msg
+              )
+            );
+          } else {
+            console.warn('⚠️ [IMAGE] Socket send not acknowledged');
+            safeSetState(setMessages, prev =>
+              prev.map(msg =>
+                msg.id === messageId ? { ...msg, status: 'failed' } : msg
+              )
+            );
+          }
+        });
+      }
+    } catch (error) {
+      console.error('❌ [IMAGE] Send failed:', error);
+      Alert.alert('Error', 'Failed to send image. Please try again.');
+      safeSetState(setMessages, prev =>
+        prev.filter(msg => msg.id !== messageId)
+      );
+    } finally {
+      setUploadingImage(false);
+    }
+  }, [selectedImage, sessionActive, generateMessageId, authUser?.id, bookingId, sessionId, isPrepaidOffer, isPrepaidCard, getCurrentRoomId, safeSetState]);
+
+  const showImageOptions = useCallback(() => {
+    Alert.alert(
+      'Send Image',
+      'Choose an option',
+      [
+        { text: 'Take Photo', onPress: takePhoto },
+        { text: 'Choose from Library', onPress: pickImage },
+        { text: 'Cancel', style: 'cancel' },
+      ]
+    );
+  }, [takePhoto, pickImage]);
+
+  const openFullScreenImage = useCallback((imageUrl) => {
+    setFullScreenImage(imageUrl);
+  }, []);
+
+  const closeFullScreenImage = useCallback(() => {
+    setFullScreenImage(null);
+  }, []);
   
   const handleInputChange = useCallback((text) => {
     safeSetState(setMessageText, text);
@@ -1512,6 +1705,7 @@ const FixedChatScreen = ({ route, navigation }) => {
   // ===== RENDER =====
   const renderMessage = useCallback(({ item }) => {
     const isOwnMessage = item.senderType === 'user';
+    const hasImage = item.attachments && item.attachments.length > 0 && item.attachments[0].type === 'image';
     
     return (
       <TouchableOpacity 
@@ -1535,9 +1729,25 @@ const FixedChatScreen = ({ route, navigation }) => {
               </View>
             </View>
           )}
-          <Text style={[styles.messageText, isOwnMessage ? styles.ownMessageText : styles.otherMessageText]}>
-            {item.content}
-          </Text>
+          {/* Image attachment */}
+          {hasImage && (
+            <TouchableOpacity 
+              style={styles.messageImageContainer}
+              onPress={() => openFullScreenImage(item.attachments[0].url)}
+            >
+              <Image
+                source={{ uri: item.attachments[0].url }}
+                style={styles.messageImage}
+                resizeMode="cover"
+              />
+            </TouchableOpacity>
+          )}
+          {/* Text content (only show if there's content) */}
+          {item.content ? (
+            <Text style={[styles.messageText, isOwnMessage ? styles.ownMessageText : styles.otherMessageText]}>
+              {item.content}
+            </Text>
+          ) : null}
           <View style={styles.messageFooter}>
             <Text style={[styles.messageTime, isOwnMessage ? styles.ownMessageTime : styles.otherMessageTime]}>
               {new Date(item.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
@@ -1564,7 +1774,7 @@ const FixedChatScreen = ({ route, navigation }) => {
         </View>
       </TouchableOpacity>
     );
-  }, [handleReplyToMessage]);
+  }, [handleReplyToMessage, openFullScreenImage]);
 
   if (loading) {
     return (
@@ -1695,6 +1905,17 @@ const FixedChatScreen = ({ route, navigation }) => {
         )}
 
         <View style={[styles.inputContainer, { paddingBottom: Math.max(insets.bottom, Platform.OS === 'android' ? 20 : 10) }]}>
+          <TouchableOpacity
+            style={styles.imageButton}
+            onPress={showImageOptions}
+            disabled={!sessionActive || uploadingImage}
+          >
+            <Ionicons 
+              name="image-outline" 
+              size={24} 
+              color={sessionActive && !uploadingImage ? '#6B46C1' : '#ccc'} 
+            />
+          </TouchableOpacity>
           <TextInput
             style={styles.textInput}
             value={messageText}
@@ -1717,6 +1938,70 @@ const FixedChatScreen = ({ route, navigation }) => {
           </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>
+
+      {/* Image Preview Modal */}
+      <Modal
+        visible={imagePreviewVisible}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={cancelImagePreview}
+      >
+        <View style={styles.imagePreviewOverlay}>
+          <View style={styles.imagePreviewContainer}>
+            <Text style={styles.imagePreviewTitle}>Send Image</Text>
+            {selectedImage && (
+              <Image
+                source={{ uri: selectedImage.uri }}
+                style={styles.imagePreviewImage}
+                resizeMode="contain"
+              />
+            )}
+            <View style={styles.imagePreviewButtons}>
+              <TouchableOpacity
+                style={styles.imagePreviewCancelButton}
+                onPress={cancelImagePreview}
+              >
+                <Text style={styles.imagePreviewCancelText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.imagePreviewSendButton, uploadingImage && styles.imagePreviewSendButtonDisabled]}
+                onPress={sendImage}
+                disabled={uploadingImage}
+              >
+                {uploadingImage ? (
+                  <ActivityIndicator size="small" color="#fff" />
+                ) : (
+                  <Text style={styles.imagePreviewSendText}>Send</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Full Screen Image Modal */}
+      <Modal
+        visible={!!fullScreenImage}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={closeFullScreenImage}
+      >
+        <View style={styles.fullScreenImageOverlay}>
+          <TouchableOpacity
+            style={styles.fullScreenCloseButton}
+            onPress={closeFullScreenImage}
+          >
+            <Ionicons name="close" size={30} color="#fff" />
+          </TouchableOpacity>
+          {fullScreenImage && (
+            <Image
+              source={{ uri: fullScreenImage }}
+              style={styles.fullScreenImage}
+              resizeMode="contain"
+            />
+          )}
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 };
@@ -2038,6 +2323,99 @@ const styles = StyleSheet.create({
   },
   cancelReplyButton: {
     padding: 5,
+  },
+  // Image button styles
+  imageButton: {
+    padding: 10,
+    marginRight: 5,
+  },
+  // Image in message styles
+  messageImage: {
+    width: 200,
+    height: 200,
+    borderRadius: 10,
+    marginTop: 5,
+  },
+  messageImageContainer: {
+    marginTop: 5,
+  },
+  // Image preview modal styles
+  imagePreviewOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.8)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  imagePreviewContainer: {
+    backgroundColor: '#fff',
+    borderRadius: 15,
+    padding: 20,
+    width: '90%',
+    maxHeight: '80%',
+    alignItems: 'center',
+  },
+  imagePreviewTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 15,
+  },
+  imagePreviewImage: {
+    width: '100%',
+    height: 300,
+    borderRadius: 10,
+  },
+  imagePreviewButtons: {
+    flexDirection: 'row',
+    marginTop: 20,
+    gap: 15,
+  },
+  imagePreviewCancelButton: {
+    flex: 1,
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    borderRadius: 10,
+    backgroundColor: '#f0f0f0',
+    alignItems: 'center',
+  },
+  imagePreviewCancelText: {
+    fontSize: 16,
+    color: '#666',
+    fontWeight: '600',
+  },
+  imagePreviewSendButton: {
+    flex: 1,
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    borderRadius: 10,
+    backgroundColor: '#6B46C1',
+    alignItems: 'center',
+  },
+  imagePreviewSendButtonDisabled: {
+    backgroundColor: '#ccc',
+  },
+  imagePreviewSendText: {
+    fontSize: 16,
+    color: '#fff',
+    fontWeight: '600',
+  },
+  // Full screen image modal styles
+  fullScreenImageOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.95)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  fullScreenCloseButton: {
+    position: 'absolute',
+    top: 50,
+    right: 20,
+    zIndex: 10,
+    padding: 10,
+  },
+  fullScreenImage: {
+    width: Dimensions.get('window').width,
+    height: Dimensions.get('window').height * 0.8,
   },
 });
 

@@ -480,6 +480,23 @@ export const homePopupAPI = {
   trackInteraction: (popupId, action) => API.post(`/home-popup/${popupId}/track`, { action }),
 };
 
+// Follow-up Messages API (remedies from astrologers after session ends)
+export const followUpMessagesAPI = {
+  getAll: (params) => API.get('/follow-up-messages', { params }),
+  getUnread: () => API.get('/follow-up-messages/unread'),
+  getUnreadCount: () => API.get('/follow-up-messages/unread-count'),
+  getSessionMessages: (sessionId) => API.get(`/follow-up-messages/session/${sessionId}`),
+  markAsRead: (messageId) => API.put(`/follow-up-messages/${messageId}/read`),
+  markAllAsRead: () => API.put('/follow-up-messages/read-all'),
+};
+
+// Chat Image Upload API
+export const chatImageAPI = {
+  uploadImage: (imageBase64, sessionId, sessionType = 'Session') => 
+    API.post('/chat/upload-image', { image: imageBase64, sessionId, sessionType }),
+  deleteImage: (publicId) => API.delete('/chat/delete-image', { data: { publicId } }),
+};
+
 // Export API_BASE for direct URL construction when needed
 export { API_BASE };
 
