@@ -1032,7 +1032,9 @@ const FixedFreeChatScreen = React.memo(({ route, navigation }) => {
       senderId: data.senderId,
       senderType: data.senderType || 'astrologer',
       timestamp: data.timestamp || new Date().toISOString(),
-      status: 'delivered'
+      status: 'delivered',
+      // Include attachments for image messages
+      attachments: data.attachments || []
     };
     
     console.log('📨 [DEBUG] Final message object:', newMessage);
@@ -2319,6 +2321,7 @@ const FixedFreeChatScreen = React.memo(({ route, navigation }) => {
     const isOwnMessage = item.senderType === 'user';
     const hasImage = item.attachments && item.attachments.length > 0 && item.attachments[0].type === 'image';
     const textContent = item.text || item.content || item.message;
+    const isImageOnly = hasImage && !textContent;
     
     return (
       <TouchableOpacity 
@@ -2327,7 +2330,11 @@ const FixedFreeChatScreen = React.memo(({ route, navigation }) => {
         delayLongPress={300}
         activeOpacity={0.7}
       >
-        <View style={[styles.messageBubble, isOwnMessage ? styles.ownBubble : styles.otherBubble]}>
+        <View style={[
+          styles.messageBubble, 
+          isOwnMessage ? styles.ownBubble : styles.otherBubble,
+          isImageOnly && styles.imageBubble
+        ]}>
           {/* Reply preview if this message is a reply */}
           {item.replyTo && (
             <View style={[styles.replyPreview, isOwnMessage ? styles.ownReplyPreview : styles.otherReplyPreview]}>
@@ -3038,6 +3045,12 @@ const styles = StyleSheet.create({
   },
   messageImageContainer: {
     marginTop: 5,
+  },
+  // Minimal padding for image-only messages
+  imageBubble: {
+    paddingHorizontal: 4,
+    paddingVertical: 4,
+    borderRadius: 12,
   },
   // Image preview modal styles
   imagePreviewOverlay: {
