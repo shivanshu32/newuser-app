@@ -131,6 +131,32 @@ const poojaAPI = {
       console.error('❌ [POOJA_API] Error cancelling booking:', error);
       throw error;
     }
+  },
+  
+  // Get bookings pending pooja details
+  getPendingPoojaDetails: async () => {
+    try {
+      console.log('📿 [POOJA_API] Fetching pending pooja details');
+      const response = await API.get('/pooja-bookings/pending-details');
+      console.log('✅ [POOJA_API] Pending details fetched:', response.count);
+      return response;
+    } catch (error) {
+      console.error('❌ [POOJA_API] Error fetching pending pooja details:', error);
+      throw error;
+    }
+  },
+  
+  // Submit pooja details for a booking
+  submitPoojaDetails: async (bookingId, poojaDetails) => {
+    try {
+      console.log('📿 [POOJA_API] Submitting pooja details for booking:', bookingId);
+      const response = await API.put(`/pooja-bookings/${bookingId}/submit-details`, poojaDetails);
+      console.log('✅ [POOJA_API] Pooja details submitted');
+      return response;
+    } catch (error) {
+      console.error('❌ [POOJA_API] Error submitting pooja details:', error);
+      throw error;
+    }
   }
 };
 

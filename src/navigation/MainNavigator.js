@@ -41,6 +41,7 @@ import BlogListScreen from '../screens/main/BlogListScreen';
 import DailyHoroscopeScreen from '../screens/main/DailyHoroscopeScreen';
 import PoojaDetailScreen from '../screens/pooja/PoojaDetailScreen';
 import PoojaListScreen from '../screens/pooja/PoojaListScreen';
+import PoojaDetailsForm from '../screens/pooja/PoojaDetailsForm';
 
 
 import RatingScreen from '../screens/session/RatingScreen';
@@ -428,6 +429,11 @@ const MainNavigator = () => {
         <Stack.Screen 
           name="PoojaList" 
           component={PoojaListScreen} 
+          options={{ headerShown: false }}
+        />
+        <Stack.Screen 
+          name="PoojaDetailsForm" 
+          component={PoojaDetailsForm} 
           options={{ headerShown: false }}
         />
       </Stack.Navigator>

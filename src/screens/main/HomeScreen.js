@@ -36,6 +36,8 @@ import PoojaSection from '../../components/PoojaSection';
 import RechargePackagesSection from '../../components/RechargePackagesSection';
 import HomePopup from '../../components/HomePopup';
 import FollowUpMessagesSection from '../../components/FollowUpMessagesSection';
+import PendingPoojaDetailsSection from '../../components/PendingPoojaDetailsSection';
+import poojaAPI from '../../services/poojaAPI';
 
 // Hardcoded app version - update this when releasing new versions
 import APP_CONFIG from '../../config/appConfig';
@@ -86,6 +88,10 @@ const HomeScreen = ({ navigation }) => {
 
   // Home Popup State
   const [showHomePopup, setShowHomePopup] = useState(false);
+
+  // Pending Pooja Details State
+  const [pendingPoojaDetails, setPendingPoojaDetails] = useState([]);
+  const [loadingPoojaDetails, setLoadingPoojaDetails] = useState(false);
 
   // Fetch categories from backend
   const fetchCategories = useCallback(async () => {
@@ -294,6 +300,32 @@ const HomeScreen = ({ navigation }) => {
       setLoadingVoiceOffers(false);
     }
   }, []);
+
+  // Fetch pending pooja details
+  const fetchPendingPoojaDetails = useCallback(async () => {
+    try {
+      setLoadingPoojaDetails(true);
+      console.log('🔄 Fetching pending pooja details...');
+      
+      const data = await poojaAPI.getPendingPoojaDetails();
+      console.log('✅ Pending pooja details fetched:', data);
+      
+      if (data.success) {
+        setPendingPoojaDetails(data.data || []);
+      }
+    } catch (error) {
+      console.error('❌ Error fetching pending pooja details:', error);
+      setPendingPoojaDetails([]);
+    } finally {
+      setLoadingPoojaDetails(false);
+    }
+  }, []);
+
+  // Handle provide pooja details
+  const handleProvidePoojaDetails = useCallback((booking) => {
+    console.log('📿 [HOME_SCREEN] Opening pooja details form:', booking._id);
+    navigation.navigate('PoojaDetailsForm', { booking });
+  }, [navigation]);
 
   // Handle offer used (remove from list)
   // Refresh prepaid offers
@@ -1671,6 +1703,9 @@ const HomeScreen = ({ navigation }) => {
             }),
             checkActiveSession().catch(error => {
               console.error('❌ [FOCUS_EFFECT] Error checking active session:', error);
+            }),
+            fetchPendingPoojaDetails().catch(error => {
+              console.error('❌ [FOCUS_EFFECT] Error fetching pending pooja details:', error);
             })
           ]);
           
@@ -2523,10 +2558,25 @@ const HomeScreen = ({ navigation }) => {
             {astrologer.displayName || astrologer.name}
           </Text>
           
-          {/* Specialization Pills */}
-          <View style={styles.specializationContainer}>
-            <Text style={styles.specializationText} numberOfLines={1}>
-              {astrologer.specialties?.[0] || astrologer.specialization || 'Vedic Astrology'}
+          {/* Specializations Tags */}
+          {(Array.isArray(astrologer.specializations) && astrologer.specializations.length > 0) && (
+            <View style={styles.specializationTagsContainer}>
+              {astrologer.specializations.slice(0, 2).map((spec, index) => (
+                <View key={spec._id || index} style={styles.specializationTag}>
+                  <Text style={styles.specializationTagText} numberOfLines={1}>
+                    {spec.name || spec}
+                  </Text>
+                </View>
+              ))}
+            </View>
+          )}
+          
+          {/* Categories */}
+          <View style={styles.categoryContainer}>
+            <Text style={styles.categoryText} numberOfLines={1}>
+              {Array.isArray(astrologer.categoryRefs) && astrologer.categoryRefs.length > 0
+                ? astrologer.categoryRefs.map(cat => cat?.name || cat).join(', ')
+                : astrologer.specialties?.[0] || astrologer.specialization || 'Vedic Astrology'}
             </Text>
           </View>
           
@@ -2884,6 +2934,11 @@ const HomeScreen = ({ navigation }) => {
         id: 'astrologersSection',
         data: onlineAstrologers
       });
+    }
+
+    // Add pending pooja details section (action required)
+    if (pendingPoojaDetails.length > 0) {
+      data.push({ type: 'pendingPoojaDetails', id: 'pendingPoojaDetails' });
     }
 
     // Add pooja section
@@ -3383,6 +3438,14 @@ const HomeScreen = ({ navigation }) => {
         );
       case 'blogSection':
         return <BlogSection navigation={navigation} />;
+      case 'pendingPoojaDetails':
+        return (
+          <PendingPoojaDetailsSection
+            bookings={pendingPoojaDetails}
+            onProvideDetails={handleProvidePoojaDetails}
+            loading={loadingPoojaDetails}
+          />
+        );
       case 'poojaSection':
         return <PoojaSection />;
       case 'rechargePackagesSection':
@@ -4547,6 +4610,41 @@ const styles = StyleSheet.create({
     color: '#3B82F6',
     fontWeight: '600',
     textTransform: 'capitalize',
+    textAlign: 'center',
+  },
+  specializationTagsContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'center',
+    marginBottom: 4,
+    gap: 4,
+  },
+  specializationTag: {
+    backgroundColor: 'rgba(139, 92, 246, 0.15)',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(139, 92, 246, 0.3)',
+  },
+  specializationTagText: {
+    fontSize: 9,
+    color: '#8B5CF6',
+    fontWeight: '600',
+    textTransform: 'capitalize',
+  },
+  categoryContainer: {
+    backgroundColor: 'rgba(59, 130, 246, 0.1)',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+    marginBottom: 4,
+    alignSelf: 'center',
+  },
+  categoryText: {
+    fontSize: 10,
+    color: '#3B82F6',
+    fontWeight: '500',
     textAlign: 'center',
   },
   enhancedPriceContainer: {

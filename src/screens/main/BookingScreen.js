@@ -9,6 +9,7 @@ import {
   RefreshControl,
   ActivityIndicator,
   Alert,
+  TextInput,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
@@ -22,13 +23,14 @@ const BookingScreen = ({ route, navigation }) => {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [activeTab, setActiveTab] = useState('all');
+  const [searchQuery, setSearchQuery] = useState('');
   const { user } = useAuth();
   const { socket } = useSocket();
   
   // Check if we have an astrologer passed from the home screen
   const selectedAstrologer = route.params?.astrologer;
 
-  // Filter bookings based on active tab
+  // Filter bookings based on active tab and search query
   const getFilteredBookings = () => {
     let filtered;
     switch (activeTab) {
@@ -50,6 +52,16 @@ const BookingScreen = ({ route, navigation }) => {
       case 'all':
       default:
         filtered = bookings;
+    }
+    
+    // Apply search filter by astrologer name
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase().trim();
+      filtered = filtered.filter(booking => {
+        const astrologerName = booking.astrologer?.name?.toLowerCase() || '';
+        const astrologerDisplayName = booking.astrologer?.displayName?.toLowerCase() || '';
+        return astrologerName.includes(query) || astrologerDisplayName.includes(query);
+      });
     }
     
     // Sort by most recent first (createdAt or scheduledAt)
@@ -694,6 +706,25 @@ const BookingScreen = ({ route, navigation }) => {
         <Text style={styles.title}>My Bookings</Text>
       </View>
 
+      {/* Search Bar */}
+      <View style={styles.searchContainer}>
+        <Ionicons name="search" size={20} color="#999" style={styles.searchIcon} />
+        <TextInput
+          style={styles.searchInput}
+          placeholder="Search by astrologer name..."
+          placeholderTextColor="#999"
+          value={searchQuery}
+          onChangeText={setSearchQuery}
+          autoCapitalize="none"
+          autoCorrect={false}
+        />
+        {searchQuery.length > 0 && (
+          <TouchableOpacity onPress={() => setSearchQuery('')} style={styles.clearButton}>
+            <Ionicons name="close-circle" size={20} color="#999" />
+          </TouchableOpacity>
+        )}
+      </View>
+
       {/* Tab Navigation */}
       <View style={styles.tabContainer}>
         {renderTabButton('all', 'All', allCount)}
@@ -772,6 +803,31 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#333',
     flex: 1,
+  },
+  searchContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#fff',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#eee',
+  },
+  searchIcon: {
+    marginRight: 10,
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: 16,
+    color: '#333',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    backgroundColor: '#f5f5f5',
+    borderRadius: 8,
+  },
+  clearButton: {
+    marginLeft: 10,
+    padding: 4,
   },
   tabContainer: {
     flexDirection: 'row',

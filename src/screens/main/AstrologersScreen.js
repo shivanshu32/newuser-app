@@ -323,8 +323,24 @@ const AstrologersScreen = ({ navigation, route }) => {
               {astrologer.displayName || astrologer.name}
             </Text>
             
+            {/* Specializations Tags */}
+            {(Array.isArray(astrologer.specializations) && astrologer.specializations.length > 0) && (
+              <View style={styles.specializationTagsContainer}>
+                {astrologer.specializations.slice(0, 3).map((spec, index) => (
+                  <View key={spec._id || index} style={styles.specializationTag}>
+                    <Text style={styles.specializationTagText} numberOfLines={1}>
+                      {spec.name || spec}
+                    </Text>
+                  </View>
+                ))}
+              </View>
+            )}
+            
+            {/* Categories */}
             <Text style={styles.astrologerSpecialty} numberOfLines={2}>
-              {astrologer.specialties?.join(', ') || (Array.isArray(astrologer.specialization) ? astrologer.specialization.join(', ') : '') || 'Vedic Astrology, Numerology'}
+              {Array.isArray(astrologer.categoryRefs) && astrologer.categoryRefs.length > 0
+                ? astrologer.categoryRefs.map(cat => cat?.name || cat).join(', ')
+                : astrologer.specialties?.join(', ') || (Array.isArray(astrologer.specialization) ? astrologer.specialization.join(', ') : 'General Astrology')}
             </Text>
             
             {/* Enhanced Rating Section */}
@@ -754,6 +770,26 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: '#6B7280',
     marginBottom: 8,
+  },
+  specializationTagsContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    marginBottom: 6,
+    gap: 4,
+  },
+  specializationTag: {
+    backgroundColor: 'rgba(139, 92, 246, 0.15)',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(139, 92, 246, 0.3)',
+  },
+  specializationTagText: {
+    fontSize: 10,
+    color: '#8B5CF6',
+    fontWeight: '600',
+    textTransform: 'capitalize',
   },
   ratingSection: {
     flexDirection: 'row',
