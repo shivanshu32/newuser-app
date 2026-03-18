@@ -63,7 +63,9 @@ const PrepaidOfferCard = ({ offer, onOfferUsed, onRefresh }) => {
         response: error.response?.data,
         status: error.response?.status
       });
-      Alert.alert('Error', 'Failed to start offer chat session');
+      // CRITICAL FIX: Extract error message from backend response
+      const errorMessage = error.response?.data?.message || error.message || 'Failed to start offer chat session';
+      Alert.alert('Error', errorMessage);
     } finally {
       setLoading(false);
     }

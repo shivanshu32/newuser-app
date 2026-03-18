@@ -99,7 +99,8 @@ const BookingWaitingScreen = () => {
                   let cancelId;
                   
                   if (isPrepaidOffer || isPrepaidCard) {
-                    cancelId = bookingId;
+                    // For prepaid sessions, use sessionId (MongoDB ObjectId) for cancellation
+                    cancelId = sessionId || bookingId;
                     cancelUrl = `${API_BASE}/prepaid-offers/sessions/${cancelId}/cancel`;
                   } else {
                     cancelId = bookingId;
@@ -472,8 +473,8 @@ const BookingWaitingScreen = () => {
       
       if (isPrepaidOffer || isPrepaidCard) {
         // For prepaid offers/cards, use session cancellation endpoint
-        // bookingId param contains the session MongoDB ObjectId
-        cancelId = bookingId;
+        // Use sessionId (MongoDB ObjectId) - bookingId may not be passed for prepaid offers
+        cancelId = sessionId || bookingId;
         cancelUrl = `${API_BASE}/prepaid-offers/sessions/${cancelId}/cancel`;
         cancelType = isPrepaidCard ? 'prepaid card session' : 'prepaid offer session';
         console.log('🔄 [BookingWaiting] Cancelling prepaid session:', {

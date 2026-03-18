@@ -197,7 +197,9 @@ const PrepaidChatPackAstrologersScreen = ({ navigation, route }) => {
               });
             } catch (error) {
               console.error('❌ Error starting chat:', error);
-              Alert.alert('Error', error.message || 'Failed to start chat session');
+              // CRITICAL FIX: Extract error message from backend response
+              const errorMessage = error.response?.data?.message || error.message || 'Failed to start chat session';
+              Alert.alert('Error', errorMessage);
             } finally {
               setLoading(false);
             }

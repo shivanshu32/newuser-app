@@ -32,8 +32,12 @@ const FreeChatCard = ({ navigation }) => {
   useFocusEffect(
     React.useCallback(() => {
      // console.log('🆓 [FREE_CHAT_CARD] Screen focused - re-checking eligibility');
-      checkEligibility();
-    }, [])
+      // CRITICAL FIX: Only check eligibility if user is authenticated
+      // This prevents API calls without token when screen focuses before auth is ready
+      if (user && user._id) {
+        checkEligibility();
+      }
+    }, [user])
   );
 
   // Socket event listeners for free chat
@@ -130,6 +134,15 @@ const FreeChatCard = ({ navigation }) => {
      // console.log('🆓 [FREE_CHAT_CARD] Starting eligibility check...');
       // console.log('🆓 [FREE_CHAT_CARD] User:', user);
       // console.log('🆓 [FREE_CHAT_CARD] User ID:', user?._id);
+      
+      // CRITICAL FIX: Skip eligibility check if user is not authenticated
+      // This prevents "No token provided" errors when component mounts before auth is ready
+      if (!user || !user._id) {
+        console.log('🆓 [FREE_CHAT_CARD] Skipping eligibility check - user not authenticated');
+        setLoading(false);
+        setIsEligible(false);
+        return;
+      }
       
       setLoading(true);
       const response = await freeChatAPI.checkEligibility();

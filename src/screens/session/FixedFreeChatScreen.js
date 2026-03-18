@@ -412,6 +412,25 @@ const FixedFreeChatScreen = React.memo(({ route, navigation }) => {
       // Get a valid token (refresh if needed)
       let tokenToUse = authUser?.token;
       
+      // CRITICAL FIX: Skip API call if token is not available yet
+      // This prevents "Invalid token" errors when token is still loading from AsyncStorage
+      if (!tokenToUse) {
+        console.log('⚠️ [FREE_CHAT_RECONNECT] Token not available yet, skipping status check and proceeding with socket reconnection');
+        // Proceed with socket reconnection without status check
+        isReconnectingRef.current = true;
+        reconnectAttemptsRef.current += 1;
+        
+        if (contextSocket && !contextSocket.connected) {
+          console.log('🔌 [RECONNECT] Attempting socket reconnection...');
+          contextSocket.connect();
+        }
+        
+        setTimeout(() => {
+          isReconnectingRef.current = false;
+        }, 2000);
+        return;
+      }
+      
       // First attempt with current token - check free chat status
       let response = await fetch(`${API_BASE_URL}/free-chat/${freeChatId}/status`, {
         headers: {
