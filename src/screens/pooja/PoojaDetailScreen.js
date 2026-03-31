@@ -130,7 +130,7 @@ const PoojaDetailScreen = () => {
             transactionId: transaction.id
           },
           config: {
-            key: 'rzp_live_7EGPTOGoJ2TPWL',
+            key: 'rzp_live_SRtGSM1fHGJsxQ',
             name: 'JyotishCall',
             description: `Pooja Booking: ${poojaData.mainHeading}`,
             image: 'https://your-logo-url.com/logo.png',
