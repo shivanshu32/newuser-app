@@ -17,6 +17,7 @@ import {
   Modal,
   Dimensions,
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
@@ -135,6 +136,10 @@ const FixedFreeChatScreen = React.memo(({ route, navigation }) => {
   const [imagePreviewVisible, setImagePreviewVisible] = useState(false);
   const [fullScreenImage, setFullScreenImage] = useState(null);
   
+  // Offline message queue state
+  const [offlineQueue, setOfflineQueue] = useState([]);
+  const [connectionStatus, setConnectionStatus] = useState('connecting'); // 'connecting', 'connected', 'reconnecting', 'error'
+  
   // Prepaid offer state
   const [showPrepaidOffer, setShowPrepaidOffer] = useState(false);
   const [prepaidOfferData, setPrepaidOfferData] = useState(null);
@@ -198,6 +203,96 @@ const FixedFreeChatScreen = React.memo(({ route, navigation }) => {
   
   // Update ref to current function
   safeSetStateRef.current = safeSetState;
+
+  // ===== OFFLINE MESSAGE QUEUE =====
+  const OFFLINE_QUEUE_KEY = `offline_queue_freechat_${freeChatId}`;
+
+  const loadOfflineQueue = useCallback(async () => {
+    try {
+      const stored = await AsyncStorage.getItem(OFFLINE_QUEUE_KEY);
+      if (stored) {
+        const queue = JSON.parse(stored);
+        console.log('📦 [OFFLINE_QUEUE] Loaded', queue.length, 'queued messages');
+        safeSetState(setOfflineQueue, queue);
+        return queue;
+      }
+    } catch (error) {
+      console.error('❌ [OFFLINE_QUEUE] Error loading queue:', error);
+    }
+    return [];
+  }, [OFFLINE_QUEUE_KEY, safeSetState]);
+
+  const saveOfflineQueue = useCallback(async (queue) => {
+    try {
+      await AsyncStorage.setItem(OFFLINE_QUEUE_KEY, JSON.stringify(queue));
+      console.log('💾 [OFFLINE_QUEUE] Saved', queue.length, 'messages to queue');
+    } catch (error) {
+      console.error('❌ [OFFLINE_QUEUE] Error saving queue:', error);
+    }
+  }, [OFFLINE_QUEUE_KEY]);
+
+  const addToOfflineQueue = useCallback(async (message) => {
+    const newQueue = [...offlineQueue, message];
+    safeSetState(setOfflineQueue, newQueue);
+    await saveOfflineQueue(newQueue);
+    console.log('📥 [OFFLINE_QUEUE] Added message to queue, total:', newQueue.length);
+  }, [offlineQueue, safeSetState, saveOfflineQueue]);
+
+  const removeFromOfflineQueue = useCallback(async (messageId) => {
+    const newQueue = offlineQueue.filter(msg => msg.id !== messageId);
+    safeSetState(setOfflineQueue, newQueue);
+    await saveOfflineQueue(newQueue);
+    console.log('📤 [OFFLINE_QUEUE] Removed message from queue, remaining:', newQueue.length);
+  }, [offlineQueue, safeSetState, saveOfflineQueue]);
+
+  const processOfflineQueue = useCallback(async () => {
+    const socket = socketRef.current;
+    if (!socket?.connected || offlineQueue.length === 0) {
+      return;
+    }
+
+    console.log('🔄 [OFFLINE_QUEUE] Processing', offlineQueue.length, 'queued messages');
+    
+    for (const queuedMessage of offlineQueue) {
+      try {
+        const messagePayload = {
+          id: queuedMessage.id,
+          content: queuedMessage.content,
+          text: queuedMessage.content,
+          message: queuedMessage.content,
+          senderId: authUser?.id,
+          senderType: 'user',
+          freeChatId,
+          sessionId,
+          astrologerId,
+          roomId: getCurrentRoomId(),
+          timestamp: queuedMessage.timestamp,
+          replyTo: queuedMessage.replyTo
+        };
+
+        socket.emit('free_chat_message', messagePayload, async (acknowledgment) => {
+          if (acknowledgment?.success) {
+            console.log('✅ [OFFLINE_QUEUE] Queued message sent:', queuedMessage.id);
+            await removeFromOfflineQueue(queuedMessage.id);
+            safeSetState(setMessages, prev =>
+              prev.map(msg =>
+                msg.id === queuedMessage.id
+                  ? { ...msg, status: 'sent' }
+                  : msg
+              )
+            );
+          } else {
+            console.warn('⚠️ [OFFLINE_QUEUE] Failed to send queued message:', queuedMessage.id);
+          }
+        });
+
+        // Small delay between messages to avoid overwhelming the server
+        await new Promise(resolve => setTimeout(resolve, 100));
+      } catch (error) {
+        console.error('❌ [OFFLINE_QUEUE] Error processing queued message:', error);
+      }
+    }
+  }, [offlineQueue, authUser?.id, freeChatId, sessionId, astrologerId, getCurrentRoomId, removeFromOfflineQueue, safeSetState]);
 
   // ===== SESSION END HANDLING =====
   const handleSessionEnd = useCallback((reason, initiatedBy = 'system') => {
@@ -1564,6 +1659,7 @@ const FixedFreeChatScreen = React.memo(({ route, navigation }) => {
     socket.on('connect', () => {
       console.log(`🔗 [FREE_CHAT_SOCKET] Connected to server (Instance: ${instanceId.current})`);
       safeSetState(setConnected, true);
+      safeSetState(setConnectionStatus, 'connected');
       reconnectAttemptsRef.current = 0;
       
       // Clear loading state on successful connection
@@ -1575,11 +1671,19 @@ const FixedFreeChatScreen = React.memo(({ route, navigation }) => {
       
       // Join free chat room after connection
       joinFreeChatRoom();
+      
+      // Process offline queue after reconnection
+      setTimeout(() => {
+        if (mountedRef.current) {
+          processOfflineQueue();
+        }
+      }, 500);
     });
     
     socket.on('disconnect', (reason) => {
       console.log(`🔌 [FREE_CHAT_SOCKET] Disconnected from server (Instance: ${instanceId.current}):`, reason);
       safeSetState(setConnected, false);
+      safeSetState(setConnectionStatus, 'reconnecting');
       
       // Reset loading state on disconnect to show reconnecting state
       if (loadingStateSetRef.current && mountedRef.current) {
@@ -1602,6 +1706,7 @@ const FixedFreeChatScreen = React.memo(({ route, navigation }) => {
     socket.on('connect_error', (error) => {
       console.error('❌ [FREE_CHAT_SOCKET] Connection error:', error);
       safeSetState(setConnected, false);
+      safeSetState(setConnectionStatus, 'error');
     });
     
     // Free chat specific message events
@@ -1810,11 +1915,19 @@ const FixedFreeChatScreen = React.memo(({ route, navigation }) => {
         });
         
       } else {
-        console.log('🔄 [MESSAGE] Socket not connected');
+        console.log('📦 [MESSAGE] Socket not connected, queuing message for later');
+        // Queue message for later delivery instead of marking as failed
+        const queuedMessage = {
+          id: messageId,
+          content: messageContent,
+          timestamp: new Date().toISOString(),
+          replyTo: replyToData
+        };
+        await addToOfflineQueue(queuedMessage);
         safeSetState(setMessages, prev => 
           prev.map(msg => 
             msg.id === messageId 
-              ? { ...msg, status: 'failed' }
+              ? { ...msg, status: 'queued' }
               : msg
           )
         );
@@ -1829,7 +1942,7 @@ const FixedFreeChatScreen = React.memo(({ route, navigation }) => {
         )
       );
     }
-  }, [messageText, sessionActive, generateMessageId, authUser?.id, freeChatId, sessionId, astrologerId, getCurrentRoomId, safeSetState]);
+  }, [messageText, sessionActive, generateMessageId, authUser?.id, freeChatId, sessionId, astrologerId, getCurrentRoomId, safeSetState, addToOfflineQueue]);
 
   // ===== IMAGE SENDING =====
   const pickImage = useCallback(async () => {
@@ -2394,6 +2507,7 @@ const FixedFreeChatScreen = React.memo(({ route, navigation }) => {
             {isOwnMessage && (
               <View style={styles.messageStatus}>
                 {item.status === 'sending' && <ActivityIndicator size={10} color="#999" />}
+                {item.status === 'queued' && <Ionicons name="time-outline" size={12} color="#F59E0B" />}
                 {item.status === 'sent' && <Ionicons name="checkmark" size={12} color="#4CAF50" />}
                 {item.status === 'delivered' && (
                   <View style={styles.readReceiptContainer}>
@@ -2429,22 +2543,36 @@ const FixedFreeChatScreen = React.memo(({ route, navigation }) => {
   // REMOVED: Waiting screen UI - now relying solely on prepaid offer bottom sheet
 
   const getStatusInfo = () => {
+    const queueCount = offlineQueue.length;
+    
     if (loading) {
-      return { color: '#F59E0B', text: 'Connecting...' };
+      return { color: '#F59E0B', text: 'Connecting...', icon: 'cloud-outline', showSpinner: true };
     }
     if (sessionEnded) {
-      return { color: '#6B7280', text: 'Session ended' };
+      return { color: '#6B7280', text: 'Session ended', icon: 'checkmark-done', showSpinner: false };
+    }
+    if (connectionStatus === 'error') {
+      return { color: '#EF4444', text: 'Connection error', icon: 'alert-circle', showSpinner: false };
+    }
+    if (connectionStatus === 'reconnecting') {
+      return { color: '#F59E0B', text: 'Reconnecting...', icon: 'refresh', showSpinner: true };
     }
     if (connected && sessionActive) {
-      return { color: '#10B981', text: 'Connected' };
+      if (queueCount > 0) {
+        return { color: '#F59E0B', text: `Connected (${queueCount} queued)`, icon: 'cloud-upload', showSpinner: false };
+      }
+      return { color: '#10B981', text: 'Connected', icon: 'checkmark-circle', showSpinner: false };
     }
     if (connected && !sessionActive) {
-      return { color: '#F59E0B', text: 'Waiting for session to start...' };
+      return { color: '#F59E0B', text: 'Waiting for session to start...', icon: 'time', showSpinner: true };
     }
     if (!connected) {
-      return { color: '#EF4444', text: 'Connection lost. Retrying...' };
+      if (queueCount > 0) {
+        return { color: '#EF4444', text: `Offline (${queueCount} queued)`, icon: 'cloud-offline', showSpinner: false };
+      }
+      return { color: '#EF4444', text: 'Connection lost. Retrying...', icon: 'cloud-offline', showSpinner: true };
     }
-    return { color: '#6B7280', text: 'Initializing...' };
+    return { color: '#6B7280', text: 'Initializing...', icon: 'ellipsis-horizontal', showSpinner: true };
   };
 
   const statusInfo = getStatusInfo();
@@ -2510,7 +2638,13 @@ const FixedFreeChatScreen = React.memo(({ route, navigation }) => {
         </View>
 
         <View style={[styles.statusBanner, { backgroundColor: statusInfo.color }]}>
-          <Text style={styles.statusText}>{statusInfo.text}</Text>
+          <View style={styles.statusContent}>
+            <Ionicons name={statusInfo.icon} size={16} color="#FFFFFF" style={styles.statusIcon} />
+            <Text style={styles.statusText}>{statusInfo.text}</Text>
+            {statusInfo.showSpinner && (
+              <ActivityIndicator size="small" color="#FFFFFF" style={styles.statusSpinner} />
+            )}
+          </View>
         </View>
 
         <FlatList
@@ -2802,10 +2936,21 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     alignItems: 'center',
   },
+  statusContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  statusIcon: {
+    marginRight: 6,
+  },
   statusText: {
     color: '#FFFFFF',
     fontWeight: 'bold',
     fontSize: 14,
+  },
+  statusSpinner: {
+    marginLeft: 8,
   },
   messagesList: {
     flex: 1,
