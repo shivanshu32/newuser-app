@@ -44,9 +44,22 @@ const FixedChatScreen = ({ route, navigation }) => {
     astrologer: routeAstrologer, // For prepaid recharge card flow
     isPrepaidOffer, // Flag to identify prepaid offer sessions
     isPrepaidCard, // Flag to identify prepaid card sessions
+    rejoin, // Flag to identify rejoin scenario
   } = route.params || {};
   
   const { user: authUser, refreshToken, getValidToken } = useAuth();
+
+  // CRITICAL FIX: Validate required parameters to prevent crashes
+  // For rejoin scenarios, bookingId might be the session ID for prepaid sessions
+  if (!bookingId && !sessionId) {
+    console.error('❌ [VALIDATION] Missing required parameters: bookingId and sessionId are both undefined');
+    Alert.alert(
+      'Session Error',
+      'Unable to join the chat session. Missing session information. Please try again from the home screen.',
+      [{ text: 'OK', onPress: () => navigation.navigate('Main', { screen: 'Home' }) }]
+    );
+    return null;
+  }
 
   // ===== STATE =====
   const [loading, setLoading] = useState(true);
@@ -364,7 +377,7 @@ const FixedChatScreen = ({ route, navigation }) => {
           Alert.alert(
             'Session Ended',
             'Your consultation session has ended while the app was in background.',
-            [{ text: 'OK', onPress: () => navigation.goBack() }]
+            [{ text: 'OK', onPress: () => navigation.navigate('Main', { screen: 'Home' }) }]
           );
           return;
         }
@@ -458,7 +471,7 @@ const FixedChatScreen = ({ route, navigation }) => {
         Alert.alert(
           'Session Ended',
           'Your consultation session has ended.',
-          [{ text: 'OK', onPress: () => navigation.goBack() }]
+          [{ text: 'OK', onPress: () => navigation.navigate('Main', { screen: 'Home' }) }]
         );
         return;
       }
@@ -964,8 +977,8 @@ const FixedChatScreen = ({ route, navigation }) => {
             console.log('🏠 [SESSION] Prepaid session ended - navigating to Home');
             navigation.navigate('Main', { screen: 'Home' });
           } else {
-            console.log('🔙 [SESSION] Regular session ended - going back');
-            navigation.goBack();
+            console.log('🔙 [SESSION] Regular session ended - navigating to Home');
+            navigation.navigate('Main', { screen: 'Home' });
           }
         }
       }}]
@@ -1949,7 +1962,12 @@ const FixedChatScreen = ({ route, navigation }) => {
         keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
       >
         <View style={styles.header}>
-          <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
+          <TouchableOpacity style={styles.backButton} onPress={() => {
+              // CRITICAL FIX: Navigate to Home instead of goBack() to prevent returning to PreChatForm
+              // This ensures users always go to Home screen during active chat, not back to details form
+              console.log('🔙 [NAVIGATION] Back button pressed - navigating to Home');
+              navigation.navigate('Main', { screen: 'Home' });
+            }}>
             <Ionicons name="arrow-back" size={24} color="#FFFFFF" />
           </TouchableOpacity>
           

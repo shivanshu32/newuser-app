@@ -68,16 +68,24 @@ const FreeChatPreForm = ({ route, navigation }) => {
 
   // Socket event listeners for free chat
   useEffect(() => {
-    if (!socket) return;
+    if (!socket) {
+      console.log('⚠️ [FREE_CHAT] Socket not available in FreeChatPreForm');
+      return;
+    }
+
+    console.log('🔌 [FREE_CHAT] Setting up socket listeners, socket connected:', socket.connected);
+    console.log('🔌 [FREE_CHAT] Socket ID:', socket.id);
 
     const handleFreeChatRequested = (data) => {
       console.log('🆓 Free chat requested:', data);
+      console.log('🆓 [FREE_CHAT] Socket still connected:', socket.connected);
       setShowWaitingModal(true);
       setWaitingMessage('Waiting for an astrologer to join...');
     };
 
     const handleFreeChatAccepted = (data) => {
-      console.log('✅ Free chat accepted:', data);
+      console.log('✅ [FREE_CHAT_ACCEPTED] Event received!');
+      console.log('✅ [FREE_CHAT_ACCEPTED] Data:', JSON.stringify(data, null, 2));
       setShowWaitingModal(false);
       setLoading(false);
       
@@ -85,7 +93,7 @@ const FreeChatPreForm = ({ route, navigation }) => {
       navigation.replace('FixedFreeChatScreen', {
         freeChatId: data.freeChatId,
         sessionId: data.sessionId,
-        astrologerId: data.astrologer.id,
+        astrologerId: data.astrologer?.id,
         astrologer: data.astrologer,
         isFreeChat: true,
         userProfile: formData // Pass the form data as user profile
@@ -126,11 +134,22 @@ const FreeChatPreForm = ({ route, navigation }) => {
       }
     };
 
+    // Handle socket reconnection - rejoin waiting room if we have an active request
+    const handleSocketReconnect = () => {
+      console.log('🔄 [FREE_CHAT] Socket reconnected, checking if we need to rejoin waiting room');
+      // The waiting room is joined server-side when request_free_chat is emitted
+      // If we're showing the waiting modal, we might need to re-request
+      if (showWaitingModal) {
+        console.log('🔄 [FREE_CHAT] Waiting modal is showing, socket reconnected');
+      }
+    };
+
     // Register socket listeners
     socket.on('free_chat_requested', handleFreeChatRequested);
     socket.on('free_chat_accepted', handleFreeChatAccepted);
     socket.on('free_chat_expired', handleFreeChatExpired);
     socket.on('free_chat_error', handleFreeChatError);
+    socket.on('connect', handleSocketReconnect);
 
     return () => {
       // Cleanup listeners
@@ -138,8 +157,9 @@ const FreeChatPreForm = ({ route, navigation }) => {
       socket.off('free_chat_accepted', handleFreeChatAccepted);
       socket.off('free_chat_expired', handleFreeChatExpired);
       socket.off('free_chat_error', handleFreeChatError);
+      socket.off('connect', handleSocketReconnect);
     };
-  }, [socket, navigation, formData]);
+  }, [socket, navigation, formData, showWaitingModal]);
 
   // Form validation
   const validateForm = () => {

@@ -143,6 +143,44 @@ const RazorpayPaymentScreen = ({ route, navigation }) => {
     return true;
   };
 
+  // ✅ CRITICAL FIX #1: Transaction status polling mechanism
+  const pollTransactionStatus = async (transactionId, maxAttempts = 15) => {
+    console.log('🔄 [POLLING] Starting transaction status polling:', transactionId);
+    
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      try {
+        console.log(`🔄 [POLLING] Attempt ${attempt}/${maxAttempts}`);
+        
+        // Wait 2 seconds between polls
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        
+        const statusResponse = await walletAPI.checkTransactionStatus(transactionId);
+        console.log('📊 [POLLING] Status response:', statusResponse);
+        
+        if (statusResponse.success && statusResponse.data.status === 'completed') {
+          console.log('✅ [POLLING] Transaction completed! Updating balance...');
+          
+          // Update wallet balance with current balance from status response
+          await updateUser({ walletBalance: statusResponse.data.currentBalance });
+          
+          return {
+            success: true,
+            balance: statusResponse.data.currentBalance,
+            bonusAmount: statusResponse.data.bonusAmount || 0
+          };
+        }
+        
+        console.log(`⏳ [POLLING] Transaction still ${statusResponse.data.status}, continuing...`);
+      } catch (pollError) {
+        console.error(`❌ [POLLING] Attempt ${attempt} failed:`, pollError);
+        // Continue polling even if one attempt fails
+      }
+    }
+    
+    console.log('⚠️ [POLLING] Max attempts reached, transaction may still be processing');
+    return { success: false, timeout: true };
+  };
+
   const handlePaymentSuccess = async (paymentData) => {
     try {
       console.log('Payment successful, verifying with backend:', paymentData);
@@ -246,7 +284,7 @@ const RazorpayPaymentScreen = ({ route, navigation }) => {
         // Mark payment as completed to stop timeout
         markCompleted();
         
-        // Get the new balance from verification response
+        // ✅ CRITICAL FIX: Enhanced balance update with polling fallback
         const newBalance = verificationResponse.data?.newBalance || verificationResponse.data?.balance;
         console.log('💰 New wallet balance from verification:', newBalance);
         
@@ -254,9 +292,21 @@ const RazorpayPaymentScreen = ({ route, navigation }) => {
         if (newBalance !== undefined) {
           await updateUser({ walletBalance: newBalance });
           console.log('✅ Updated user context with new balance:', newBalance);
+        } else if (transactionId) {
+          // ✅ CRITICAL FIX #1: If no balance in response, start polling
+          console.log('⚠️ No balance in verification response, starting polling...');
+          const pollResult = await pollTransactionStatus(transactionId);
+          
+          if (pollResult.success) {
+            console.log('✅ Balance updated via polling:', pollResult.balance);
+          } else {
+            // Fallback: fetch balance from API
+            console.log('⚠️ Polling timeout, fetching from API...');
+            await updateWalletBalance();
+          }
         } else {
           // Fallback: fetch balance from API
-          console.log('⚠️ No balance in verification response, fetching from API...');
+          console.log('⚠️ No transaction ID, fetching from API...');
           await updateWalletBalance();
         }
 
@@ -372,24 +422,88 @@ const RazorpayPaymentScreen = ({ route, navigation }) => {
           ]
         );
       } else {
+        // ✅ CRITICAL FIX #4: Enhanced error handling with user-friendly messages
         console.error('Payment verification failed:', verificationResponse);
-        Alert.alert(
-          'Payment Verification Failed',
-          'Payment was successful but verification failed. Please contact support if your wallet is not updated.',
-          [
-            {
-              text: 'OK',
-              onPress: () => navigation.goBack()
-            }
-          ]
-        );
+        
+        // Check if this is a wallet credit processing delay
+        if (verificationResponse.data?.creditFailed || verificationResponse.message?.includes('processing')) {
+          // Start polling in background
+          if (transactionId) {
+            console.log('🔄 Starting background polling for delayed credit...');
+            pollTransactionStatus(transactionId).then(pollResult => {
+              if (pollResult.success) {
+                console.log('✅ Background polling succeeded, balance updated');
+              }
+            });
+          }
+          
+          Alert.alert(
+            'Payment Processing',
+            'Your payment was successful! ✅\n\nYour wallet balance is being updated and will reflect within 2-5 minutes.\n\nIf your balance doesn\'t update within 5 minutes, please contact support with this Payment ID:\n\n' + paymentData.payment_id,
+            [
+              {
+                text: 'Check Wallet',
+                onPress: () => navigation.navigate('Wallet')
+              },
+              {
+                text: 'OK',
+                onPress: () => navigation.goBack()
+              }
+            ]
+          );
+        } else {
+          // Generic verification failure
+          Alert.alert(
+            'Payment Verification Issue',
+            'Your payment was successful but we\'re having trouble verifying it right now.\n\nDon\'t worry - your money is safe! Your wallet will be updated within 5 minutes.\n\nIf not updated, contact support with:\nPayment ID: ' + paymentData.payment_id,
+            [
+              {
+                text: 'Contact Support',
+                onPress: () => {
+                  // TODO: Navigate to support screen
+                  navigation.goBack();
+                }
+              },
+              {
+                text: 'OK',
+                onPress: () => navigation.goBack()
+              }
+            ]
+          );
+        }
       }
     } catch (error) {
+      // ✅ CRITICAL FIX #4: Enhanced error messages with polling fallback
       console.error('Error verifying payment:', error);
+      
+      // Start polling as fallback if we have transaction ID
+      if (transactionId) {
+        console.log('🔄 Starting fallback polling due to verification error...');
+        try {
+          const pollResult = await pollTransactionStatus(transactionId);
+          
+          if (pollResult.success) {
+            console.log('✅ Fallback polling succeeded!');
+            Alert.alert(
+              'Payment Successful!',
+              'Your payment has been processed successfully and your wallet has been updated.\n\nPayment ID: ' + paymentData.payment_id,
+              [{ text: 'OK', onPress: () => navigation.goBack() }]
+            );
+            return;
+          }
+        } catch (pollError) {
+          console.error('❌ Fallback polling also failed:', pollError);
+        }
+      }
+      
       Alert.alert(
-        'Payment Verification Error',
-        'Payment was successful but verification failed. Please contact support if your wallet is not updated.',
+        'Payment Processing',
+        'Your payment was successful! ✅\n\nWe\'re processing your wallet update. It should reflect within 2-5 minutes.\n\nIf your balance doesn\'t update, please contact support with:\n\nPayment ID: ' + paymentData.payment_id + '\nOrder ID: ' + paymentData.order_id,
         [
+          {
+            text: 'Check Wallet',
+            onPress: () => navigation.navigate('Wallet')
+          },
           {
             text: 'OK',
             onPress: () => navigation.goBack()

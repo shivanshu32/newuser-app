@@ -76,7 +76,7 @@ const FixedFreeChatScreen = React.memo(({ route, navigation }) => {
       [
         {
           text: 'OK',
-          onPress: () => navigation.goBack()
+          onPress: () => navigation.navigate('Main', { screen: 'Home' })
         }
       ]
     );

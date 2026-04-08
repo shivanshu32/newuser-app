@@ -506,43 +506,66 @@ const HomeScreen = ({ navigation }) => {
 
   // Handle rejoin chat button press
   const handleRejoinChat = useCallback((sessionData) => {
-    console.log('🔄 Rejoining chat session:', sessionData);
+    console.log('🔄 Rejoining chat session:', JSON.stringify(sessionData, null, 2));
     
     // Hide bottom sheet
     setShowRejoinBottomSheet(false);
     clearRemainingTimeTimer();
     
     try {
+      // CRITICAL VALIDATION: Ensure we have required data before navigation
+      if (!sessionData) {
+        console.error('❌ [REJOIN] No session data provided');
+        Alert.alert('Error', 'Session data not available. Please try again.');
+        return;
+      }
+
       if (sessionData.isFreeChat) {
         // Navigate to free chat screen
+        console.log('🔄 [REJOIN] Navigating to FixedFreeChatScreen for free chat');
         navigation.navigate('FixedFreeChatScreen', {
           sessionId: sessionData.sessionIdentifier,
           freeChatId: sessionData.freeChatId,
-          astrologerId: sessionData.astrologer?.id,
-          astrologerName: sessionData.astrologer?.name,
+          astrologer: sessionData.astrologer, // Pass complete astrologer object
+          astrologerId: sessionData.astrologer?.id, // Keep for backward compatibility
+          astrologerName: sessionData.astrologer?.name, // Keep for backward compatibility
           rejoin: true
         });
       } else {
+        // CRITICAL FIX: Determine the correct bookingId to use
+        // Backend returns:
+        // - sessionId: MongoDB session _id
+        // - bookingId: booking._id for regular sessions, or session._id for prepaid sessions
+        // For FixedChatScreen, we need bookingId to be valid
+        const effectiveBookingId = sessionData.bookingId || sessionData.sessionId;
+        
+        if (!effectiveBookingId) {
+          console.error('❌ [REJOIN] No valid bookingId or sessionId found in session data');
+          Alert.alert('Error', 'Unable to rejoin session. Missing session identifier.');
+          return;
+        }
+
         // Navigate to enhanced chat screen for paid consultations, prepaid offers, and prepaid cards
         console.log('🔄 [REJOIN] Navigating to EnhancedChat with:', {
-          bookingId: sessionData.bookingId,
+          bookingId: effectiveBookingId,
           sessionId: sessionData.sessionId,
           isPrepaidOffer: sessionData.isPrepaidOffer,
           isPrepaidCard: sessionData.isPrepaidCard,
           astrologer: sessionData.astrologer
         });
         
-        // CRITICAL FIX: Pass complete session data for prepaid cards
+        // CRITICAL FIX: Pass complete session data with validated bookingId
         navigation.navigate('EnhancedChat', {
-          bookingId: sessionData.bookingId,
+          bookingId: effectiveBookingId, // Use effective booking ID (could be session ID for prepaid)
           sessionId: sessionData.sessionId,
-          astrologerId: sessionData.astrologer?.id,
-          astrologerName: sessionData.astrologer?.name,
-          astrologerImage: sessionData.astrologer?.profileImage,
+          astrologer: sessionData.astrologer, // Pass complete astrologer object
+          astrologerId: sessionData.astrologer?.id, // Keep for backward compatibility
+          astrologerName: sessionData.astrologer?.name, // Keep for backward compatibility
+          astrologerImage: sessionData.astrologer?.profileImage, // Keep for backward compatibility
           isPrepaidOffer: sessionData.isPrepaidOffer || false,
-          isPrepaidCard: sessionData.isPrepaidCard || false, // CRITICAL: Pass prepaid card flag
-          durationMinutes: sessionData.durationMinutes, // CRITICAL: Pass duration for prepaid cards
-          remainingTime: sessionData.remainingTime, // Pass remaining time
+          isPrepaidCard: sessionData.isPrepaidCard || false,
+          durationMinutes: sessionData.durationMinutes,
+          remainingTime: sessionData.remainingTime,
           rejoin: true
         });
       }
@@ -3560,7 +3583,7 @@ const HomeScreen = ({ navigation }) => {
       <RejoinChatBottomSheet
         visible={showRejoinBottomSheet}
         onClose={() => setShowRejoinBottomSheet(false)}
-        onRejoin={handleRejoinChat}
+        onRejoinPress={handleRejoinChat}
         sessionData={activeSessionData}
         remainingTime={remainingTime}
       />
