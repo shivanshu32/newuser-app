@@ -1,6 +1,11 @@
 import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Constants from 'expo-constants';
+import { DeviceEventEmitter } from 'react-native';
+
+// Global event emitter for auth events
+// This allows the API service to communicate with AuthContext
+global.authEventEmitter = DeviceEventEmitter;
 
 // API URL Configuration based on environment
 const getApiUrl = () => {
@@ -130,6 +135,7 @@ API.interceptors.response.use(
         console.error('🌐 [API] Network connectivity issue detected');
         return Promise.reject({
           ...error,
+          response: error.response, // Preserve response property
           isNetworkError: true,
           userMessage: 'Network connection failed. Please check your internet connection and try again.'
         });
@@ -140,6 +146,7 @@ API.interceptors.response.use(
         console.error('⏰ [API] Request timeout detected');
         return Promise.reject({
           ...error,
+          response: error.response, // Preserve response property
           isTimeout: true,
           userMessage: 'Request timed out. Please try again.'
         });
@@ -162,6 +169,18 @@ API.interceptors.response.use(
             } catch (clearError) {
               console.error('❌ [API] Error clearing tokens:', clearError);
             }
+            
+            // Emit logout event
+            try {
+              console.log('🚪 [API] Emitting LOGOUT_REQUIRED event - no refresh token');
+              global.authEventEmitter?.emit('LOGOUT_REQUIRED', { 
+                reason: 'no_refresh_token',
+                message: 'Your session has expired. Please log in again.'
+              });
+            } catch (emitError) {
+              console.error('❌ [API] Error emitting logout event:', emitError);
+            }
+            
             throw new Error('No refresh token available');
           }
           
@@ -206,17 +225,20 @@ API.interceptors.response.use(
             console.error('❌ [API] Error clearing tokens after refresh failure:', clearError);
           }
           
-          // Emit logout event if global event emitter is available
-          if (global.eventEmitter) {
-            try {
-              global.eventEmitter.emit('LOGOUT_REQUIRED', { reason: 'token_refresh_failed' });
-            } catch (emitError) {
-              console.error('❌ [API] Error emitting logout event:', emitError);
-            }
+          // Emit logout event using DeviceEventEmitter
+          try {
+            console.log('🚪 [API] Emitting LOGOUT_REQUIRED event - session expired');
+            global.authEventEmitter?.emit('LOGOUT_REQUIRED', { 
+              reason: 'token_refresh_failed',
+              message: 'Your session has expired. Please log in again.'
+            });
+          } catch (emitError) {
+            console.error('❌ [API] Error emitting logout event:', emitError);
           }
           
           return Promise.reject({
             ...refreshError,
+            response: refreshError.response, // Preserve response property
             isAuthError: true,
             userMessage: 'Session expired. Please log in again.'
           });
@@ -231,8 +253,11 @@ API.interceptors.response.use(
       }
       
       // For other errors, enhance with user-friendly messages
+      // CRITICAL FIX: Preserve the response property explicitly since object spread
+      // doesn't copy non-enumerable properties from Axios error objects
       const enhancedError = {
         ...error,
+        response: error.response, // Explicitly preserve response property
         userMessage: getUserFriendlyErrorMessage(error)
       };
       
@@ -272,7 +297,7 @@ export const authAPI = {
   requestOtp: (phoneNumber) => API.post('/auth/request-otp', { phoneNumber, role: 'user' }),
   verifyOtp: (phoneNumber, otp) => API.post('/auth/verify-otp', { phoneNumber, otp, role: 'user' }),
   updateProfile: (profileData) => API.put('/users/profile', profileData),
-  registerDeviceToken: (token) => API.post('/users/register-device-token', { token }),
+  registerDeviceToken: (token) => API.post('/users/register-device-token', { deviceToken: token }),
 };
 
 // Astrologers API

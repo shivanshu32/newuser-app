@@ -64,15 +64,39 @@ const GooglePlacesInput = ({
       if (data.status === 'OK' && data.predictions) {
         setPredictions(data.predictions);
         setShowPredictions(true);
+        setError(null);
       } else if (data.status === 'ZERO_RESULTS') {
         setPredictions([]);
         setShowPredictions(false);
+        setError(null);
       } else if (data.status === 'REQUEST_DENIED') {
         console.error('Google Places API request denied:', data.error_message);
-        setError('Location search unavailable');
+        console.error('Full API response:', JSON.stringify(data));
+        // Allow manual entry when API is unavailable
+        setError('Auto-search unavailable. You can type your location manually.');
+        setPredictions([]);
+        setShowPredictions(false);
+        // Still allow the user to use the typed value
+        if (onLocationSelect && searchText.length >= 2) {
+          onLocationSelect({
+            name: searchText,
+            placeId: null,
+            coordinates: null,
+            formattedAddress: searchText,
+            isManualEntry: true,
+          });
+        }
+      } else if (data.status === 'OVER_QUERY_LIMIT') {
+        console.error('Google Places API query limit exceeded');
+        setError('Search limit reached. You can type your location manually.');
+        setPredictions([]);
+        setShowPredictions(false);
+      } else if (data.status === 'INVALID_REQUEST') {
+        console.error('Google Places API invalid request:', data.error_message);
+        setError(null);
         setPredictions([]);
       } else {
-        console.log('Google Places API response:', data.status);
+        console.log('Google Places API response:', data.status, data.error_message);
         setPredictions([]);
       }
     } catch (err) {
@@ -82,11 +106,31 @@ const GooglePlacesInput = ({
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [onLocationSelect]);
 
   // Debounced search handler
   const handleTextChange = useCallback((text) => {
     setInputValue(text);
+    
+    // Always update parent with typed value for manual entry support
+    // This ensures the form can work even if Google Places API is unavailable
+    if (onLocationSelect && text.length >= 2) {
+      onLocationSelect({
+        name: text,
+        placeId: null,
+        coordinates: null,
+        formattedAddress: text,
+        isManualEntry: true,
+      });
+    } else if (onLocationSelect && text.length === 0) {
+      onLocationSelect({
+        name: '',
+        placeId: null,
+        coordinates: null,
+        formattedAddress: '',
+        isManualEntry: true,
+      });
+    }
     
     // Clear previous timeout
     if (debounceTimeoutRef.current) {
@@ -97,7 +141,7 @@ const GooglePlacesInput = ({
     debounceTimeoutRef.current = setTimeout(() => {
       fetchPredictions(text);
     }, 300);
-  }, [fetchPredictions]);
+  }, [fetchPredictions, onLocationSelect]);
 
   // Fetch place details to get coordinates
   const fetchPlaceDetails = useCallback(async (placeId) => {
@@ -258,9 +302,9 @@ const GooglePlacesInput = ({
         ) : null}
       </View>
 
-      {/* Error Message */}
+      {/* Error/Info Message */}
       {error && (
-        <Text style={styles.errorText}>{error}</Text>
+        <Text style={[styles.errorText, error.includes('manually') && styles.infoText]}>{error}</Text>
       )}
 
       {/* Predictions List */}
@@ -340,6 +384,10 @@ const styles = StyleSheet.create({
     fontSize: 12,
     marginTop: 4,
     marginLeft: 4,
+  },
+  infoText: {
+    color: '#F97316', // Orange color for info/warning instead of red error
+    fontStyle: 'italic',
   },
   predictionsContainer: {
     position: 'absolute',

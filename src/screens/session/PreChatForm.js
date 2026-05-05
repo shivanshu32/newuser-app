@@ -15,11 +15,10 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import DateTimePicker from '@react-native-community/datetimepicker';
-// import { GooglePlacesAutocomplete } from 'react-native-google-places-autocomplete';
 import { useAuth } from '../../context/AuthContext';
 import { useSocket } from '../../context/SocketContext';
 import { walletAPI } from '../../services/api';
-import { GOOGLE_PLACES_CONFIG } from '../../config/googlePlaces';
+import GooglePlacesInput from '../../components/GooglePlacesInput';
 
 const PreChatForm = ({ route, navigation }) => {
   const { astrologer, bookingType = 'chat' } = route.params || {};
@@ -32,6 +31,7 @@ const PreChatForm = ({ route, navigation }) => {
     dateOfBirth: new Date(),
     timeOfBirth: new Date(),
     placeOfBirth: '',
+    placeOfBirthCoordinates: null,
     gender: '',
     isTimeOfBirthUnknown: false,
   });
@@ -60,6 +60,7 @@ const PreChatForm = ({ route, navigation }) => {
         dateOfBirth: user.birthDate ? new Date(user.birthDate) : new Date(),
         timeOfBirth: isTimeUnknown ? new Date() : (user.birthTime ? new Date(user.birthTime) : new Date()),
         placeOfBirth: user.birthLocation || '',
+        placeOfBirthCoordinates: user.birthLocationCoordinates || null,
         gender: user.gender || '',
         isTimeOfBirthUnknown: isTimeUnknown,
       };
@@ -202,36 +203,6 @@ const PreChatForm = ({ route, navigation }) => {
     return option ? option.label : 'Select Gender';
   };
 
-  // Handle place of birth selection from Google Places
-  const handlePlaceOfBirthSelect = (data, details = null) => {
-    try {
-      if (!data) {
-        console.log('GooglePlacesAutocomplete: No data received');
-        return;
-      }
-      
-      const locationName = data.description || 
-                          data.structured_formatting?.main_text || 
-                          data.formatted_address || 
-                          data.name || 
-                          '';
-      
-      if (locationName) {
-        console.log('Selected place of birth:', locationName);
-        setFormData(prev => ({ ...prev, placeOfBirth: locationName }));
-        // Clear place of birth error if it exists
-        if (errors.placeOfBirth) {
-          setErrors(prev => ({ ...prev, placeOfBirth: null }));
-        }
-      } else {
-        console.log('GooglePlacesAutocomplete: No valid location name found in data:', data);
-      }
-    } catch (error) {
-      console.error('Error handling place of birth selection:', error);
-      Alert.alert('Error', 'Failed to select location. Please try again.');
-    }
-  };
-
   // Check wallet balance before booking
   const checkWalletBalance = async () => {
     try {
@@ -366,6 +337,7 @@ const PreChatForm = ({ route, navigation }) => {
           dateOfBirth: formData.dateOfBirth.toISOString(),
           timeOfBirth: formData.isTimeOfBirthUnknown ? null : formData.timeOfBirth?.toISOString(),
           placeOfBirth: formData.placeOfBirth.trim(),
+          placeOfBirthCoordinates: formData.placeOfBirthCoordinates,
           gender: formData.gender,
           isTimeOfBirthUnknown: formData.isTimeOfBirthUnknown,
         }
@@ -509,7 +481,12 @@ const PreChatForm = ({ route, navigation }) => {
           <View style={styles.headerSpacer} />
         </View>
 
-        <ScrollView style={styles.scrollContainer} showsVerticalScrollIndicator={false}>
+        <ScrollView 
+          style={styles.scrollContainer} 
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+          nestedScrollEnabled={true}
+        >
           {/* Astrologer Info */}
           <View style={styles.astrologerCard}>
             <Text style={styles.astrologerName}>
@@ -620,18 +597,28 @@ const PreChatForm = ({ route, navigation }) => {
             </View>
 
             {/* Place of Birth Field */}
-            <View style={styles.fieldContainer}>
+            <View style={[styles.fieldContainer, { zIndex: 1000 }]}>
               <Text style={styles.fieldLabel}>Place of Birth *</Text>
-              <TextInput
-                style={[styles.textInput, errors.placeOfBirth && styles.inputError]}
+              <GooglePlacesInput
                 value={formData.placeOfBirth}
-                onChangeText={(value) => handleInputChange('placeOfBirth', value)}
-                placeholder="Enter your place of birth (City, State)"
-                placeholderTextColor="#999"
-                autoCapitalize="words"
-                autoCorrect={false}
+                onLocationSelect={(location) => {
+                  if (location) {
+                    const locationName = location.name || location.formattedAddress || '';
+                    console.log('Selected place of birth:', locationName);
+                    setFormData(prev => ({ 
+                      ...prev, 
+                      placeOfBirth: locationName,
+                      placeOfBirthCoordinates: location.coordinates || null
+                    }));
+                    // Clear place of birth error if it exists
+                    if (errors.placeOfBirth) {
+                      setErrors(prev => ({ ...prev, placeOfBirth: null }));
+                    }
+                  }
+                }}
+                placeholder="Search for your birth city..."
+                inputStyle={errors.placeOfBirth ? { borderColor: '#ef4444' } : {}}
               />
-              {/* Note: Google Places Autocomplete temporarily disabled due to filter error */}
               {errors.placeOfBirth && <Text style={styles.errorText}>{errors.placeOfBirth}</Text>}
             </View>
           </View>

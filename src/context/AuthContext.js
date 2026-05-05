@@ -1,7 +1,7 @@
-import React, { createContext, useState, useContext, useEffect } from 'react';
+import React, { createContext, useState, useContext, useEffect, useRef } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
-import { Alert } from 'react-native';
+import { Alert, DeviceEventEmitter } from 'react-native';
 import { walletAPI } from '../services/api';
 import analyticsService from '../services/analyticsService';
 import facebookTrackingService from '../services/facebookTrackingService';
@@ -25,6 +25,57 @@ export const AuthProvider = ({ children }) => {
   const [loading, setLoading] = useState(false); // For API operations
   const [initialLoading, setInitialLoading] = useState(true); // For initial auth check
   const [error, setError] = useState(null);
+  const isLoggingOut = useRef(false); // Prevent multiple logout attempts
+
+  // Listen for LOGOUT_REQUIRED events from API service (session expiration)
+  useEffect(() => {
+    const handleLogoutRequired = async (data) => {
+      console.log('🚪 [AuthContext] LOGOUT_REQUIRED event received:', data);
+      
+      // Prevent multiple simultaneous logout attempts
+      if (isLoggingOut.current) {
+        console.log('🚪 [AuthContext] Logout already in progress, skipping...');
+        return;
+      }
+      
+      isLoggingOut.current = true;
+      
+      try {
+        // Clear storage
+        await AsyncStorage.multiRemove(['userToken', 'refreshToken', 'userData']);
+        
+        // Clear state
+        setUser(null);
+        setToken(null);
+        
+        // Clear axios default header
+        delete axios.defaults.headers.common['Authorization'];
+        
+        // Show alert to user
+        Alert.alert(
+          'Session Expired',
+          data?.message || 'Your session has expired. Please log in again to continue.',
+          [{ text: 'OK', style: 'default' }]
+        );
+        
+        console.log('✅ [AuthContext] User logged out due to session expiration');
+      } catch (error) {
+        console.error('❌ [AuthContext] Error during forced logout:', error);
+      } finally {
+        isLoggingOut.current = false;
+      }
+    };
+
+    // Subscribe to LOGOUT_REQUIRED events
+    const subscription = DeviceEventEmitter.addListener('LOGOUT_REQUIRED', handleLogoutRequired);
+    console.log('🔔 [AuthContext] Subscribed to LOGOUT_REQUIRED events');
+
+    // Cleanup subscription on unmount
+    return () => {
+      subscription.remove();
+      console.log('🔕 [AuthContext] Unsubscribed from LOGOUT_REQUIRED events');
+    };
+  }, []);
 
   // Check if user is logged in on app start (crash-safe)
   useEffect(() => {

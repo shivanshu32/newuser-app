@@ -132,11 +132,20 @@ const WalletScreen = () => {
       isLoadingTransactions.current = false;
       
       // Show more specific error message
-      if (error.response) {
+      // Use userMessage from API interceptor if available, otherwise check response
+      // Don't show alert for auth errors - the LOGOUT_REQUIRED handler will show it
+      if (error.isAuthError) {
+        // Auth error is handled by the global LOGOUT_REQUIRED event
+        console.log('Auth error detected - user will be redirected to login');
+      } else if (error.userMessage) {
+        Alert.alert('Error', error.userMessage);
+      } else if (error.response) {
         console.error('API Error Response:', error.response.data);
-        Alert.alert('Error', error.response.data.message || 'Failed to load wallet data. Please try again.');
+        Alert.alert('Error', error.response.data?.message || 'Failed to load wallet data. Please try again.');
+      } else if (error.isNetworkError) {
+        Alert.alert('Error', 'Network connection failed. Please check your internet connection and try again.');
       } else {
-        Alert.alert('Error', 'Network error. Please check your connection and try again.');
+        Alert.alert('Error', error.message || 'Network error. Please check your connection and try again.');
       }
       
       // Fallback to dummy transactions in case of error for development

@@ -199,6 +199,10 @@ const AddUserProfile = ({ navigation, route }) => {
       Alert.alert('Validation Error', 'Please select your gender');
       return false;
     }
+    if (!formData.birthDate || !(formData.birthDate instanceof Date) || isNaN(formData.birthDate)) {
+      Alert.alert('Validation Error', 'Please select your date of birth');
+      return false;
+    }
     if (!formData.birthLocation.trim()) {
       Alert.alert('Validation Error', 'Please enter your birth location');
       return false;
@@ -216,11 +220,37 @@ const AddUserProfile = ({ navigation, route }) => {
 
     setLoading(true);
     try {
+      // Safely convert dates to ISO strings
+      let birthDateISO = null;
+      let birthTimeISO = null;
+      
+      try {
+        if (formData.birthDate instanceof Date && !isNaN(formData.birthDate)) {
+          birthDateISO = formData.birthDate.toISOString();
+        } else if (formData.birthDate) {
+          birthDateISO = new Date(formData.birthDate).toISOString();
+        }
+      } catch (dateError) {
+        console.error('Error converting birthDate:', dateError);
+      }
+      
+      try {
+        if (!isTimeOfBirthUnknown && formData.birthTime) {
+          if (formData.birthTime instanceof Date && !isNaN(formData.birthTime)) {
+            birthTimeISO = formData.birthTime.toISOString();
+          } else {
+            birthTimeISO = new Date(formData.birthTime).toISOString();
+          }
+        }
+      } catch (timeError) {
+        console.error('Error converting birthTime:', timeError);
+      }
+
       // Prepare data for API
       const profileData = {
         name: formData.name.trim(),
-        birthDate: formData.birthDate.toISOString(),
-        birthTime: isTimeOfBirthUnknown ? null : formData.birthTime?.toISOString(),
+        birthDate: birthDateISO,
+        birthTime: birthTimeISO,
         birthLocation: formData.birthLocation.trim(),
         birthLocationCoordinates: formData.birthLocationCoordinates,
         gender: formData.gender,
@@ -276,10 +306,36 @@ const AddUserProfile = ({ navigation, route }) => {
       }
     } catch (error) {
       console.error('Profile update error:', error);
-      Alert.alert(
-        'Error',
-        error.response?.data?.message || 'Failed to update profile. Please try again.'
-      );
+      console.error('Error details:', {
+        message: error.message,
+        userMessage: error.userMessage,
+        response: error.response?.data,
+        isNetworkError: error.isNetworkError,
+        isAuthError: error.isAuthError,
+      });
+      
+      // Use userMessage from API interceptor if available
+      let errorMessage = 'Failed to update profile. Please try again.';
+      if (error.userMessage) {
+        errorMessage = error.userMessage;
+      } else if (error.response?.data?.message) {
+        errorMessage = error.response.data.message;
+      } else if (error.response?.data?.error) {
+        errorMessage = error.response.data.error;
+      } else if (error.isNetworkError) {
+        errorMessage = 'Network error. Please check your connection and try again.';
+      } else if (error.isAuthError) {
+        // Auth error is handled by the global LOGOUT_REQUIRED event
+        // Just show a brief message, user will be redirected to login
+        errorMessage = 'Session expired. Redirecting to login...';
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+      
+      // Don't show alert for auth errors - the LOGOUT_REQUIRED handler will show it
+      if (!error.isAuthError) {
+        Alert.alert('Error', errorMessage);
+      }
     } finally {
       setLoading(false);
     }
