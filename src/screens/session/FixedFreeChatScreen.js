@@ -1006,29 +1006,38 @@ const FixedFreeChatScreen = React.memo(({ route, navigation }) => {
   const handleTypingStarted = useCallback((data) => {
     console.log('✏️ [FREE_CHAT_TYPING] Received typing_started:', data);
     
-    // Only handle typing from astrologer in this free chat session
-    if (data.senderRole === 'astrologer' && (data.freeChatId === freeChatId || data.bookingId === sessionId)) {
+    // Must match backend payloads (AI free chat sends senderRole; legacy sends senderType).
+    const fromAstrologer =
+      data.senderRole === 'astrologer' || data.senderType === 'astrologer';
+    if (
+      fromAstrologer &&
+      (data.freeChatId === freeChatId || data.bookingId === sessionId)
+    ) {
       safeSetState(setAstrologerTyping, true);
-      
+
       // Clear existing timeout
       if (astrologerTypingTimeoutRef.current) {
         clearTimeout(astrologerTypingTimeoutRef.current);
       }
-      
-      // Auto-clear typing indicator after 5 seconds
+
+      // Allow long simulated typing (backend uses 6–18s per bubble like admin playground).
       astrologerTypingTimeoutRef.current = setTimeout(() => {
         safeSetState(setAstrologerTyping, false);
-      }, 5000);
+      }, 22000);
     }
   }, [freeChatId, sessionId, safeSetState]);
   
   const handleTypingStopped = useCallback((data) => {
     console.log('✏️ [FREE_CHAT_TYPING] Received typing_stopped:', data);
     
-    // Only handle typing from astrologer in this free chat session
-    if (data.senderRole === 'astrologer' && (data.freeChatId === freeChatId || data.bookingId === sessionId)) {
+    const fromAstrologer =
+      data.senderRole === 'astrologer' || data.senderType === 'astrologer';
+    if (
+      fromAstrologer &&
+      (data.freeChatId === freeChatId || data.bookingId === sessionId)
+    ) {
       safeSetState(setAstrologerTyping, false);
-      
+
       // Clear existing timeout
       if (astrologerTypingTimeoutRef.current) {
         clearTimeout(astrologerTypingTimeoutRef.current);
@@ -1053,7 +1062,7 @@ const FixedFreeChatScreen = React.memo(({ route, navigation }) => {
       if (data.isTyping) {
         astrologerTypingTimeoutRef.current = setTimeout(() => {
           safeSetState(setAstrologerTyping, false);
-        }, 5000);
+        }, 22000);
       }
     }
   }, [freeChatId, safeSetState]);
