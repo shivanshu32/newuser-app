@@ -43,6 +43,8 @@ import PoojaDetailScreen from '../screens/pooja/PoojaDetailScreen';
 import PoojaListScreen from '../screens/pooja/PoojaListScreen';
 import PoojaDetailsForm from '../screens/pooja/PoojaDetailsForm';
 
+// Shop Navigator
+import ShopNavigator from './ShopNavigator';
 
 import RatingScreen from '../screens/session/RatingScreen';
 
@@ -79,8 +81,8 @@ const TabNavigator = () => {
             iconName = focused ? 'home' : 'home-outline';
           } else if (route.name === 'Bookings') {
             iconName = focused ? 'calendar' : 'calendar-outline';
-          } else if (route.name === 'Pooja') {
-            iconName = focused ? 'flame' : 'flame-outline';
+          } else if (route.name === 'Shop') {
+            iconName = focused ? 'cart' : 'cart-outline';
           } else if (route.name === 'Wallet') {
             iconName = focused ? 'wallet' : 'wallet-outline';
           } else if (route.name === 'Profile') {
@@ -105,11 +107,11 @@ const TabNavigator = () => {
         options={{ headerShown: false }}
       />
       <Tab.Screen
-        name="Pooja"
-        component={PoojaListScreen}
+        name="Shop"
+        component={ShopNavigator}
         options={{
           headerShown: false,
-          tabBarLabel: 'Pooja',
+          tabBarLabel: 'Shop',
         }}
       />
       <Tab.Screen 
