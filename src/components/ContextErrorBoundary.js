@@ -39,6 +39,13 @@ class ContextErrorBoundary extends React.Component {
           <Text style={styles.errorMessage}>
             {this.props.fallbackMessage || 'Something went wrong with this service'}
           </Text>
+          {this.state.error && (
+            <View style={styles.errorBox}>
+              <Text style={styles.errorActual} numberOfLines={3}>
+                {this.state.error.toString()}
+              </Text>
+            </View>
+          )}
           <Text style={styles.errorDetails}>
             The app will continue without this feature.
           </Text>
@@ -72,6 +79,20 @@ const styles = StyleSheet.create({
     color: '#7F1D1D',
     textAlign: 'center',
     marginBottom: 8,
+  },
+  errorBox: {
+    backgroundColor: '#FEE2E2',
+    padding: 12,
+    borderRadius: 8,
+    marginVertical: 8,
+    borderLeftWidth: 3,
+    borderLeftColor: '#DC2626',
+    maxWidth: '100%',
+  },
+  errorActual: {
+    fontSize: 11,
+    color: '#7F1D1D',
+    fontFamily: 'monospace',
   },
   errorDetails: {
     fontSize: 12,

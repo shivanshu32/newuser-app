@@ -23,6 +23,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { useAuth } from '../../context/AuthContext';
 import { useSocket } from '../../context/SocketContext';
 import { uploadChatImage } from '../../services/cloudinaryService';
+import analyticsService from '../../services/analyticsService';
 
 const API_BASE_URL = 'https://jyotishcallbackend-2uxrv.ondigitalocean.app/api/v1';
 
@@ -884,14 +885,39 @@ const FixedChatScreen = ({ route, navigation }) => {
 
   
   // ===== SESSION EVENT HANDLERS =====
-  const handleSessionStarted = useCallback((data) => {
+  const handleSessionStarted = useCallback(async (data) => {
     console.log('🎯 [BACKEND-ONLY] Session started:', data);
     safeSetState(setSessionActive, true);
     safeSetState(setConnected, true);
     
+    // Track chat session started
+    try {
+      await analyticsService.logEvent('chat_session_started', {
+        booking_id: bookingId,
+        session_id: data.sessionId || bookingId,
+        astrologer_id: astrologer?._id || astrologer?.id,
+        astrologer_name: astrologer?.name,
+        session_type: data.sessionType || 'chat',
+        is_prepaid: data.isPrepaidCard || data.isPrepaidOffer || false,
+        duration: data.duration || data.maxAllowedSeconds
+      });
+
+      const { AppEventsLogger } = require('react-native-fbsdk-next');
+      await AppEventsLogger.logEvent('ChatSessionStarted', {
+        fb_content_type: 'chat_session',
+        fb_content_id: bookingId,
+        astrologer_id: astrologer?._id || astrologer?.id,
+        is_prepaid: data.isPrepaidCard || data.isPrepaidOffer || false
+      });
+
+      console.log('📊 [TRACKING] Chat session started:', bookingId);
+    } catch (error) {
+      console.error('❌ [TRACKING] Failed to track session start:', error);
+    }
+    
     console.log('✅ [BACKEND-ONLY] Session started - waiting for backend timer updates');
     console.log('⏱️ [BACKEND-ONLY] No local timer started - backend will send timer updates');
-  }, [safeSetState]);
+  }, [safeSetState, bookingId, astrologer]);
   
   const handleTimerUpdate = useCallback((data) => {
     console.log('⏱️ [BACKEND-ONLY] Timer update received:', data);
@@ -934,7 +960,7 @@ const FixedChatScreen = ({ route, navigation }) => {
     console.log('✅ [BACKEND-ONLY] Timer synced with backend - no local calculations');
   }, [bookingId, safeSetState, formatTime]);
 
-  const handleSessionEnded = useCallback((data) => {
+  const handleSessionEnded = useCallback(async (data) => {
     console.log('🛑 [SESSION] Session ended:', data);
     
     // ENHANCED: Validate this session end event is for current session
@@ -950,6 +976,32 @@ const FixedChatScreen = ({ route, navigation }) => {
       console.log('⚠️ [SESSION] Expected bookingId:', bookingId, 'Received:', data.bookingId);
       console.log('⚠️ [SESSION] Expected sessionId:', sessionId, 'Received:', data.sessionId);
       return;
+    }
+    
+    // Track chat session completed
+    try {
+      await analyticsService.logEvent('chat_session_completed', {
+        booking_id: bookingId,
+        session_id: data.sessionId || bookingId,
+        astrologer_id: astrologer?._id || astrologer?.id,
+        astrologer_name: astrologer?.name,
+        session_duration: data.duration || timerData?.elapsed || 0,
+        ended_by: data.endedBy || 'system',
+        is_prepaid: isPrepaidCard || isPrepaidOffer || false,
+        message_count: messages.length
+      });
+
+      const { AppEventsLogger } = require('react-native-fbsdk-next');
+      await AppEventsLogger.logEvent('ChatSessionCompleted', {
+        fb_content_type: 'chat_session',
+        fb_content_id: bookingId,
+        session_duration: data.duration || timerData?.elapsed || 0,
+        ended_by: data.endedBy || 'system'
+      });
+
+      console.log('📊 [TRACKING] Chat session completed:', bookingId);
+    } catch (error) {
+      console.error('❌ [TRACKING] Failed to track session completion:', error);
     }
     
     safeSetState(setSessionActive, false);

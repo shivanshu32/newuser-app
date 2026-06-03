@@ -10,6 +10,7 @@ import {
   TouchableOpacity
 } from 'react-native';
 import { WebView } from 'react-native-webview';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAuth } from '../../context/AuthContext';
 import { walletAPI } from '../../services/api';
 import prepaidOffersAPI from '../../services/prepaidOffersAPI';
@@ -18,6 +19,22 @@ import prepaidVoiceCardsAPI from '../../services/prepaidVoiceCardsAPI';
 import poojaAPI from '../../services/poojaAPI';
 import usePaymentTimeout from '../../hooks/usePaymentTimeout';
 import facebookTrackingService from '../../services/facebookTrackingService';
+import analyticsService from '../../services/analyticsService';
+
+// Helper function to check if this is user's first payment
+const checkIfFirstPayment = async () => {
+  try {
+    const firstPaymentTracked = await AsyncStorage.getItem('first_payment_tracked');
+    if (!firstPaymentTracked) {
+      await AsyncStorage.setItem('first_payment_tracked', 'true');
+      return true;
+    }
+    return false;
+  } catch (error) {
+    console.error('Error checking first payment:', error);
+    return false;
+  }
+};
 
 const RazorpayPaymentScreen = ({ route, navigation }) => {
   const { order, config, finalAmount, user, selectedPackage, paymentType, offerId, offerDetails, bookingId, rechargeCardPurchaseId, voiceCardPurchaseId, voiceCardDetails } = route.params;
@@ -310,62 +327,81 @@ const RazorpayPaymentScreen = ({ route, navigation }) => {
           await updateWalletBalance();
         }
 
-        // Track successful payment with Facebook SDK
+        // Track successful payment with GA4 and Meta (consolidated to prevent duplicates)
         try {
-          const trackingData = {
-            amount: finalAmount,
-            currency: 'INR',
-            paymentId: paymentData.payment_id,
-            orderId: paymentData.order_id,
-            paymentType: paymentType || 'wallet_recharge',
-            selectedPackage: selectedPackage,
-            offerId: offerId
-          };
+          const isFirstPayment = await checkIfFirstPayment();
+          
+          // Calculate bonus and total wallet credit
+          let bonusAmount = 0;
+          let totalWalletCredit = finalAmount;
+          let actualPaymentType = paymentType || 'wallet_recharge';
 
           if (paymentType === 'prepaid_offer') {
-            // Track prepaid offer purchase
-            await facebookTrackingService.trackPrepaidOfferPurchase({
-              offerId: offerId,
-              amount: finalAmount,
-              currency: 'INR',
-              astrologerName: offerDetails?.astrologerName,
-              durationMinutes: offerDetails?.durationMinutes,
-              paymentId: paymentData.payment_id,
-              orderId: paymentData.order_id
-            });
+            actualPaymentType = 'prepaid_offer';
+          } else if (selectedPackage) {
+            const rechargeAmount = selectedPackage.minRechargeAmount || 0;
+            bonusAmount = selectedPackage.percentageBonus > 0 
+              ? Math.round(rechargeAmount * selectedPackage.percentageBonus / 100)
+              : (selectedPackage.flatBonus || 0);
+            totalWalletCredit = rechargeAmount + bonusAmount;
           } else {
-            // Calculate bonus and total wallet credit for regular payments
-            let bonusAmount = 0;
-            let totalWalletCredit = finalAmount;
-
-            if (selectedPackage) {
-              const rechargeAmount = selectedPackage.minRechargeAmount || 0;
-              bonusAmount = selectedPackage.percentageBonus > 0 
-                ? Math.round(rechargeAmount * selectedPackage.percentageBonus / 100)
-                : (selectedPackage.flatBonus || 0);
-              totalWalletCredit = rechargeAmount + bonusAmount;
-            } else {
-              // Manual recharge - remove GST to get actual wallet credit
-              totalWalletCredit = Math.round(finalAmount / 1.18);
-            }
-
-            trackingData.bonusAmount = bonusAmount;
-            trackingData.totalWalletCredit = totalWalletCredit;
-
-            await facebookTrackingService.trackPaymentCompleted(trackingData);
+            // Manual recharge - remove GST to get actual wallet credit
+            totalWalletCredit = Math.round(finalAmount / 1.18);
           }
 
-          // Track first payment milestone
-          await facebookTrackingService.trackFirstPayment({
-            amount: finalAmount,
+          // GA4 Purchase Event (single consolidated event)
+          await analyticsService.logEvent('purchase', {
+            transaction_id: paymentData.payment_id,
+            value: finalAmount,
             currency: 'INR',
-            paymentType: paymentType || 'wallet_recharge',
-            paymentId: paymentData.payment_id
+            payment_type: actualPaymentType,
+            is_first_payment: isFirstPayment,
+            bonus_amount: bonusAmount,
+            total_wallet_credit: totalWalletCredit,
+            items: [{
+              item_id: selectedPackage?._id || offerId || 'manual_recharge',
+              item_name: selectedPackage?.name || offerDetails?.description || 'Wallet Top-up',
+              item_category: actualPaymentType,
+              price: finalAmount,
+              quantity: 1
+            }]
           });
 
-          console.log('📊 [FB-TRACKING] Payment success tracked with Facebook SDK');
+          // Meta Purchase Event (single consolidated event)
+          const { AppEventsLogger } = require('react-native-fbsdk-next');
+          await AppEventsLogger.logPurchase(finalAmount, 'INR', {
+            fb_content_type: actualPaymentType,
+            fb_transaction_id: paymentData.payment_id,
+            fb_order_id: paymentData.order_id,
+            fb_content_id: selectedPackage?._id || offerId || 'manual',
+            fb_content_name: selectedPackage?.name || offerDetails?.description || 'Wallet Recharge',
+            is_first_payment: isFirstPayment,
+            bonus_amount: bonusAmount,
+            total_wallet_credit: totalWalletCredit
+          });
+
+          // Only track first payment as separate event for remarketing (not as duplicate purchase)
+          if (isFirstPayment) {
+            await analyticsService.logEvent('first_payment', {
+              value: finalAmount,
+              payment_type: actualPaymentType,
+              transaction_id: paymentData.payment_id
+            });
+            
+            await AppEventsLogger.logEvent('FirstPayment', {
+              fb_currency: 'INR',
+              value: finalAmount,
+              payment_type: actualPaymentType
+            });
+          }
+
+          console.log('📊 [TRACKING] Payment success tracked (GA4 + Meta):', {
+            transaction_id: paymentData.payment_id,
+            value: finalAmount,
+            is_first_payment: isFirstPayment
+          });
         } catch (trackingError) {
-          console.error('❌ [FB-TRACKING] Failed to track payment success:', trackingError);
+          console.error('❌ [TRACKING] Failed to track payment success:', trackingError);
           // Don't fail the payment flow if tracking fails
         }
         

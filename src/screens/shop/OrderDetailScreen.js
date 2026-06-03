@@ -12,6 +12,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import productAPI from '../../services/productAPI';
+import CosmicBackground from '../../components/shop/CosmicBackground';
 
 const OrderDetailScreen = ({ route, navigation }) => {
   const { orderId } = route.params;
@@ -96,23 +97,26 @@ const OrderDetailScreen = ({ route, navigation }) => {
 
   if (loading) {
     return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#9333EA" />
-      </View>
+      <CosmicBackground>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color="#FBBF24" />
+        </View>
+      </CosmicBackground>
     );
   }
 
   if (!order) return null;
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-          <Ionicons name="arrow-back" size={24} color="#1F2937" />
-        </TouchableOpacity>
-        <Text style={styles.title}>Order Details</Text>
-        <View style={styles.placeholder} />
-      </View>
+    <CosmicBackground>
+      <SafeAreaView style={styles.container} edges={['top']}>
+        <View style={styles.header}>
+          <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
+            <Ionicons name="arrow-back" size={24} color="#F3F4F6" />
+          </TouchableOpacity>
+          <Text style={styles.title}>Order Details</Text>
+          <View style={styles.placeholder} />
+        </View>
 
       <ScrollView style={styles.content}>
         {/* Order Status */}
@@ -255,25 +259,25 @@ const OrderDetailScreen = ({ route, navigation }) => {
         <View style={styles.helpCard}>
           <Text style={styles.helpTitle}>Need Help?</Text>
           <TouchableOpacity style={styles.helpButton}>
-            <Ionicons name="chatbubble-outline" size={20} color="#9333EA" />
+            <Ionicons name="chatbubble-outline" size={20} color="#FBBF24" />
             <Text style={styles.helpButtonText}>Contact Support</Text>
           </TouchableOpacity>
         </View>
       </ScrollView>
-    </SafeAreaView>
+      </SafeAreaView>
+    </CosmicBackground>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F9FAFB'
+    backgroundColor: 'transparent'
   },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#F9FAFB'
+    alignItems: 'center'
   },
   header: {
     flexDirection: 'row',
@@ -281,9 +285,9 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: 16,
     paddingVertical: 12,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: 'rgba(255,255,255,0.06)',
     borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB'
+    borderBottomColor: 'rgba(255,255,255,0.08)'
   },
   backButton: {
     padding: 4
@@ -291,7 +295,7 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#1F2937'
+    color: '#F3F4F6'
   },
   placeholder: {
     width: 32
@@ -300,10 +304,13 @@ const styles = StyleSheet.create({
     flex: 1
   },
   statusCard: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: 'rgba(255,255,255,0.06)',
     padding: 24,
     marginTop: 8,
-    alignItems: 'center'
+    alignItems: 'center',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)'
   },
   statusBadge: {
     width: 80,
@@ -320,17 +327,20 @@ const styles = StyleSheet.create({
   },
   estimatedDelivery: {
     fontSize: 14,
-    color: '#6B7280'
+    color: '#94A3B8'
   },
   infoCard: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: 'rgba(255,255,255,0.06)',
     padding: 16,
-    marginTop: 8
+    marginTop: 8,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)'
   },
   cardTitle: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#1F2937',
+    color: '#F3F4F6',
     marginBottom: 12
   },
   infoRow: {
@@ -338,34 +348,37 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingVertical: 8,
     borderBottomWidth: 1,
-    borderBottomColor: '#F3F4F6'
+    borderBottomColor: 'rgba(255,255,255,0.08)'
   },
   infoLabel: {
     fontSize: 14,
-    color: '#6B7280'
+    color: '#94A3B8'
   },
   infoValue: {
     fontSize: 14,
     fontWeight: '500',
-    color: '#1F2937'
+    color: '#F3F4F6'
   },
   trackingNumber: {
     fontSize: 14,
     fontWeight: '500',
-    color: '#9333EA',
+    color: '#FBBF24',
     textDecorationLine: 'underline'
   },
   itemsCard: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: 'rgba(255,255,255,0.06)',
     padding: 16,
-    marginTop: 8
+    marginTop: 8,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)'
   },
   itemRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: '#F3F4F6'
+    borderBottomColor: 'rgba(255,255,255,0.08)'
   },
   itemInfo: {
     flex: 1,
@@ -374,49 +387,55 @@ const styles = StyleSheet.create({
   itemName: {
     fontSize: 14,
     fontWeight: '500',
-    color: '#1F2937',
+    color: '#F3F4F6',
     marginBottom: 4
   },
   itemVariant: {
     fontSize: 12,
-    color: '#6B7280',
+    color: '#94A3B8',
     marginBottom: 4
   },
   itemQuantity: {
     fontSize: 12,
-    color: '#9CA3AF'
+    color: '#A5B4FC'
   },
   itemTotal: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#1F2937'
+    color: '#F3F4F6'
   },
   addressCard: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: 'rgba(255,255,255,0.06)',
     padding: 16,
-    marginTop: 8
+    marginTop: 8,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)'
   },
   addressName: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#1F2937',
+    color: '#F3F4F6',
     marginBottom: 4
   },
   addressText: {
     fontSize: 13,
-    color: '#6B7280',
+    color: '#94A3B8',
     lineHeight: 18,
     marginBottom: 2
   },
   addressPhone: {
     fontSize: 13,
-    color: '#374151',
+    color: '#A5B4FC',
     marginTop: 4
   },
   priceCard: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: 'rgba(255,255,255,0.06)',
     padding: 16,
-    marginTop: 8
+    marginTop: 8,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)'
   },
   priceRow: {
     flexDirection: 'row',
@@ -425,33 +444,33 @@ const styles = StyleSheet.create({
   },
   priceLabel: {
     fontSize: 14,
-    color: '#6B7280'
+    color: '#94A3B8'
   },
   priceValue: {
     fontSize: 14,
     fontWeight: '500',
-    color: '#1F2937'
+    color: '#F3F4F6'
   },
   discountLabel: {
-    color: '#10B981'
+    color: '#34D399'
   },
   discountValue: {
-    color: '#10B981'
+    color: '#34D399'
   },
   divider: {
     height: 1,
-    backgroundColor: '#E5E7EB',
+    backgroundColor: 'rgba(255,255,255,0.1)',
     marginVertical: 12
   },
   totalLabel: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#1F2937'
+    color: '#F3F4F6'
   },
   totalValue: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: '#9333EA'
+    color: '#FBBF24'
   },
   cancelButton: {
     flexDirection: 'row',
@@ -463,27 +482,30 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#EF4444',
-    backgroundColor: '#FFFFFF'
+    borderColor: '#F87171',
+    backgroundColor: 'rgba(248,113,113,0.1)'
   },
   cancelButtonText: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#EF4444'
+    color: '#F87171'
   },
   disabledButton: {
     opacity: 0.5
   },
   helpCard: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: 'rgba(255,255,255,0.06)',
     padding: 16,
     marginTop: 8,
-    marginBottom: 16
+    marginBottom: 16,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)'
   },
   helpTitle: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#1F2937',
+    color: '#F3F4F6',
     marginBottom: 12
   },
   helpButton: {
@@ -493,12 +515,12 @@ const styles = StyleSheet.create({
     gap: 8,
     paddingVertical: 12,
     borderRadius: 8,
-    backgroundColor: '#F3E8FF'
+    backgroundColor: 'rgba(251,191,36,0.15)'
   },
   helpButtonText: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#9333EA'
+    color: '#FBBF24'
   }
 });
 

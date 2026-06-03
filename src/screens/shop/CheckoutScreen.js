@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -10,9 +10,12 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import { useFocusEffect } from '@react-navigation/native';
 import RazorpayCheckout from 'react-native-razorpay';
 import productAPI from '../../services/productAPI';
 import { useAuth } from '../../context/AuthContext';
+import CosmicBackground from '../../components/shop/CosmicBackground';
+import analyticsService from '../../services/analyticsService';
 
 const CheckoutScreen = ({ route, navigation }) => {
   const { cartItems, subtotal, couponCode, discount } = route.params;
@@ -35,6 +38,90 @@ const CheckoutScreen = ({ route, navigation }) => {
       loadAddresses();
     }
   }, []);
+
+  // Track begin_checkout when user lands on checkout screen
+  useFocusEffect(
+    useCallback(() => {
+      const trackBeginCheckout = async () => {
+        try {
+          // GA4 begin_checkout
+          await analyticsService.logEvent('begin_checkout', {
+            currency: 'INR',
+            value: total,
+            tax: tax,
+            shipping: shippingCost,
+            coupon: couponCode || undefined,
+            items: cartItems.map(item => ({
+              item_id: item.product._id,
+              item_name: item.product.name,
+              item_category: item.product.category,
+              item_variant: item.variant?.name,
+              price: item.price,
+              quantity: item.quantity
+            }))
+          });
+
+          // Meta InitiateCheckout
+          const { AppEventsLogger } = require('react-native-fbsdk-next');
+          await AppEventsLogger.logEvent('InitiateCheckout', {
+            fb_content_type: 'product',
+            fb_num_items: cartItems.length,
+            fb_currency: 'INR',
+            fb_value: total
+          });
+
+          console.log('📊 [TRACKING] Begin checkout tracked (ecommerce):', {
+            items: cartItems.length,
+            value: total
+          });
+        } catch (error) {
+          console.error('❌ [TRACKING] Failed to track begin checkout:', error);
+        }
+      };
+
+      trackBeginCheckout();
+    }, [cartItems, total])
+  );
+
+  // Helper function to track ecommerce purchase
+  const trackPurchase = async (order, transactionId = null) => {
+    try {
+      // GA4 purchase event
+      await analyticsService.logEvent('purchase', {
+        transaction_id: transactionId || order._id,
+        value: order.total,
+        currency: 'INR',
+        tax: order.tax || 0,
+        shipping: order.shippingCost || 0,
+        coupon: order.couponCode || undefined,
+        items: order.items.map(item => ({
+          item_id: item.product._id || item.productId,
+          item_name: item.product.name || item.name,
+          item_category: item.product.category,
+          item_variant: item.variant?.name,
+          price: item.price,
+          quantity: item.quantity
+        }))
+      });
+
+      // Meta Purchase event
+      const { AppEventsLogger } = require('react-native-fbsdk-next');
+      await AppEventsLogger.logPurchase(order.total, 'INR', {
+        fb_content_type: 'product',
+        fb_transaction_id: transactionId || order._id,
+        fb_order_id: order.orderNumber,
+        fb_num_items: order.items.length
+      });
+
+      console.log('📊 [TRACKING] Ecommerce purchase tracked:', {
+        order_id: order._id,
+        value: order.total,
+        items: order.items.length
+      });
+    } catch (error) {
+      console.error('❌ [TRACKING] Failed to track purchase:', error);
+    }
+  };
 
   const loadAddresses = async () => {
     try {
@@ -75,7 +162,8 @@ const CheckoutScreen = ({ route, navigation }) => {
       const order = orderResponse.data;
 
       if (paymentMethod === 'wallet') {
-        // Wallet payment already processed
+        // Wallet payment already processed - track purchase
+        await trackPurchase(order);
         navigation.replace('OrderConfirmation', { orderId: order._id });
       } else if (paymentMethod === 'razorpay') {
         // Create Razorpay order
@@ -94,7 +182,7 @@ const CheckoutScreen = ({ route, navigation }) => {
             contact: user?.mobileNumber || user?.phone || '',
             name: user?.name || ''
           },
-          theme: { color: '#9333EA' }
+          theme: { color: '#F97316' }
         };
 
         RazorpayCheckout.open(options)
@@ -108,6 +196,8 @@ const CheckoutScreen = ({ route, navigation }) => {
                 razorpay_signature: data.razorpay_signature
               });
               
+              // Track purchase for Razorpay payment
+              await trackPurchase(order, data.razorpay_payment_id);
               navigation.replace('OrderConfirmation', { orderId: order._id });
             } catch (error) {
               console.error('Payment verification error:', error);
@@ -121,6 +211,7 @@ const CheckoutScreen = ({ route, navigation }) => {
       } else if (paymentMethod === 'cod') {
         // Process COD
         await productAPI.processPayment(order._id, { paymentMethod: 'cod' });
+        await trackPurchase(order);
         navigation.replace('OrderConfirmation', { orderId: order._id });
       }
     } catch (error) {
@@ -132,14 +223,15 @@ const CheckoutScreen = ({ route, navigation }) => {
   };
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-          <Ionicons name="arrow-back" size={24} color="#1F2937" />
-        </TouchableOpacity>
-        <Text style={styles.title}>Checkout</Text>
-        <View style={styles.placeholder} />
-      </View>
+    <CosmicBackground>
+      <SafeAreaView style={styles.container} edges={['top']}>
+        <View style={styles.header}>
+          <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
+            <Ionicons name="arrow-back" size={24} color="#F3F4F6" />
+          </TouchableOpacity>
+          <Text style={styles.title}>Checkout</Text>
+          <View style={styles.placeholder} />
+        </View>
 
       <ScrollView style={styles.content}>
         {/* Delivery Address */}
@@ -253,7 +345,7 @@ const CheckoutScreen = ({ route, navigation }) => {
             <View style={styles.radioButton}>
               {paymentMethod === 'wallet' && <View style={styles.radioButtonInner} />}
             </View>
-            <Ionicons name="wallet" size={24} color="#9333EA" />
+            <Ionicons name="wallet" size={24} color="#F97316" />
             <View style={styles.paymentInfo}>
               <Text style={styles.paymentName}>Wallet</Text>
               <Text style={styles.paymentDesc}>Pay using wallet balance</Text>
@@ -270,7 +362,7 @@ const CheckoutScreen = ({ route, navigation }) => {
             <View style={styles.radioButton}>
               {paymentMethod === 'razorpay' && <View style={styles.radioButtonInner} />}
             </View>
-            <Ionicons name="card" size={24} color="#9333EA" />
+            <Ionicons name="card" size={24} color="#F97316" />
             <View style={styles.paymentInfo}>
               <Text style={styles.paymentName}>Card / UPI / Net Banking</Text>
               <Text style={styles.paymentDesc}>Pay via Razorpay</Text>
@@ -288,7 +380,7 @@ const CheckoutScreen = ({ route, navigation }) => {
               <View style={styles.radioButton}>
                 {paymentMethod === 'cod' && <View style={styles.radioButtonInner} />}
               </View>
-              <Ionicons name="cash" size={24} color="#9333EA" />
+              <Ionicons name="cash" size={24} color="#F97316" />
               <View style={styles.paymentInfo}>
                 <Text style={styles.paymentName}>Cash on Delivery</Text>
                 <Text style={styles.paymentDesc}>Pay when you receive</Text>
@@ -346,14 +438,15 @@ const CheckoutScreen = ({ route, navigation }) => {
           )}
         </TouchableOpacity>
       </View>
-    </SafeAreaView>
+      </SafeAreaView>
+    </CosmicBackground>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F9FAFB'
+    backgroundColor: 'transparent'
   },
   header: {
     flexDirection: 'row',
@@ -361,9 +454,9 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: 16,
     paddingVertical: 12,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: 'rgba(255,255,255,0.06)',
     borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB'
+    borderBottomColor: 'rgba(255,255,255,0.08)'
   },
   backButton: {
     padding: 4
@@ -371,7 +464,7 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#1F2937'
+    color: '#F3F4F6'
   },
   placeholder: {
     width: 32
@@ -380,9 +473,12 @@ const styles = StyleSheet.create({
     flex: 1
   },
   section: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: 'rgba(255,255,255,0.06)',
     padding: 16,
-    marginTop: 8
+    marginTop: 8,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)'
   },
   sectionHeader: {
     flexDirection: 'row',
@@ -393,12 +489,12 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#1F2937',
+    color: '#F3F4F6',
     marginBottom: 12
   },
   addButton: {
     fontSize: 14,
-    color: '#9333EA',
+    color: '#FBBF24',
     fontWeight: '500'
   },
   emptyAddress: {
@@ -408,12 +504,12 @@ const styles = StyleSheet.create({
   emptyText: {
     fontSize: 16,
     fontWeight: '500',
-    color: '#374151',
+    color: '#F3F4F6',
     marginTop: 12
   },
   emptySubtext: {
     fontSize: 14,
-    color: '#9CA3AF',
+    color: '#94A3B8',
     marginTop: 4
   },
   addressCard: {
@@ -421,19 +517,20 @@ const styles = StyleSheet.create({
     padding: 12,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#E5E7EB',
-    marginBottom: 12
+    borderColor: 'rgba(255,255,255,0.1)',
+    marginBottom: 12,
+    backgroundColor: 'rgba(255,255,255,0.04)'
   },
   addressCardSelected: {
-    borderColor: '#9333EA',
-    backgroundColor: '#F3E8FF'
+    borderColor: '#FBBF24',
+    backgroundColor: 'rgba(251,191,36,0.1)'
   },
   radioButton: {
     width: 20,
     height: 20,
     borderRadius: 10,
     borderWidth: 2,
-    borderColor: '#D1D5DB',
+    borderColor: 'rgba(255,255,255,0.2)',
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 12,
@@ -443,7 +540,7 @@ const styles = StyleSheet.create({
     width: 10,
     height: 10,
     borderRadius: 5,
-    backgroundColor: '#9333EA'
+    backgroundColor: '#FBBF24'
   },
   addressInfo: {
     flex: 1
@@ -457,28 +554,28 @@ const styles = StyleSheet.create({
   addressName: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#1F2937'
+    color: '#F3F4F6'
   },
   defaultBadge: {
     paddingHorizontal: 6,
     paddingVertical: 2,
-    backgroundColor: '#10B981',
+    backgroundColor: '#FBBF24',
     borderRadius: 4
   },
   defaultText: {
     fontSize: 10,
-    color: '#FFFFFF',
+    color: '#0B0F2F',
     fontWeight: '600'
   },
   addressText: {
     fontSize: 13,
-    color: '#6B7280',
+    color: '#94A3B8',
     lineHeight: 18,
     marginBottom: 4
   },
   addressPhone: {
     fontSize: 13,
-    color: '#374151'
+    color: '#A5B4FC'
   },
   deliveryOptions: {
     gap: 12
@@ -489,11 +586,12 @@ const styles = StyleSheet.create({
     padding: 12,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#E5E7EB'
+    borderColor: 'rgba(255,255,255,0.1)',
+    backgroundColor: 'rgba(255,255,255,0.04)'
   },
   deliveryOptionSelected: {
-    borderColor: '#9333EA',
-    backgroundColor: '#F3E8FF'
+    borderColor: '#FBBF24',
+    backgroundColor: 'rgba(251,191,36,0.1)'
   },
   deliveryInfo: {
     flex: 1,
@@ -502,17 +600,17 @@ const styles = StyleSheet.create({
   deliveryName: {
     fontSize: 14,
     fontWeight: '500',
-    color: '#1F2937'
+    color: '#F3F4F6'
   },
   deliveryTime: {
     fontSize: 12,
-    color: '#6B7280',
+    color: '#94A3B8',
     marginTop: 2
   },
   deliveryPrice: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#9333EA'
+    color: '#FBBF24'
   },
   paymentOption: {
     flexDirection: 'row',
@@ -520,12 +618,13 @@ const styles = StyleSheet.create({
     padding: 12,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#E5E7EB',
-    marginBottom: 12
+    borderColor: 'rgba(255,255,255,0.1)',
+    marginBottom: 12,
+    backgroundColor: 'rgba(255,255,255,0.04)'
   },
   paymentOptionSelected: {
-    borderColor: '#9333EA',
-    backgroundColor: '#F3E8FF'
+    borderColor: '#FBBF24',
+    backgroundColor: 'rgba(251,191,36,0.1)'
   },
   paymentInfo: {
     flex: 1,
@@ -534,11 +633,11 @@ const styles = StyleSheet.create({
   paymentName: {
     fontSize: 14,
     fontWeight: '500',
-    color: '#1F2937'
+    color: '#F3F4F6'
   },
   paymentDesc: {
     fontSize: 12,
-    color: '#6B7280',
+    color: '#94A3B8',
     marginTop: 2
   },
   summaryRow: {
@@ -548,39 +647,39 @@ const styles = StyleSheet.create({
   },
   summaryLabel: {
     fontSize: 14,
-    color: '#6B7280'
+    color: '#94A3B8'
   },
   summaryValue: {
     fontSize: 14,
     fontWeight: '500',
-    color: '#1F2937'
+    color: '#F3F4F6'
   },
   discountLabel: {
-    color: '#10B981'
+    color: '#34D399'
   },
   discountValue: {
-    color: '#10B981'
+    color: '#34D399'
   },
   divider: {
     height: 1,
-    backgroundColor: '#E5E7EB',
+    backgroundColor: 'rgba(255,255,255,0.1)',
     marginVertical: 12
   },
   totalLabel: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#1F2937'
+    color: '#F3F4F6'
   },
   totalValue: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: '#9333EA'
+    color: '#FBBF24'
   },
   bottomBar: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: 'rgba(255,255,255,0.06)',
     padding: 16,
     borderTopWidth: 1,
-    borderTopColor: '#E5E7EB'
+    borderTopColor: 'rgba(255,255,255,0.08)'
   },
   totalInfo: {
     flexDirection: 'row',
@@ -589,16 +688,16 @@ const styles = StyleSheet.create({
   },
   bottomTotalLabel: {
     fontSize: 14,
-    color: '#6B7280'
+    color: '#94A3B8'
   },
   bottomTotalValue: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: '#9333EA'
+    color: '#FBBF24'
   },
   placeOrderButton: {
     paddingVertical: 14,
-    backgroundColor: '#9333EA',
+    backgroundColor: '#F97316',
     borderRadius: 12,
     alignItems: 'center'
   },

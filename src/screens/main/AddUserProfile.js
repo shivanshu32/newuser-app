@@ -20,6 +20,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAuth } from '../../context/AuthContext';
 import { authAPI } from '../../services/api';
 import GooglePlacesInput from '../../components/GooglePlacesInput';
+import analyticsService from '../../services/analyticsService';
 
 const AddUserProfile = ({ navigation, route }) => {
   const { user, setUser } = useAuth();
@@ -277,6 +278,27 @@ const AddUserProfile = ({ navigation, route }) => {
           await AsyncStorage.setItem('userData', JSON.stringify(updatedUser));
         } catch (storageError) {
           console.error('Error updating user data in storage:', storageError);
+        }
+
+        // Track profile completion
+        try {
+          await analyticsService.logEvent('profile_completed', {
+            has_birth_date: !!profileData.birthDate,
+            has_birth_time: !!profileData.birthTime,
+            has_birth_location: !!profileData.birthLocation,
+            gender: profileData.gender,
+            is_required: route.params?.isRequired || false
+          });
+
+          const { AppEventsLogger } = require('react-native-fbsdk-next');
+          await AppEventsLogger.logEvent('ProfileCompleted', {
+            fb_content_type: 'user_profile',
+            has_complete_info: !!(profileData.birthDate && profileData.birthLocation)
+          });
+
+          console.log('📊 [TRACKING] Profile completed');
+        } catch (trackingError) {
+          console.error('❌ [TRACKING] Failed to track profile completion:', trackingError);
         }
 
         Alert.alert(

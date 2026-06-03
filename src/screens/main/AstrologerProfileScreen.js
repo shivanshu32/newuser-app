@@ -19,6 +19,7 @@ import { useSocket } from '../../context/SocketContext';
 import { astrologersAPI, walletAPI, ratingsAPI } from '../../services/api';
 import { initiateRealTimeBooking, listenForBookingStatusUpdates } from '../../services/socketService';
 import { addPendingConsultation, getPendingConsultations } from '../../utils/pendingConsultationsStore';
+import analyticsService from '../../services/analyticsService';
 
 const AstrologerProfileScreen = ({ route, navigation }) => {
   const { socket } = useSocket();
@@ -54,10 +55,37 @@ const AstrologerProfileScreen = ({ route, navigation }) => {
   console.log('🔍 [USER-APP] AstrologerProfileScreen: Extracted astrologer ID:', actualAstrologerId);
 
   // Handle chat booking - navigate to PreChatForm for user info collection
-  const handleBookChat = () => {
+  const handleBookChat = async () => {
     if (!astrologer) {
       Alert.alert('Error', 'Astrologer information not available. Please try again.');
       return;
+    }
+
+    // Track chat booking initiated
+    try {
+      // GA4 event
+      await analyticsService.logEvent('chat_booking_initiated', {
+        astrologer_id: astrologer._id,
+        astrologer_name: astrologer.name,
+        astrologer_rating: astrologer.rating || 0,
+        astrologer_experience: astrologer.experience || 0,
+        chat_rate: astrologer.chatRate || 0,
+        specialties: astrologer.specialties?.join(',') || ''
+      });
+
+      // Meta event
+      const { AppEventsLogger } = require('react-native-fbsdk-next');
+      await AppEventsLogger.logEvent('ChatBookingInitiated', {
+        fb_content_type: 'consultation',
+        fb_content_id: astrologer._id,
+        fb_content_name: astrologer.name,
+        astrologer_rating: astrologer.rating || 0,
+        chat_rate: astrologer.chatRate || 0
+      });
+
+      console.log('📊 [TRACKING] Chat booking initiated:', astrologer.name);
+    } catch (error) {
+      console.error('❌ [TRACKING] Failed to track chat booking:', error);
     }
 
     console.log('🚀 [USER-APP] AstrologerProfileScreen: Navigating to PreChatForm for chat booking');
@@ -545,6 +573,33 @@ const AstrologerProfileScreen = ({ route, navigation }) => {
       
       // Set the extracted astrologer data
       setAstrologer(astrologerData);
+
+      // Track view_astrologer_profile event
+      try {
+        await analyticsService.logEvent('view_astrologer_profile', {
+          astrologer_id: astrologerData._id,
+          astrologer_name: astrologerData.name,
+          astrologer_rating: astrologerData.rating || 0,
+          astrologer_experience: astrologerData.experience || 0,
+          chat_rate: astrologerData.chatRate || 0,
+          voice_rate: astrologerData.voiceRate || 0,
+          is_online: astrologerData.isOnline || false,
+          specialties: astrologerData.specialties?.join(',') || ''
+        });
+
+        const { AppEventsLogger } = require('react-native-fbsdk-next');
+        await AppEventsLogger.logEvent('ViewContent', {
+          fb_content_type: 'astrologer_profile',
+          fb_content_id: astrologerData._id,
+          fb_content_name: astrologerData.name,
+          astrologer_rating: astrologerData.rating || 0,
+          is_online: astrologerData.isOnline || false
+        });
+
+        console.log('📊 [TRACKING] Astrologer profile viewed:', astrologerData.name);
+      } catch (trackingError) {
+        console.error('❌ [TRACKING] Failed to track profile view:', trackingError);
+      }
     } catch (err) {
       setError('Failed to load astrologer details. Please try again.');
     } finally {

@@ -13,6 +13,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 import { ScrollView } from 'react-native';
 import productAPI from '../../services/productAPI';
+import CosmicBackground from '../../components/shop/CosmicBackground';
 
 const OrderHistoryScreen = ({ navigation }) => {
   const [loading, setLoading] = useState(true);
@@ -135,7 +136,7 @@ const OrderHistoryScreen = ({ navigation }) => {
         </View>
         <TouchableOpacity style={styles.viewButton}>
           <Text style={styles.viewButtonText}>View Details</Text>
-          <Ionicons name="chevron-forward" size={16} color="#9333EA" />
+          <Ionicons name="chevron-forward" size={16} color="#F97316" />
         </TouchableOpacity>
       </View>
     </TouchableOpacity>
@@ -163,65 +164,67 @@ const OrderHistoryScreen = ({ navigation }) => {
     if (!loading || page === 1) return null;
     return (
       <View style={styles.footerLoader}>
-        <ActivityIndicator size="small" color="#9333EA" />
+        <ActivityIndicator size="small" color="#FBBF24" />
       </View>
     );
   };
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-          <Ionicons name="arrow-back" size={24} color="#1F2937" />
-        </TouchableOpacity>
-        <Text style={styles.title}>My Orders</Text>
-        <View style={styles.placeholder} />
-      </View>
-
-      {/* Filter Tabs */}
-      <View style={styles.filterTabs}>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.tabsContent}>
-          {['all', 'pending', 'confirmed', 'shipped', 'delivered', 'cancelled'].map((status) => (
-            <TouchableOpacity
-              key={status}
-              style={[styles.filterTab, filter === status && styles.filterTabActive]}
-              onPress={() => setFilter(status)}
-            >
-              <Text style={[styles.filterTabText, filter === status && styles.filterTabTextActive]}>
-                {status.charAt(0).toUpperCase() + status.slice(1)}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
-      </View>
-
-      {loading && page === 1 ? (
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#9333EA" />
+    <CosmicBackground>
+      <SafeAreaView style={styles.container} edges={['top']}>
+        <View style={styles.header}>
+          <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
+            <Ionicons name="arrow-back" size={24} color="#F3F4F6" />
+          </TouchableOpacity>
+          <Text style={styles.title}>My Orders</Text>
+          <View style={styles.placeholder} />
         </View>
-      ) : (
-        <FlatList
-          data={orders}
-          renderItem={renderOrder}
-          keyExtractor={(item) => item._id}
-          ListEmptyComponent={renderEmpty}
-          ListFooterComponent={renderFooter}
-          onEndReached={handleLoadMore}
-          onEndReachedThreshold={0.5}
-          refreshControl={
-            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#9333EA']} />
-          }
-          contentContainerStyle={orders.length === 0 ? styles.emptyList : styles.list}
-        />
-      )}
-    </SafeAreaView>
+
+        {/* Filter Tabs */}
+        <View style={styles.filterTabs}>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.tabsContent}>
+            {['all', 'pending', 'confirmed', 'shipped', 'delivered', 'cancelled'].map((status) => (
+              <TouchableOpacity
+                key={status}
+                style={[styles.filterTab, filter === status && styles.filterTabActive]}
+                onPress={() => setFilter(status)}
+              >
+                <Text style={[styles.filterTabText, filter === status && styles.filterTabTextActive]}>
+                  {status.charAt(0).toUpperCase() + status.slice(1)}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        </View>
+
+        {loading && page === 1 ? (
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color="#FBBF24" />
+          </View>
+        ) : (
+          <FlatList
+            data={orders}
+            renderItem={renderOrder}
+            keyExtractor={(item) => item._id}
+            ListEmptyComponent={renderEmpty}
+            ListFooterComponent={renderFooter}
+            onEndReached={handleLoadMore}
+            onEndReachedThreshold={0.5}
+            refreshControl={
+              <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#FBBF24']} />
+            }
+            contentContainerStyle={orders.length === 0 ? styles.emptyList : styles.list}
+          />
+        )}
+      </SafeAreaView>
+    </CosmicBackground>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F9FAFB'
+    backgroundColor: 'transparent'
   },
   header: {
     flexDirection: 'row',
@@ -229,9 +232,9 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: 16,
     paddingVertical: 12,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: 'rgba(255,255,255,0.06)',
     borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB'
+    borderBottomColor: 'rgba(255,255,255,0.08)'
   },
   backButton: {
     padding: 4
@@ -239,15 +242,15 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#1F2937'
+    color: '#F3F4F6'
   },
   placeholder: {
     width: 32
   },
   filterTabs: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: 'rgba(255,255,255,0.04)',
     borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB'
+    borderBottomColor: 'rgba(255,255,255,0.08)'
   },
   tabsContent: {
     paddingHorizontal: 16,
@@ -258,19 +261,19 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 8,
     borderRadius: 20,
-    backgroundColor: '#F3F4F6',
+    backgroundColor: 'rgba(255,255,255,0.08)',
     marginRight: 8
   },
   filterTabActive: {
-    backgroundColor: '#9333EA'
+    backgroundColor: '#FBBF24'
   },
   filterTabText: {
     fontSize: 14,
     fontWeight: '500',
-    color: '#6B7280'
+    color: '#94A3B8'
   },
   filterTabTextActive: {
-    color: '#FFFFFF'
+    color: '#0B0F2F'
   },
   loadingContainer: {
     flex: 1,
@@ -284,15 +287,12 @@ const styles = StyleSheet.create({
     flexGrow: 1
   },
   orderCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    borderRadius: 16,
     padding: 16,
     marginBottom: 12,
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)'
   },
   orderHeader: {
     flexDirection: 'row',
@@ -303,12 +303,12 @@ const styles = StyleSheet.create({
   orderNumber: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#1F2937',
+    color: '#F3F4F6',
     marginBottom: 4
   },
   orderDate: {
     fontSize: 12,
-    color: '#9CA3AF'
+    color: '#94A3B8'
   },
   statusBadge: {
     flexDirection: 'row',
@@ -326,16 +326,16 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     borderTopWidth: 1,
     borderBottomWidth: 1,
-    borderColor: '#F3F4F6'
+    borderColor: 'rgba(255,255,255,0.08)'
   },
   itemsLabel: {
     fontSize: 12,
-    color: '#6B7280',
+    color: '#94A3B8',
     marginBottom: 4
   },
   itemNames: {
     fontSize: 14,
-    color: '#374151'
+    color: '#F3F4F6'
   },
   orderFooter: {
     flexDirection: 'row',
@@ -348,13 +348,13 @@ const styles = StyleSheet.create({
   },
   totalLabel: {
     fontSize: 12,
-    color: '#6B7280',
+    color: '#94A3B8',
     marginBottom: 2
   },
   totalAmount: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: '#9333EA'
+    color: '#FBBF24'
   },
   viewButton: {
     flexDirection: 'row',
@@ -364,7 +364,7 @@ const styles = StyleSheet.create({
   viewButtonText: {
     fontSize: 14,
     fontWeight: '500',
-    color: '#9333EA'
+    color: '#FBBF24'
   },
   emptyContainer: {
     flex: 1,
@@ -376,12 +376,12 @@ const styles = StyleSheet.create({
   emptyText: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#374151',
+    color: '#F3F4F6',
     marginTop: 16
   },
   emptySubtext: {
     fontSize: 14,
-    color: '#9CA3AF',
+    color: '#94A3B8',
     marginTop: 8,
     textAlign: 'center',
     marginBottom: 24
@@ -389,7 +389,7 @@ const styles = StyleSheet.create({
   shopButton: {
     paddingHorizontal: 24,
     paddingVertical: 12,
-    backgroundColor: '#9333EA',
+    backgroundColor: '#F97316',
     borderRadius: 12
   },
   shopButtonText: {

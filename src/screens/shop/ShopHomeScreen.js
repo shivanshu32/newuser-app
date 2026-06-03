@@ -8,17 +8,22 @@ import {
   Image,
   FlatList,
   ActivityIndicator,
-  RefreshControl
+  RefreshControl,
+  Animated
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import productAPI from '../../services/productAPI';
+import CosmicBackground from '../../components/shop/CosmicBackground';
+import AnimatedCard from '../../components/shop/AnimatedCard';
+import MysticBadge from '../../components/shop/MysticBadge';
 
 const ShopHomeScreen = ({ navigation }) => {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [categories, setCategories] = useState([]);
   const [featuredProducts, setFeaturedProducts] = useState([]);
+  const [products, setProducts] = useState([]);
   const [cartCount, setCartCount] = useState(0);
 
   useEffect(() => {
@@ -28,14 +33,16 @@ const ShopHomeScreen = ({ navigation }) => {
   const loadData = async () => {
     try {
       setLoading(true);
-      const [categoriesRes, featuredRes, cartRes] = await Promise.all([
+      const [categoriesRes, featuredRes, productsRes, cartRes] = await Promise.all([
         productAPI.getCategories(),
         productAPI.getFeaturedProducts(10),
+        productAPI.getProducts({ limit: 10 }),
         productAPI.getCart()
       ]);
 
       setCategories(categoriesRes.data || []);
       setFeaturedProducts(featuredRes.data || []);
+      setProducts(productsRes.data?.products || productsRes.data || []);
       setCartCount(cartRes.data?.totalItems || 0);
     } catch (error) {
       console.error('Error loading shop data:', error);
@@ -50,25 +57,27 @@ const ShopHomeScreen = ({ navigation }) => {
     setRefreshing(false);
   };
 
-  const renderCategory = ({ item }) => (
-    <TouchableOpacity
+  const renderCategory = ({ item, index }) => (
+    <AnimatedCard
       style={styles.categoryCard}
+      delay={index * 80}
       onPress={() => navigation.navigate('ProductList', { category: item._id, categoryName: item.name })}
     >
       {item.image?.url ? (
         <Image source={{ uri: item.image.url }} style={styles.categoryImage} />
       ) : (
         <View style={[styles.categoryImage, styles.categoryPlaceholder]}>
-          <Ionicons name="cube-outline" size={32} color="#9333EA" />
+          <Ionicons name="planet-outline" size={32} color="#FBBF24" />
         </View>
       )}
       <Text style={styles.categoryName}>{item.name}</Text>
-    </TouchableOpacity>
+    </AnimatedCard>
   );
 
-  const renderProduct = ({ item }) => (
-    <TouchableOpacity
+  const renderProduct = ({ item, index }) => (
+    <AnimatedCard
       style={styles.productCard}
+      delay={index * 80}
       onPress={() => navigation.navigate('ProductDetail', { productId: item._id })}
     >
       <Image
@@ -76,18 +85,18 @@ const ShopHomeScreen = ({ navigation }) => {
         style={styles.productImage}
       />
       {item.compareAtPrice && item.compareAtPrice > item.price && (
-        <View style={styles.discountBadge}>
-          <Text style={styles.discountText}>
-            {Math.round(((item.compareAtPrice - item.price) / item.compareAtPrice) * 100)}% OFF
-          </Text>
-        </View>
+        <MysticBadge
+          type="discount"
+          label={`${Math.round(((item.compareAtPrice - item.price) / item.compareAtPrice) * 100)}% OFF`}
+          style={styles.discountBadge}
+        />
       )}
       <View style={styles.productInfo}>
         <Text style={styles.productName} numberOfLines={2}>{item.name}</Text>
         <View style={styles.ratingRow}>
-          <Ionicons name="star" size={14} color="#FFA500" />
-          <Text style={styles.ratingText}>{item.rating.toFixed(1)}</Text>
-          <Text style={styles.reviewCount}>({item.reviewCount})</Text>
+          <Ionicons name="star" size={14} color="#FBBF24" />
+          <Text style={styles.ratingText}>{item.rating?.toFixed(1) || '0.0'}</Text>
+          <Text style={styles.reviewCount}>({item.reviewCount || 0})</Text>
         </View>
         <View style={styles.priceRow}>
           <Text style={styles.price}>₹{item.price}</Text>
@@ -96,146 +105,170 @@ const ShopHomeScreen = ({ navigation }) => {
           )}
         </View>
       </View>
-    </TouchableOpacity>
+    </AnimatedCard>
   );
 
   if (loading) {
     return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#9333EA" />
-      </View>
+      <CosmicBackground>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color="#FBBF24" />
+        </View>
+      </CosmicBackground>
     );
   }
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
-      <View style={styles.header}>
-        <View>
-          <Text style={styles.headerTitle}>Shop</Text>
-          <Text style={styles.headerSubtitle}>Spiritual Products & Services</Text>
-        </View>
-        <View style={styles.headerIcons}>
-          <TouchableOpacity
-            style={styles.iconButton}
-            onPress={() => navigation.navigate('ProductList', { search: true })}
-          >
-            <Ionicons name="search-outline" size={24} color="#1F2937" />
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.iconButton}
-            onPress={() => navigation.navigate('Cart')}
-          >
-            <Ionicons name="cart-outline" size={24} color="#1F2937" />
-            {cartCount > 0 && (
-              <View style={styles.cartBadge}>
-                <Text style={styles.cartBadgeText}>{cartCount}</Text>
-              </View>
-            )}
-          </TouchableOpacity>
-        </View>
-      </View>
-
-      <ScrollView
-        style={styles.content}
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#9333EA']} />
-        }
-      >
-        {/* Categories Section */}
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Categories</Text>
-            <TouchableOpacity onPress={() => navigation.navigate('ProductList')}>
-              <Text style={styles.seeAll}>See All</Text>
-            </TouchableOpacity>
+    <CosmicBackground>
+      <SafeAreaView style={styles.container} edges={['top']}>
+        <View style={styles.header}>
+          <View>
+            <Text style={styles.headerTitle}>Shop</Text>
+            <Text style={styles.headerSubtitle}>Spiritual Products & Services</Text>
           </View>
-          <FlatList
-            horizontal
-            data={categories}
-            renderItem={renderCategory}
-            keyExtractor={(item) => item._id}
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.categoriesList}
-          />
-        </View>
-
-        {/* Featured Products Section */}
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Featured Products</Text>
-            <TouchableOpacity onPress={() => navigation.navigate('ProductList', { isFeatured: true })}>
-              <Text style={styles.seeAll}>See All</Text>
-            </TouchableOpacity>
-          </View>
-          <FlatList
-            horizontal
-            data={featuredProducts}
-            renderItem={renderProduct}
-            keyExtractor={(item) => item._id}
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.productsList}
-          />
-        </View>
-
-        {/* Quick Links */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Shop by Type</Text>
-          <View style={styles.quickLinks}>
+          <View style={styles.headerIcons}>
             <TouchableOpacity
-              style={styles.quickLink}
-              onPress={() => navigation.navigate('ProductList', { productType: 'physical' })}
+              style={styles.iconButton}
+              onPress={() => navigation.navigate('ProductList', { search: true })}
             >
-              <View style={styles.quickLinkIcon}>
-                <Ionicons name="cube" size={24} color="#9333EA" />
-              </View>
-              <Text style={styles.quickLinkText}>Physical Products</Text>
+              <Ionicons name="search-outline" size={24} color="#F3F4F6" />
             </TouchableOpacity>
             <TouchableOpacity
-              style={styles.quickLink}
-              onPress={() => navigation.navigate('ProductList', { productType: 'digital' })}
+              style={styles.iconButton}
+              onPress={() => navigation.navigate('Cart')}
             >
-              <View style={styles.quickLinkIcon}>
-                <Ionicons name="document-text" size={24} color="#9333EA" />
-              </View>
-              <Text style={styles.quickLinkText}>Digital Services</Text>
+              <Ionicons name="cart-outline" size={24} color="#F3F4F6" />
+              {cartCount > 0 && (
+                <View style={styles.cartBadge}>
+                  <Text style={styles.cartBadgeText}>{cartCount}</Text>
+                </View>
+              )}
             </TouchableOpacity>
           </View>
         </View>
 
-        {/* Wishlist & Orders */}
-        <View style={styles.section}>
-          <View style={styles.actionButtons}>
-            <TouchableOpacity
-              style={styles.actionButton}
-              onPress={() => navigation.navigate('Wishlist')}
-            >
-              <Ionicons name="heart-outline" size={24} color="#9333EA" />
-              <Text style={styles.actionButtonText}>Wishlist</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.actionButton}
-              onPress={() => navigation.navigate('OrderHistory')}
-            >
-              <Ionicons name="receipt-outline" size={24} color="#9333EA" />
-              <Text style={styles.actionButtonText}>My Orders</Text>
-            </TouchableOpacity>
+        <ScrollView
+          style={styles.content}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#FBBF24']} />
+          }
+        >
+          {/* Categories Section */}
+          <View style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>Categories</Text>
+              <TouchableOpacity onPress={() => navigation.navigate('ProductList')}>
+                <Text style={styles.seeAll}>See All</Text>
+              </TouchableOpacity>
+            </View>
+            <FlatList
+              horizontal
+              data={categories}
+              renderItem={renderCategory}
+              keyExtractor={(item) => item._id}
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.categoriesList}
+            />
           </View>
-        </View>
-      </ScrollView>
-    </SafeAreaView>
+
+          {/* Featured Products Section */}
+          <View style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>Featured Products</Text>
+              <TouchableOpacity onPress={() => navigation.navigate('ProductList', { isFeatured: true })}>
+                <Text style={styles.seeAll}>See All</Text>
+              </TouchableOpacity>
+            </View>
+            <FlatList
+              horizontal
+              data={featuredProducts}
+              renderItem={renderProduct}
+              keyExtractor={(item) => item._id}
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.productsList}
+            />
+          </View>
+
+          {/* Products Grid */}
+          <View style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>Products</Text>
+              <TouchableOpacity onPress={() => navigation.navigate('ProductList')}>
+                <Text style={styles.seeAll}>See All</Text>
+              </TouchableOpacity>
+            </View>
+            <View style={styles.productsGrid}>
+              {products.map((item, index) => (
+                <AnimatedCard
+                  key={item._id}
+                  style={styles.gridProductCard}
+                  delay={index * 80}
+                  onPress={() => navigation.navigate('ProductDetail', { productId: item._id })}
+                >
+                  <Image
+                    source={{ uri: item.images?.[0]?.url || 'https://via.placeholder.com/150' }}
+                    style={styles.gridProductImage}
+                  />
+                  {item.compareAtPrice && item.compareAtPrice > item.price && (
+                    <MysticBadge
+                      type="discount"
+                      label={`${Math.round(((item.compareAtPrice - item.price) / item.compareAtPrice) * 100)}% OFF`}
+                      style={styles.discountBadge}
+                    />
+                  )}
+                  <View style={styles.productInfo}>
+                    <Text style={styles.productName} numberOfLines={2}>{item.name}</Text>
+                    <View style={styles.ratingRow}>
+                      <Ionicons name="star" size={14} color="#FBBF24" />
+                      <Text style={styles.ratingText}>{item.rating?.toFixed(1) || '0.0'}</Text>
+                      <Text style={styles.reviewCount}>({item.reviewCount || 0})</Text>
+                    </View>
+                    <View style={styles.priceRow}>
+                      <Text style={styles.price}>₹{item.price}</Text>
+                      {item.compareAtPrice && item.compareAtPrice > item.price && (
+                        <Text style={styles.comparePrice}>₹{item.compareAtPrice}</Text>
+                      )}
+                    </View>
+                  </View>
+                </AnimatedCard>
+              ))}
+            </View>
+          </View>
+
+          {/* Wishlist & Orders */}
+          <View style={styles.section}>
+            <View style={styles.actionButtons}>
+              <TouchableOpacity
+                style={styles.actionButton}
+                onPress={() => navigation.navigate('Wishlist')}
+              >
+                <Ionicons name="heart-outline" size={24} color="#FBBF24" />
+                <Text style={styles.actionButtonText}>Wishlist</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.actionButton}
+                onPress={() => navigation.navigate('OrderHistory')}
+              >
+                <Ionicons name="receipt-outline" size={24} color="#FBBF24" />
+                <Text style={styles.actionButtonText}>My Orders</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </ScrollView>
+      </SafeAreaView>
+    </CosmicBackground>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F9FAFB'
+    backgroundColor: 'transparent'
   },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#F9FAFB'
+    alignItems: 'center'
   },
   header: {
     flexDirection: 'row',
@@ -243,18 +276,18 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 16,
     paddingVertical: 12,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: 'rgba(255,255,255,0.06)',
     borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB'
+    borderBottomColor: 'rgba(255,255,255,0.08)'
   },
   headerTitle: {
     fontSize: 24,
     fontWeight: 'bold',
-    color: '#1F2937'
+    color: '#F3F4F6'
   },
   headerSubtitle: {
     fontSize: 12,
-    color: '#6B7280',
+    color: '#A5B4FC',
     marginTop: 2
   },
   headerIcons: {
@@ -296,13 +329,14 @@ const styles = StyleSheet.create({
     marginBottom: 12
   },
   sectionTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#1F2937'
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#F3F4F6',
+    letterSpacing: 0.5
   },
   seeAll: {
     fontSize: 14,
-    color: '#9333EA',
+    color: '#FBBF24',
     fontWeight: '500'
   },
   categoriesList: {
@@ -311,13 +345,15 @@ const styles = StyleSheet.create({
   categoryCard: {
     alignItems: 'center',
     marginRight: 16,
-    width: 80
+    width: 80,
+    backgroundColor: 'transparent',
+    borderWidth: 0
   },
   categoryImage: {
     width: 70,
     height: 70,
     borderRadius: 35,
-    backgroundColor: '#F3F4F6'
+    backgroundColor: 'rgba(255,255,255,0.08)'
   },
   categoryPlaceholder: {
     justifyContent: 'center',
@@ -326,50 +362,39 @@ const styles = StyleSheet.create({
   categoryName: {
     marginTop: 8,
     fontSize: 12,
-    color: '#374151',
-    textAlign: 'center'
+    color: '#F3F4F6',
+    textAlign: 'center',
+    fontWeight: '500'
   },
   productsList: {
     paddingRight: 16
   },
   productCard: {
     width: 160,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
     marginRight: 12,
     overflow: 'hidden',
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)'
   },
   productImage: {
     width: '100%',
     height: 160,
-    backgroundColor: '#F3F4F6'
+    backgroundColor: 'rgba(255,255,255,0.05)'
   },
   discountBadge: {
     position: 'absolute',
     top: 8,
-    right: 8,
-    backgroundColor: '#EF4444',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 4
-  },
-  discountText: {
-    color: '#FFFFFF',
-    fontSize: 10,
-    fontWeight: 'bold'
+    right: 8
   },
   productInfo: {
     padding: 12
   },
   productName: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: '#1F2937',
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#FFFFFF',
     marginBottom: 4
   },
   ratingRow: {
@@ -379,12 +404,12 @@ const styles = StyleSheet.create({
   },
   ratingText: {
     fontSize: 12,
-    color: '#374151',
+    color: '#A5B4FC',
     marginLeft: 4
   },
   reviewCount: {
     fontSize: 12,
-    color: '#9CA3AF',
+    color: '#94A3B8',
     marginLeft: 4
   },
   priceRow: {
@@ -395,44 +420,31 @@ const styles = StyleSheet.create({
   price: {
     fontSize: 16,
     fontWeight: 'bold',
-    color: '#9333EA'
+    color: '#FBBF24'
   },
   comparePrice: {
     fontSize: 12,
-    color: '#9CA3AF',
+    color: '#94A3B8',
     textDecorationLine: 'line-through'
   },
-  quickLinks: {
+  productsGrid: {
     flexDirection: 'row',
-    gap: 12,
-    marginTop: 12
+    flexWrap: 'wrap',
+    justifyContent: 'space-between'
   },
-  quickLink: {
-    flex: 1,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    padding: 16,
-    alignItems: 'center',
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4
+  gridProductCard: {
+    width: '48%',
+    marginBottom: 12,
+    overflow: 'hidden',
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)'
   },
-  quickLinkIcon: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: '#F3E8FF',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 8
-  },
-  quickLinkText: {
-    fontSize: 12,
-    color: '#374151',
-    textAlign: 'center',
-    fontWeight: '500'
+  gridProductImage: {
+    width: '100%',
+    height: 160,
+    backgroundColor: 'rgba(255,255,255,0.05)'
   },
   actionButtons: {
     flexDirection: 'row',
@@ -442,22 +454,19 @@ const styles = StyleSheet.create({
   },
   actionButton: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
     padding: 16,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 8,
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4
+    gap: 8
   },
   actionButtonText: {
     fontSize: 14,
-    color: '#374151',
+    color: '#F3F4F6',
     fontWeight: '500'
   }
 });

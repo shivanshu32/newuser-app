@@ -85,6 +85,8 @@ const FixedFreeChatScreen = React.memo(({ route, navigation }) => {
   
   console.log('✅ [FREE_CHAT_INIT] Using effective freeChatId:', effectiveFreeChatId);
   
+  const { user: authUser, refreshToken, getValidToken } = useAuth();
+
   // Create fallback booking details for free chat if not provided
   const effectiveBookingDetails = bookingDetails || {
     id: freeChatId || sessionId,
@@ -98,8 +100,6 @@ const FixedFreeChatScreen = React.memo(({ route, navigation }) => {
     sessionDuration: sessionDuration,
     createdAt: new Date().toISOString()
   };
-  
-  const { user: authUser, refreshToken, getValidToken } = useAuth();
   
   // ===== MESSAGE PERSISTENCE HOOK =====
   const {
@@ -127,6 +127,14 @@ const FixedFreeChatScreen = React.memo(({ route, navigation }) => {
     isActive: false,
     startTime: null
   });
+  
+  // Question-based free chat mode state
+  const [freeChatMode, setFreeChatMode] = useState('time_based'); // 'time_based' or 'question_based'
+  const [questionsAsked, setQuestionsAsked] = useState(0);
+  const [maxQuestions, setMaxQuestions] = useState(1);
+  const [questionsRemaining, setQuestionsRemaining] = useState(1);
+  const [showLastQuestionWarning, setShowLastQuestionWarning] = useState(false);
+  
   // Reply-to functionality state
   const [replyingTo, setReplyingTo] = useState(null); // Message being replied to
   
@@ -1199,6 +1207,21 @@ const FixedFreeChatScreen = React.memo(({ route, navigation }) => {
     safeSetState(setSessionActive, true);
     safeSetState(setConnected, true);
     
+    // Handle question-based mode
+    if (data.mode === 'question_based') {
+      console.log('❓ [USER-APP] [QUESTION_MODE] Session started in question-based mode');
+      safeSetState(setFreeChatMode, 'question_based');
+      safeSetState(setMaxQuestions, data.maxQuestions || 1);
+      safeSetState(setQuestionsAsked, data.questionsAsked || 0);
+      safeSetState(setQuestionsRemaining, data.questionsRemaining || data.maxQuestions || 1);
+      safeSetState(setShowLastQuestionWarning, false);
+      
+      // Don't start timer in question mode
+      return;
+    } else {
+      safeSetState(setFreeChatMode, 'time_based');
+    }
+    
     const duration = data.duration || sessionDuration;
     const startTime = data.startTime || Date.now();
     
@@ -1257,6 +1280,43 @@ const FixedFreeChatScreen = React.memo(({ route, navigation }) => {
     
     console.log('🔗 [FREE_CHAT_TIMER] Connection state synchronized - connected: true, sessionActive: true');
   }, [freeChatId, sessionDuration, safeSetState]);
+
+  const handleQuestionCountUpdate = useCallback((data) => {
+    console.log('❓ [USER-APP] [QUESTION_MODE] Question count update received:', data);
+    
+    if (data.freeChatId !== freeChatId) {
+      console.log('⚠️ [USER-APP] [QUESTION_MODE] Ignoring for different free chat');
+      return;
+    }
+    
+    console.log('❓ [USER-APP] [QUESTION_MODE] Updating question count:', {
+      questionsAsked: data.questionsAsked,
+      questionsRemaining: data.questionsRemaining,
+      maxQuestions: data.maxQuestions
+    });
+    
+    safeSetState(setQuestionsAsked, data.questionsAsked || 0);
+    safeSetState(setQuestionsRemaining, data.questionsRemaining || 0);
+    safeSetState(setMaxQuestions, data.maxQuestions || 1);
+  }, [freeChatId, safeSetState]);
+
+  const handleLastQuestionWarning = useCallback((data) => {
+    console.log('⚠️ [USER-APP] [QUESTION_MODE] Last question warning received:', data);
+    
+    if (data.freeChatId !== freeChatId) {
+      console.log('⚠️ [USER-APP] [QUESTION_MODE] Ignoring for different free chat');
+      return;
+    }
+    
+    console.log('⚠️ [USER-APP] [QUESTION_MODE] Showing last question warning');
+    safeSetState(setShowLastQuestionWarning, true);
+    
+    Alert.alert(
+      'Last Question',
+      data.message || 'This is your last question in the free chat. The session will end after the astrologer responds.',
+      [{ text: 'OK', onPress: () => console.log('⚠️ [USER-APP] [QUESTION_MODE] Last question warning acknowledged') }]
+    );
+  }, [freeChatId, safeSetState]);
 
   const handleSessionEnded = useCallback((data) => {
     console.log('🛑 [FREE_CHAT_SESSION] Session ended by backend:', data);
@@ -1490,6 +1550,21 @@ const FixedFreeChatScreen = React.memo(({ route, navigation }) => {
     safeSetState(setSessionActive, true);
     safeSetState(setConnected, true);
     
+    // Handle question-based mode resumption
+    if (data.mode === 'question_based') {
+      console.log('❓ [USER-APP] [QUESTION_MODE] Resuming question-based session');
+      safeSetState(setFreeChatMode, 'question_based');
+      safeSetState(setMaxQuestions, data.maxQuestions || 1);
+      safeSetState(setQuestionsAsked, data.questionsAsked || 0);
+      safeSetState(setQuestionsRemaining, data.questionsRemaining || data.maxQuestions || 1);
+      safeSetState(setShowLastQuestionWarning, false);
+      
+      console.log('✅ [FREE_CHAT_RESUMPTION] Question-based session successfully resumed');
+      return;
+    } else {
+      safeSetState(setFreeChatMode, 'time_based');
+    }
+    
     // Update timer with resumed state
     const timeRemaining = data.timeRemaining || 0;
     const elapsed = data.elapsedSeconds || 0;
@@ -1645,7 +1720,8 @@ const FixedFreeChatScreen = React.memo(({ route, navigation }) => {
       'typing_started', 'typing_stopped',
       'session_started', 'session_timer', 'free_chat_session_ended', // Backend emits 'free_chat_session_ended'
       'free_chat_session_resumed', 'get_free_chat_message_history',
-      'prepaid_offer_available', 'prepaid_offer_creation_failed' // CRITICAL FIX: Added new events
+      'prepaid_offer_available', 'prepaid_offer_creation_failed', // CRITICAL FIX: Added new events
+      'question_count_update', 'last_question_warning' // Question-based mode events
     ];
     
     events.forEach(event => {
@@ -1732,6 +1808,10 @@ const FixedFreeChatScreen = React.memo(({ route, navigation }) => {
     socket.on('session_started', handleSessionStarted);
     socket.on('session_timer', handleTimerUpdate);
     socket.on('free_chat_session_ended', handleSessionEnded); // Backend emits 'free_chat_session_ended'
+    
+    // Question-based mode events
+    socket.on('question_count_update', handleQuestionCountUpdate);
+    socket.on('last_question_warning', handleLastQuestionWarning);
     
     // Handle free chat session resumption (for rejoining)
     socket.on('free_chat_session_resumed', handleSessionResumed);
@@ -1821,7 +1901,7 @@ const FixedFreeChatScreen = React.memo(({ route, navigation }) => {
     });
     
     console.log('✅ [FREE_CHAT_SOCKET] Event listeners setup complete');
-  }, [safeSetState, cleanupSocketListeners, joinFreeChatRoom, handleIncomingMessage, handleMessageDelivered, handleMessageRead, handleTypingStarted, handleTypingStopped, handleSessionStarted, handleTimerUpdate, handleSessionEnded, freeChatId, messages]);
+  }, [safeSetState, cleanupSocketListeners, joinFreeChatRoom, handleIncomingMessage, handleMessageDelivered, handleMessageRead, handleTypingStarted, handleTypingStopped, handleSessionStarted, handleTimerUpdate, handleSessionEnded, handleQuestionCountUpdate, handleLastQuestionWarning, freeChatId, messages]);
 
   // ===== MESSAGE SENDING =====
   const sendMessage = useCallback(async () => {
@@ -2628,13 +2708,22 @@ const FixedFreeChatScreen = React.memo(({ route, navigation }) => {
               { backgroundColor: connected ? '#4ADE80' : '#EF4444' }
             ]} />
             
-            {/* Timer */}
+            {/* Timer or Question Counter */}
             {sessionActive && (
-              <View style={styles.timerContainer}>
-                <Text style={styles.timerText}>
-                  {formatTime(timerData.elapsed || 0)}
-                </Text>
-              </View>
+              freeChatMode === 'question_based' ? (
+                <View style={styles.questionCounterContainer}>
+                  <Ionicons name="help-circle-outline" size={16} color="#FFFFFF" />
+                  <Text style={styles.questionCounterText}>
+                    {questionsRemaining} Q
+                  </Text>
+                </View>
+              ) : (
+                <View style={styles.timerContainer}>
+                  <Text style={styles.timerText}>
+                    {formatTime(timerData.elapsed || 0)}
+                  </Text>
+                </View>
+              )
             )}
             
             {/* End Session Button - Icon only */}
@@ -2924,6 +3013,23 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 14,
     fontWeight: 'bold',
+  },
+  questionCounterContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginRight: 8,
+    backgroundColor: 'rgba(139, 92, 246, 0.3)',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: 'rgba(139, 92, 246, 0.5)',
+  },
+  questionCounterText: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: 'bold',
+    marginLeft: 4,
   },
   endSessionButton: {
     alignItems: 'center',

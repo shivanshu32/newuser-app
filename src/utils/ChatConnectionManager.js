@@ -39,6 +39,13 @@ class ChatConnectionManager {
       lastTimerUpdate: null,
       isFreeChat: false
     };
+    
+    // Question-based free chat mode state
+    this.freeChatMode = 'time_based'; // 'time_based' or 'question_based'
+    this.questionsAsked = 0;
+    this.maxQuestions = 1;
+    this.questionsRemaining = 1;
+    
     this.eventListenersSetup = false;
     this.reconnectionInProgress = false;
     
@@ -451,8 +458,30 @@ class ChatConnectionManager {
       
       if (data.bookingId === this.currentBookingId || data.bookingId == this.currentBookingId) {
         console.log('🔴 [USER-APP] ✅ BOOKING ID MATCH - Activating session and notifying status update');
-        this.notifyConnectionStatus('session_active', 'Chat session is now active');
-        this.notifyStatusUpdate({ type: 'session_started', data });
+        
+        // Handle question-based mode
+        if (data.mode === 'question_based') {
+          console.log('❓ [USER-APP] [QUESTION_MODE] Session started in question-based mode');
+          this.freeChatMode = 'question_based';
+          this.maxQuestions = data.maxQuestions || 1;
+          this.questionsAsked = data.questionsAsked || 0;
+          this.questionsRemaining = data.questionsRemaining || data.maxQuestions || 1;
+          
+          this.notifyConnectionStatus('session_active', 'Question-based chat session is now active');
+          this.notifyStatusUpdate({ 
+            type: 'question_based_session', 
+            data,
+            sessionId: data.sessionId,
+            maxQuestions: this.maxQuestions,
+            questionsRemaining: this.questionsRemaining,
+            isFreeChat: data.isFreeChat
+          });
+        } else {
+          // Time-based mode (default)
+          this.freeChatMode = 'time_based';
+          this.notifyConnectionStatus('session_active', 'Chat session is now active');
+          this.notifyStatusUpdate({ type: 'session_started', data });
+        }
       } else {
         console.log('🔴 [USER-APP] ❌ BOOKING ID MISMATCH - Session started event ignored');
         console.log('🔴 [USER-APP] Expected:', this.currentBookingId);
@@ -632,6 +661,49 @@ class ChatConnectionManager {
       if (data.bookingId === this.currentBookingId) {
         this.notifyConnectionStatus('session_ended', 'Chat session has ended');
         this.notifyStatusUpdate({ type: 'session_ended', data });
+      }
+    });
+
+    // Question-based mode events
+    this.socket.on('question_count_update', (data) => {
+      console.log('❓ [USER-APP] [QUESTION_MODE] Question count update received:', data);
+      console.log('❓ [USER-APP] [QUESTION_MODE] Current booking ID:', this.currentBookingId);
+      console.log('❓ [USER-APP] [QUESTION_MODE] Event bookingId:', data.bookingId);
+      
+      if (data.bookingId === this.currentBookingId || data.bookingId == this.currentBookingId) {
+        console.log('❓ [USER-APP] [QUESTION_MODE] ✅ Updating question count for current session');
+        
+        this.questionsAsked = data.questionsAsked || 0;
+        this.questionsRemaining = data.questionsRemaining || 0;
+        this.maxQuestions = data.maxQuestions || 1;
+        
+        this.notifyStatusUpdate({
+          type: 'question_count',
+          questionsAsked: this.questionsAsked,
+          questionsRemaining: this.questionsRemaining,
+          maxQuestions: this.maxQuestions,
+          sessionId: data.sessionId
+        });
+      } else {
+        console.log('❓ [USER-APP] [QUESTION_MODE] ❌ Ignoring for different session');
+      }
+    });
+    
+    this.socket.on('last_question_warning', (data) => {
+      console.log('⚠️ [USER-APP] [QUESTION_MODE] Last question warning received:', data);
+      console.log('⚠️ [USER-APP] [QUESTION_MODE] Current booking ID:', this.currentBookingId);
+      console.log('⚠️ [USER-APP] [QUESTION_MODE] Event bookingId:', data.bookingId);
+      
+      if (data.bookingId === this.currentBookingId || data.bookingId == this.currentBookingId) {
+        console.log('⚠️ [USER-APP] [QUESTION_MODE] ✅ Showing last question warning');
+        
+        this.notifyStatusUpdate({
+          type: 'last_question_warning',
+          message: data.message || 'This is your last question in the free chat',
+          sessionId: data.sessionId
+        });
+      } else {
+        console.log('⚠️ [USER-APP] [QUESTION_MODE] ❌ Ignoring for different session');
       }
     });
 

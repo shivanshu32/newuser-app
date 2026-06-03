@@ -7,6 +7,7 @@ import {
   Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import analyticsService from '../services/analyticsService';
 
 const WhatsAppSupportButton = ({ 
   style,
@@ -19,6 +20,25 @@ const WhatsAppSupportButton = ({
 
   const handleWhatsAppSupport = async () => {
     try {
+      // Track WhatsApp contact event
+      try {
+        await analyticsService.logEvent('contact_whatsapp', {
+          contact_method: 'whatsapp',
+          phone_number: phoneNumber,
+          message_preview: message.substring(0, 50)
+        });
+
+        const { AppEventsLogger } = require('react-native-fbsdk-next');
+        await AppEventsLogger.logEvent('Contact', {
+          fb_content_type: 'whatsapp_support',
+          contact_method: 'whatsapp'
+        });
+
+        console.log('📊 [TRACKING] WhatsApp contact initiated');
+      } catch (trackingError) {
+        console.error('❌ [TRACKING] Failed to track WhatsApp contact:', trackingError);
+      }
+
       // Try WhatsApp first
       const whatsappUrl = `whatsapp://send?phone=${phoneNumber}&text=${encodeURIComponent(message)}`;
       const canOpenWhatsApp = await Linking.canOpenURL(whatsappUrl);

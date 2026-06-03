@@ -14,6 +14,7 @@ import { useNavigation, useRoute } from '@react-navigation/native';
 import { useSocket } from '../../context/SocketContext';
 import { bookingsAPI, API_BASE } from '../../services/api';
 import { useBookingPopup } from '../../context/BookingPopupContext';
+import analyticsService from '../../services/analyticsService';
 
 const BookingWaitingScreen = () => {
   const navigation = useNavigation();
@@ -148,6 +149,38 @@ const BookingWaitingScreen = () => {
       );
       return;
     }
+
+    // Track booking request sent
+    const trackBookingRequest = async () => {
+      try {
+        await analyticsService.logEvent('booking_request_sent', {
+          booking_id: bookingId || waitingId,
+          session_id: sessionId,
+          astrologer_id: astrologer._id || astrologer.id,
+          astrologer_name: astrologer.name,
+          booking_type: bookingType,
+          is_prepaid_offer: isPrepaidOffer || false,
+          is_prepaid_card: isPrepaidCard || false,
+          session_type: sessionType,
+          duration: duration,
+          total_amount: totalAmount
+        });
+
+        const { AppEventsLogger } = require('react-native-fbsdk-next');
+        await AppEventsLogger.logEvent('BookingRequestSent', {
+          fb_content_type: 'booking_request',
+          fb_content_id: astrologer._id || astrologer.id,
+          booking_type: bookingType,
+          is_prepaid: isPrepaidOffer || isPrepaidCard || false
+        });
+
+        console.log('📊 [TRACKING] Booking request sent:', bookingType);
+      } catch (error) {
+        console.error('❌ [TRACKING] Failed to track booking request:', error);
+      }
+    };
+
+    trackBookingRequest();
     
     // Set up socket listeners for booking status updates
     console.log(' [BookingWaiting] Socket connection:', socket ? 'connected' : 'not connected');

@@ -14,6 +14,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 import productAPI from '../../services/productAPI';
+import CosmicBackground from '../../components/shop/CosmicBackground';
 
 const AddressManagementScreen = ({ route, navigation }) => {
   const { selectMode } = route.params || {};
@@ -158,7 +159,7 @@ const AddressManagementScreen = ({ route, navigation }) => {
           <Ionicons
             name={address.addressType === 'home' ? 'home' : address.addressType === 'work' ? 'briefcase' : 'location'}
             size={20}
-            color="#9333EA"
+            color="#FBBF24"
           />
           <Text style={styles.addressType}>
             {address.addressType.charAt(0).toUpperCase() + address.addressType.slice(1)}
@@ -174,13 +175,13 @@ const AddressManagementScreen = ({ route, navigation }) => {
             style={styles.iconButton}
             onPress={() => openEditModal(address)}
           >
-            <Ionicons name="pencil" size={18} color="#6B7280" />
+            <Ionicons name="pencil" size={18} color="#94A3B8" />
           </TouchableOpacity>
           <TouchableOpacity
             style={styles.iconButton}
             onPress={() => handleDelete(address._id)}
           >
-            <Ionicons name="trash-outline" size={18} color="#EF4444" />
+            <Ionicons name="trash-outline" size={18} color="#F87171" />
           </TouchableOpacity>
         </View>
       </View>
@@ -208,28 +209,31 @@ const AddressManagementScreen = ({ route, navigation }) => {
 
   if (loading) {
     return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#9333EA" />
-      </View>
+      <CosmicBackground>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color="#FBBF24" />
+        </View>
+      </CosmicBackground>
     );
   }
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
+    <CosmicBackground>
+      <SafeAreaView style={styles.container} edges={['top']}>
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-          <Ionicons name="arrow-back" size={24} color="#1F2937" />
+          <Ionicons name="arrow-back" size={24} color="#F3F4F6" />
         </TouchableOpacity>
         <Text style={styles.title}>Manage Addresses</Text>
         <TouchableOpacity onPress={openAddModal} style={styles.addButton}>
-          <Ionicons name="add" size={24} color="#9333EA" />
+          <Ionicons name="add" size={24} color="#FBBF24" />
         </TouchableOpacity>
       </View>
 
       <ScrollView style={styles.content}>
         {addresses.length === 0 ? (
           <View style={styles.emptyContainer}>
-            <Ionicons name="location-outline" size={64} color="#D1D5DB" />
+            <Ionicons name="location-outline" size={64} color="#94A3B8" />
             <Text style={styles.emptyText}>No addresses found</Text>
             <Text style={styles.emptySubtext}>Add a delivery address to continue</Text>
           </View>
@@ -252,7 +256,7 @@ const AddressManagementScreen = ({ route, navigation }) => {
                 {editingAddress ? 'Edit Address' : 'Add New Address'}
               </Text>
               <TouchableOpacity onPress={() => setShowAddModal(false)}>
-                <Ionicons name="close" size={24} color="#1F2937" />
+                <Ionicons name="close" size={24} color="#F3F4F6" />
               </TouchableOpacity>
             </View>
 
@@ -365,20 +369,20 @@ const AddressManagementScreen = ({ route, navigation }) => {
           </View>
         </View>
       </Modal>
-    </SafeAreaView>
+      </SafeAreaView>
+    </CosmicBackground>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F9FAFB'
+    backgroundColor: 'transparent'
   },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#F9FAFB'
+    alignItems: 'center'
   },
   header: {
     flexDirection: 'row',
@@ -386,9 +390,9 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: 16,
     paddingVertical: 12,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: 'rgba(255,255,255,0.06)',
     borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB'
+    borderBottomColor: 'rgba(255,255,255,0.08)'
   },
   backButton: {
     padding: 4
@@ -396,7 +400,7 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#1F2937'
+    color: '#F3F4F6'
   },
   addButton: {
     padding: 4
@@ -412,24 +416,21 @@ const styles = StyleSheet.create({
   emptyText: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#374151',
+    color: '#F3F4F6',
     marginTop: 16
   },
   emptySubtext: {
     fontSize: 14,
-    color: '#9CA3AF',
+    color: '#94A3B8',
     marginTop: 8
   },
   addressCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    borderRadius: 16,
     padding: 16,
     marginBottom: 12,
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)'
   },
   addressHeader: {
     flexDirection: 'row',
@@ -444,17 +445,17 @@ const styles = StyleSheet.create({
   addressType: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#1F2937'
+    color: '#F3F4F6'
   },
   defaultBadge: {
     paddingHorizontal: 8,
     paddingVertical: 2,
-    backgroundColor: '#10B981',
+    backgroundColor: '#FBBF24',
     borderRadius: 4
   },
   defaultText: {
     fontSize: 10,
-    color: '#FFFFFF',
+    color: '#0B0F2F',
     fontWeight: '600'
   },
   addressActions: {
@@ -467,18 +468,18 @@ const styles = StyleSheet.create({
   addressName: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#1F2937',
+    color: '#F3F4F6',
     marginBottom: 4
   },
   addressText: {
     fontSize: 13,
-    color: '#6B7280',
+    color: '#94A3B8',
     lineHeight: 18,
     marginBottom: 2
   },
   addressPhone: {
     fontSize: 13,
-    color: '#374151',
+    color: '#A5B4FC',
     marginTop: 4
   },
   setDefaultButton: {
@@ -486,21 +487,21 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#9333EA',
+    borderColor: '#FBBF24',
     alignItems: 'center'
   },
   setDefaultText: {
     fontSize: 14,
     fontWeight: '500',
-    color: '#9333EA'
+    color: '#FBBF24'
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
     justifyContent: 'flex-end'
   },
   modalContent: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#0f1229',
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     paddingTop: 20,
@@ -514,25 +515,27 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingBottom: 20,
     borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB'
+    borderBottomColor: 'rgba(255,255,255,0.1)'
   },
   modalTitle: {
     fontSize: 20,
     fontWeight: '600',
-    color: '#1F2937'
+    color: '#F3F4F6'
   },
   formScroll: {
     paddingHorizontal: 20,
     paddingTop: 20
   },
   input: {
-    backgroundColor: '#F3F4F6',
+    backgroundColor: 'rgba(255,255,255,0.08)',
     borderRadius: 8,
     paddingHorizontal: 12,
     paddingVertical: 12,
     fontSize: 14,
-    color: '#1F2937',
-    marginBottom: 12
+    color: '#F3F4F6',
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.1)'
   },
   row: {
     flexDirection: 'row',
@@ -544,7 +547,7 @@ const styles = StyleSheet.create({
   label: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#1F2937',
+    color: '#F3F4F6',
     marginBottom: 8
   },
   typeButtons: {
@@ -557,19 +560,20 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#D1D5DB',
-    alignItems: 'center'
+    borderColor: 'rgba(255,255,255,0.15)',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.04)'
   },
   typeButtonActive: {
-    borderColor: '#9333EA',
-    backgroundColor: '#F3E8FF'
+    borderColor: '#FBBF24',
+    backgroundColor: 'rgba(251,191,36,0.15)'
   },
   typeButtonText: {
     fontSize: 14,
-    color: '#6B7280'
+    color: '#94A3B8'
   },
   typeButtonTextActive: {
-    color: '#9333EA',
+    color: '#FBBF24',
     fontWeight: '600'
   },
   checkboxRow: {
@@ -583,23 +587,23 @@ const styles = StyleSheet.create({
     height: 24,
     borderRadius: 6,
     borderWidth: 2,
-    borderColor: '#D1D5DB',
+    borderColor: 'rgba(255,255,255,0.2)',
     justifyContent: 'center',
     alignItems: 'center'
   },
   checkboxChecked: {
-    backgroundColor: '#9333EA',
-    borderColor: '#9333EA'
+    backgroundColor: '#FBBF24',
+    borderColor: '#FBBF24'
   },
   checkboxLabel: {
     fontSize: 14,
-    color: '#374151'
+    color: '#F3F4F6'
   },
   saveButton: {
     marginHorizontal: 20,
     marginTop: 20,
     paddingVertical: 14,
-    backgroundColor: '#9333EA',
+    backgroundColor: '#F97316',
     borderRadius: 12,
     alignItems: 'center'
   },

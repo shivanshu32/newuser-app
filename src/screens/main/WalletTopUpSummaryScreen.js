@@ -16,6 +16,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { walletAPI } from '../../services/api';
 import facebookTrackingService from '../../services/facebookTrackingService';
+import analyticsService from '../../services/analyticsService';
 
 // API Base URL for payment link creation
 const API_BASE_URL = 'https://jyotishcall-backend.onrender.com';
@@ -51,21 +52,42 @@ const WalletTopUpSummaryScreen = () => {
 
     setProcessingPayment(true);
     try {
-      // Track payment initiation with Facebook SDK
+      // Track begin_checkout with GA4 and Meta
       try {
-        await facebookTrackingService.initialize();
-        
-        const trackingData = {
-          amount: finalAmount,
+        // GA4 begin_checkout event
+        await analyticsService.logEvent('begin_checkout', {
           currency: 'INR',
-          paymentType: 'wallet_recharge',
-          selectedPackage: selectedPackage
-        };
+          value: finalAmount,
+          items: [{
+            item_id: selectedPackage?._id || 'manual_recharge',
+            item_name: selectedPackage?.name || 'Wallet Top-up',
+            item_category: 'wallet_recharge',
+            price: finalAmount,
+            quantity: 1
+          }],
+          bonus_amount: bonusAmount,
+          total_wallet_credit: totalWalletCredit
+        });
 
-        await facebookTrackingService.trackPaymentInitiated(trackingData);
-        console.log('📊 [FB-TRACKING] Wallet recharge payment initiation tracked for amount:', finalAmount);
+        // Meta InitiateCheckout event
+        const { AppEventsLogger } = require('react-native-fbsdk-next');
+        await AppEventsLogger.logEvent('InitiateCheckout', {
+          fb_content_type: 'wallet_recharge',
+          fb_content_id: selectedPackage?._id || 'manual',
+          fb_content_name: selectedPackage?.name || 'Wallet Recharge',
+          fb_currency: 'INR',
+          fb_value: finalAmount,
+          fb_num_items: 1,
+          bonus_amount: bonusAmount
+        });
+
+        console.log('📊 [TRACKING] Begin checkout tracked (GA4 + Meta):', {
+          value: finalAmount,
+          bonus: bonusAmount,
+          total_credit: totalWalletCredit
+        });
       } catch (trackingError) {
-        console.error('❌ [FB-TRACKING] Failed to track wallet recharge payment initiation:', trackingError);
+        console.error('❌ [TRACKING] Failed to track begin checkout:', trackingError);
         // Don't fail the payment flow if tracking fails
       }
 

@@ -322,15 +322,61 @@ export const AuthProvider = ({ children }) => {
           console.error('🔥 [AUTH] Failed to track login success:', analyticsError);
         }
 
+        // Determine if this is a new user (created within last 5 minutes)
+        const isNewUser = userData.createdAt && 
+          (new Date() - new Date(userData.createdAt)) < 5 * 60 * 1000;
+
+        // Track login/signup with GA4
+        try {
+          await analyticsService.setUserId(userData._id || userData.id);
+          
+          if (isNewUser) {
+            // Track signup for new users
+            await analyticsService.logEvent('sign_up', {
+              method: 'phone_otp',
+              user_id: userData._id || userData.id
+            });
+            console.log('📊 [GA4] Sign up tracked for new user');
+          } else {
+            // Track login for returning users
+            await analyticsService.logEvent('login', {
+              method: 'phone_otp',
+              user_id: userData._id || userData.id
+            });
+            console.log('📊 [GA4] Login tracked for returning user');
+          }
+
+          // Set user properties
+          await analyticsService.setUserProperties({
+            user_type: isNewUser ? 'new' : 'returning',
+            wallet_balance: userData.walletBalance || 0,
+            signup_date: userData.createdAt
+          });
+        } catch (analyticsError) {
+          console.error('❌ [GA4] Failed to track login/signup:', analyticsError);
+        }
+
         // Track user registration/login with Facebook SDK
         try {
           await facebookTrackingService.initialize();
-          await facebookTrackingService.trackUserRegistration({
-            id: userData._id || userData.id,
-            name: userData.name,
-            mobile: userData.mobile,
-            createdAt: userData.createdAt
-          });
+          
+          const { AppEventsLogger } = require('react-native-fbsdk-next');
+          
+          if (isNewUser) {
+            // Track CompleteRegistration for new users
+            await AppEventsLogger.logEvent('CompleteRegistration', {
+              fb_registration_method: 'phone_otp',
+              user_id: userData._id || userData.id
+            });
+            console.log('📊 [Meta] CompleteRegistration tracked for new user');
+          } else {
+            // Track login for returning users
+            await AppEventsLogger.logEvent('fb_mobile_login_success', {
+              method: 'phone_otp',
+              user_id: userData._id || userData.id
+            });
+            console.log('📊 [Meta] Login tracked for returning user');
+          }
           
           // Set user properties for better targeting
           await facebookTrackingService.setUserProperties({
