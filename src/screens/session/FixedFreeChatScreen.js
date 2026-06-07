@@ -131,9 +131,13 @@ const FixedFreeChatScreen = React.memo(({ route, navigation }) => {
   // Question-based free chat mode state
   const [freeChatMode, setFreeChatMode] = useState('time_based'); // 'time_based' or 'question_based'
   const [questionsAsked, setQuestionsAsked] = useState(0);
-  const [maxQuestions, setMaxQuestions] = useState(1);
-  const [questionsRemaining, setQuestionsRemaining] = useState(1);
+  const [maxQuestions, setMaxQuestions] = useState(2); // Default to 2 questions
+  const [questionsRemaining, setQuestionsRemaining] = useState(2);
   const [showLastQuestionWarning, setShowLastQuestionWarning] = useState(false);
+  const [isInWarmupPhase, setIsInWarmupPhase] = useState(true); // Warm-up phase tracking
+  const [warmupMessagesRemaining, setWarmupMessagesRemaining] = useState(2);
+  const [sessionEndingCountdown, setSessionEndingCountdown] = useState(null); // Grace period countdown
+  const [questionHint, setQuestionHint] = useState(null); // Hint message for user
   
   // Reply-to functionality state
   const [replyingTo, setReplyingTo] = useState(null); // Message being replied to
@@ -1312,9 +1316,81 @@ const FixedFreeChatScreen = React.memo(({ route, navigation }) => {
     safeSetState(setShowLastQuestionWarning, true);
     
     Alert.alert(
-      'Last Question',
-      data.message || 'This is your last question in the free chat. The session will end after the astrologer responds.',
+      '🌟 Last Free Question',
+      data.message || 'This is your last free question. The astrologer will provide a detailed answer!',
       [{ text: 'OK', onPress: () => console.log('⚠️ [USER-APP] [QUESTION_MODE] Last question warning acknowledged') }]
+    );
+  }, [freeChatId, safeSetState]);
+
+  // Handle warm-up phase status updates
+  const handleWarmupStatusUpdate = useCallback((data) => {
+    console.log('🌅 [USER-APP] [WARMUP] Status update received:', data);
+    
+    if (data.freeChatId !== freeChatId) return;
+    
+    safeSetState(setIsInWarmupPhase, data.isInWarmupPhase);
+    safeSetState(setWarmupMessagesRemaining, data.warmupMessagesRemaining || 0);
+  }, [freeChatId, safeSetState]);
+
+  // Handle warm-up phase completion
+  const handleWarmupComplete = useCallback((data) => {
+    console.log('✅ [USER-APP] [WARMUP] Warm-up phase complete:', data);
+    
+    if (data.freeChatId !== freeChatId) return;
+    
+    safeSetState(setIsInWarmupPhase, false);
+    safeSetState(setWarmupMessagesRemaining, 0);
+    safeSetState(setMaxQuestions, data.maxQuestions || 2);
+    
+    // Show a friendly notification
+    Alert.alert(
+      '🎯 Ready for Your Question!',
+      data.message || `Great! Now ask your astrology question. You have ${data.maxQuestions || 2} free question(s).`,
+      [{ text: 'Ask Now', style: 'default' }]
+    );
+  }, [freeChatId, safeSetState]);
+
+  // Handle question hints
+  const handleQuestionHint = useCallback((data) => {
+    console.log('💡 [USER-APP] [HINT] Question hint received:', data);
+    
+    if (data.freeChatId !== freeChatId) return;
+    
+    safeSetState(setQuestionHint, data.message);
+    
+    // Auto-dismiss hint after 5 seconds
+    setTimeout(() => {
+      if (mountedRef.current) {
+        safeSetState(setQuestionHint, null);
+      }
+    }, 5000);
+  }, [freeChatId, safeSetState]);
+
+  // Handle session ending soon (grace period)
+  const handleSessionEndingSoon = useCallback((data) => {
+    console.log('⏰ [USER-APP] [GRACE_PERIOD] Session ending soon:', data);
+    
+    if (data.freeChatId !== freeChatId) return;
+    
+    let countdown = data.secondsRemaining || 15;
+    safeSetState(setSessionEndingCountdown, countdown);
+    
+    // Start countdown timer
+    const countdownInterval = setInterval(() => {
+      countdown--;
+      if (countdown <= 0) {
+        clearInterval(countdownInterval);
+        safeSetState(setSessionEndingCountdown, null);
+      } else if (mountedRef.current) {
+        safeSetState(setSessionEndingCountdown, countdown);
+      }
+    }, 1000);
+    
+    // Show notification
+    Alert.alert(
+      '⏰ Session Ending Soon',
+      data.message || `Your free session will end in ${data.secondsRemaining} seconds. A special offer is coming!`,
+      [{ text: 'OK', style: 'default' }]
     );
   }, [freeChatId, safeSetState]);
 
@@ -1721,7 +1797,8 @@ const FixedFreeChatScreen = React.memo(({ route, navigation }) => {
       'session_started', 'session_timer', 'free_chat_session_ended', // Backend emits 'free_chat_session_ended'
       'free_chat_session_resumed', 'get_free_chat_message_history',
       'prepaid_offer_available', 'prepaid_offer_creation_failed', // CRITICAL FIX: Added new events
-      'question_count_update', 'last_question_warning' // Question-based mode events
+      'question_count_update', 'last_question_warning', // Question-based mode events
+      'warmup_status_update', 'warmup_complete', 'question_hint', 'session_ending_soon' // Enhanced question mode events
     ];
     
     events.forEach(event => {
@@ -1812,6 +1889,10 @@ const FixedFreeChatScreen = React.memo(({ route, navigation }) => {
     // Question-based mode events
     socket.on('question_count_update', handleQuestionCountUpdate);
     socket.on('last_question_warning', handleLastQuestionWarning);
+    socket.on('warmup_status_update', handleWarmupStatusUpdate);
+    socket.on('warmup_complete', handleWarmupComplete);
+    socket.on('question_hint', handleQuestionHint);
+    socket.on('session_ending_soon', handleSessionEndingSoon);
     
     // Handle free chat session resumption (for rejoining)
     socket.on('free_chat_session_resumed', handleSessionResumed);
@@ -1901,7 +1982,7 @@ const FixedFreeChatScreen = React.memo(({ route, navigation }) => {
     });
     
     console.log('✅ [FREE_CHAT_SOCKET] Event listeners setup complete');
-  }, [safeSetState, cleanupSocketListeners, joinFreeChatRoom, handleIncomingMessage, handleMessageDelivered, handleMessageRead, handleTypingStarted, handleTypingStopped, handleSessionStarted, handleTimerUpdate, handleSessionEnded, handleQuestionCountUpdate, handleLastQuestionWarning, freeChatId, messages]);
+  }, [safeSetState, cleanupSocketListeners, joinFreeChatRoom, handleIncomingMessage, handleMessageDelivered, handleMessageRead, handleTypingStarted, handleTypingStopped, handleSessionStarted, handleTimerUpdate, handleSessionEnded, handleQuestionCountUpdate, handleLastQuestionWarning, handleWarmupStatusUpdate, handleWarmupComplete, handleQuestionHint, handleSessionEndingSoon, freeChatId, messages]);
 
   // ===== MESSAGE SENDING =====
   const sendMessage = useCallback(async () => {
@@ -2695,7 +2776,11 @@ const FixedFreeChatScreen = React.memo(({ route, navigation }) => {
                   {astrologer?.name || bookingDetails?.astrologer?.name || 'Astrologer'}
                 </Text>
                 <Text style={styles.headerSubtitle}>
-                  {consultationType === 'chat' ? 'Free Chat Consultation' : 'Free Consultation'}
+                  {freeChatMode === 'question_based' 
+                    ? (isInWarmupPhase 
+                        ? `Say hello first! (${warmupMessagesRemaining} warm-up)` 
+                        : `${questionsRemaining} Free Question${questionsRemaining !== 1 ? 's' : ''} Left`)
+                    : 'Free Chat Consultation'}
                 </Text>
               </View>
             </View>
@@ -2759,6 +2844,24 @@ const FixedFreeChatScreen = React.memo(({ route, navigation }) => {
         {astrologerTyping && !sessionEnded && (
           <View style={styles.typingContainer}>
             <Text style={styles.typingText}>Astrologer is typing...</Text>
+          </View>
+        )}
+
+        {/* Question Hint Banner */}
+        {questionHint && !sessionEnded && (
+          <View style={styles.hintBanner}>
+            <Ionicons name="bulb-outline" size={16} color="#FCD34D" />
+            <Text style={styles.hintText}>{questionHint}</Text>
+          </View>
+        )}
+
+        {/* Session Ending Countdown */}
+        {sessionEndingCountdown !== null && (
+          <View style={styles.countdownBanner}>
+            <Ionicons name="time-outline" size={16} color="#FFFFFF" />
+            <Text style={styles.countdownText}>
+              Session ending in {sessionEndingCountdown}s - Special offer coming!
+            </Text>
           </View>
         )}
 
@@ -3215,6 +3318,36 @@ const styles = StyleSheet.create({
     color: '#6B46C1',
     fontSize: 14,
     fontStyle: 'italic',
+  },
+  hintBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    backgroundColor: 'rgba(251, 191, 36, 0.15)',
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(251, 191, 36, 0.3)',
+    gap: 8,
+  },
+  hintText: {
+    color: '#B45309',
+    fontSize: 13,
+    flex: 1,
+    fontWeight: '500',
+  },
+  countdownBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    backgroundColor: '#6B46C1',
+    gap: 8,
+  },
+  countdownText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '600',
   },
   readReceiptContainer: {
     flexDirection: 'row',
