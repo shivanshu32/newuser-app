@@ -1,12 +1,9 @@
-module.exports = ({ config }) => ({
-  ...config,
-  // Use consistent configuration from app.json
+module.exports = {
   jsEngine: "hermes",
   name: "Jyotish Call",
   slug: "jyotishcall-user-app",
-  version: "5.8.0",
-  // Remove global orientation restriction for Android 16+ large screen support
-  // orientation: "portrait", // Commented out for large screen compatibility
+  version: "5.8.2",
+  orientation: "portrait",
   icon: "./assets/icon-square.png",
   userInterfaceStyle: "light",
   splash: {
@@ -35,10 +32,11 @@ module.exports = ({ config }) => ({
       backgroundColor: "#ffffff"
     },
     package: "com.jyotishtalk",
-    versionCode: 104,
+    versionCode: 107,
     minSdkVersion: 24,
     compileSdkVersion: 36,
     targetSdkVersion: 36,
+    newArchEnabled: true,
     googleServicesFile: "./google-services.json",
     permissions: [
       "MODIFY_AUDIO_SETTINGS",
@@ -64,8 +62,7 @@ module.exports = ({ config }) => ({
     edgeToEdgeEnabled: true,
     // Android 16+ Large Screen Device Support
     supportsTablet: true,
-    // Remove orientation restrictions for foldables and tablets
-    screenOrientation: "unspecified",
+    screenOrientation: "portrait",
     // Enable resizable activities for all form factors
     resizeableActivity: true,
     // Support multi-window mode
@@ -126,4 +123,4 @@ module.exports = ({ config }) => ({
     }
   },
   owner: "shivanshu32"
-});
+};

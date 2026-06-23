@@ -15,6 +15,7 @@ import { useSocket } from '../../context/SocketContext';
 import { bookingsAPI, API_BASE } from '../../services/api';
 import { useBookingPopup } from '../../context/BookingPopupContext';
 import analyticsService from '../../services/analyticsService';
+import { colors, spacing, radius, shadows } from '../../theme';
 
 const BookingWaitingScreen = () => {
   const navigation = useNavigation();
@@ -268,8 +269,8 @@ const BookingWaitingScreen = () => {
           </TouchableOpacity>
         </View>
         <View style={[styles.content, { justifyContent: 'center', alignItems: 'center' }]}>
-          <ActivityIndicator size="large" color="#007AFF" />
-          <Text style={{ marginTop: 16, fontSize: 16, color: '#8E8E93' }}>
+          <ActivityIndicator size="large" color={colors.secondary} />
+          <Text style={{ marginTop: 16, fontSize: 16, color: colors.textSecondary }}>
             Loading booking information...
           </Text>
         </View>
@@ -580,11 +581,11 @@ const BookingWaitingScreen = () => {
 
   const getStatusColor = () => {
     switch (bookingStatus) {
-      case 'pending': return '#FF9500';
-      case 'accepted': return '#34C759';
-      case 'rejected': return '#FF3B30';
-      case 'cancelled': return '#8E8E93';
-      default: return '#FF9500';
+      case 'pending': return colors.warning;
+      case 'accepted': return colors.success;
+      case 'rejected': return colors.error;
+      case 'cancelled': return colors.textSecondary;
+      default: return colors.warning;
     }
   };
 
@@ -628,7 +629,7 @@ const BookingWaitingScreen = () => {
           {bookingStatus === 'pending' && (
             <View style={styles.timerContainer}>
               <Text style={styles.timerLabel}>Time remaining:</Text>
-              <Text style={[styles.timerText, { color: timeLeft <= 30 ? '#FF3B30' : '#FF9500' }]}>
+              <Text style={[styles.timerText, { color: timeLeft <= 30 ? colors.error : colors.warning }]}>
                 {formatTime(timeLeft)}
               </Text>
             </View>
@@ -648,7 +649,7 @@ const BookingWaitingScreen = () => {
               disabled={isLoading}
             >
               {isLoading ? (
-                <ActivityIndicator color="#FFFFFF" size="small" />
+                <ActivityIndicator color={colors.primary} size="small" />
               ) : (
                 <Text style={styles.cancelButtonText}>Cancel Request</Text>
               )}
@@ -672,22 +673,22 @@ const BookingWaitingScreen = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F8F9FA',
+    backgroundColor: colors.background,
   },
   header: {
     paddingTop: 50,
     paddingHorizontal: 20,
     paddingBottom: 20,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
     borderBottomWidth: 1,
-    borderBottomColor: '#E5E5E7',
+    borderBottomColor: colors.divider,
   },
   backButton: {
     alignSelf: 'flex-start',
   },
   backButtonText: {
     fontSize: 16,
-    color: '#007AFF',
+    color: colors.secondary,
     fontWeight: '500',
   },
   content: {
@@ -695,12 +696,12 @@ const styles = StyleSheet.create({
     padding: 20,
   },
   astrologerCard: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
     borderRadius: 16,
     padding: 24,
     alignItems: 'center',
     marginBottom: 24,
-    shadowColor: '#000',
+    shadowColor: colors.shadow,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 8,
@@ -715,20 +716,20 @@ const styles = StyleSheet.create({
   astrologerName: {
     fontSize: 20,
     fontWeight: '600',
-    color: '#1C1C1E',
+    color: colors.textPrimary,
     marginBottom: 4,
   },
   consultationType: {
     fontSize: 16,
-    color: '#8E8E93',
+    color: colors.textSecondary,
   },
   statusCard: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
     borderRadius: 16,
     padding: 20,
     marginBottom: 24,
     borderWidth: 2,
-    shadowColor: '#000',
+    shadowColor: colors.shadow,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 8,
@@ -743,7 +744,7 @@ const styles = StyleSheet.create({
   statusText: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#1C1C1E',
+    color: colors.textPrimary,
     marginBottom: 16,
   },
   timerContainer: {
@@ -751,7 +752,7 @@ const styles = StyleSheet.create({
   },
   timerLabel: {
     fontSize: 14,
-    color: '#8E8E93',
+    color: colors.textSecondary,
     marginBottom: 4,
   },
   timerText: {
@@ -764,13 +765,13 @@ const styles = StyleSheet.create({
   },
   waitingMessage: {
     fontSize: 16,
-    color: '#8E8E93',
+    color: colors.textSecondary,
     textAlign: 'center',
     lineHeight: 22,
     marginBottom: 32,
   },
   cancelButton: {
-    backgroundColor: '#FF3B30',
+    backgroundColor: colors.error,
     paddingHorizontal: 32,
     paddingVertical: 16,
     borderRadius: 12,
@@ -781,19 +782,19 @@ const styles = StyleSheet.create({
     opacity: 0.6,
   },
   cancelButtonText: {
-    color: '#FFFFFF',
+    color: colors.textInverse,
     fontSize: 16,
     fontWeight: '600',
   },
   joinButton: {
-    backgroundColor: '#34C759',
+    backgroundColor: colors.success,
     paddingHorizontal: 32,
     paddingVertical: 16,
     borderRadius: 12,
     alignItems: 'center',
   },
   joinButtonText: {
-    color: '#FFFFFF',
+    color: colors.textInverse,
     fontSize: 16,
     fontWeight: '600',
   },

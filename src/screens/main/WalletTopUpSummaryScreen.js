@@ -17,6 +17,7 @@ import { useNavigation, useRoute } from '@react-navigation/native';
 import { walletAPI } from '../../services/api';
 import facebookTrackingService from '../../services/facebookTrackingService';
 import analyticsService from '../../services/analyticsService';
+import { colors, spacing, radius, shadows } from '../../theme';
 
 // API Base URL for payment link creation
 const API_BASE_URL = 'https://jyotishcall-backend.onrender.com';
@@ -151,7 +152,7 @@ const WalletTopUpSummaryScreen = () => {
           name: user?.name || user?.displayName || ''
         },
         theme: {
-          color: '#F97316'
+          color: colors.primary
         }
       };
       
@@ -274,7 +275,7 @@ const WalletTopUpSummaryScreen = () => {
           style={styles.backButton} 
           onPress={() => navigation.goBack()}
         >
-          <Ionicons name="arrow-back" size={24} color="#333" />
+          <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Payment Summary</Text>
         <View style={styles.placeholder} />
@@ -284,7 +285,7 @@ const WalletTopUpSummaryScreen = () => {
         {selectedPackage && (
           <View style={styles.packageCard}>
             <View style={styles.packageHeader}>
-              <Ionicons name="gift" size={24} color="#F97316" />
+              <Ionicons name="gift" size={24} color={colors.primary} />
               <Text style={styles.packageTitle}>Recharge Package Selected</Text>
             </View>
             <Text style={styles.packageName}>{selectedPackage.name}</Text>
@@ -336,7 +337,7 @@ const WalletTopUpSummaryScreen = () => {
 
         <View style={styles.infoCard}>
           <View style={styles.infoHeader}>
-            <Ionicons name="information-circle" size={20} color="#F97316" />
+            <Ionicons name="information-circle" size={20} color={colors.primary} />
             <Text style={styles.infoTitle}>Payment Information</Text>
           </View>
           <Text style={styles.infoText}>
@@ -356,7 +357,7 @@ const WalletTopUpSummaryScreen = () => {
             </Text>
           </View>
           <View style={styles.breakdownItem}>
-            <View style={[styles.breakdownDot, { backgroundColor: '#FF6B6B' }]} />
+            <View style={[styles.breakdownDot, { backgroundColor: colors.error }]} />
             <Text style={styles.breakdownText}>
               GST Charges: ₹{gstAmount.toFixed(2)} (Government tax - 18%)
             </Text>
@@ -371,7 +372,7 @@ const WalletTopUpSummaryScreen = () => {
           disabled={processingPayment}
         >
           {processingPayment ? (
-            <ActivityIndicator color="#fff" size="small" />
+            <ActivityIndicator color={colors.primary} size="small" />
           ) : (
             <>
               <Text style={styles.proceedButtonText}>Proceed to Pay</Text>
@@ -387,7 +388,7 @@ const WalletTopUpSummaryScreen = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f8f9fa',
+    backgroundColor: colors.background,
   },
   header: {
     flexDirection: 'row',
@@ -395,9 +396,9 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: 16,
     paddingVertical: 12,
-    backgroundColor: '#fff',
+    backgroundColor: colors.surface,
     borderBottomWidth: 1,
-    borderBottomColor: '#e9ecef',
+    borderBottomColor: colors.divider,
   },
   backButton: {
     padding: 8,
@@ -405,7 +406,7 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#333',
+    color: colors.textPrimary,
   },
   placeholder: {
     width: 40,
@@ -415,28 +416,20 @@ const styles = StyleSheet.create({
     padding: 16,
   },
   summaryCard: {
-    backgroundColor: '#fff',
-    borderRadius: 12,
+    backgroundColor: colors.surface,
+    borderRadius: radius.md,
     padding: 20,
     marginBottom: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    ...shadows.card,
   },
   packageCard: {
-    backgroundColor: '#fff',
-    borderRadius: 12,
+    backgroundColor: colors.surface,
+    borderRadius: radius.md,
     padding: 20,
     marginBottom: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    ...shadows.card,
     borderLeftWidth: 4,
-    borderLeftColor: '#F97316',
+    borderLeftColor: colors.primary,
   },
   packageHeader: {
     flexDirection: 'row',
@@ -446,31 +439,31 @@ const styles = StyleSheet.create({
   packageTitle: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#F97316',
+    color: colors.primary,
     marginLeft: 8,
   },
   packageName: {
     fontSize: 18,
     fontWeight: '700',
-    color: '#333',
+    color: colors.textPrimary,
     marginBottom: 8,
   },
   firstRechargeBadge: {
-    backgroundColor: '#4CAF50',
+    backgroundColor: colors.success,
     paddingHorizontal: 8,
     paddingVertical: 4,
-    borderRadius: 12,
+    borderRadius: radius.sm,
     alignSelf: 'flex-start',
     marginBottom: 16,
   },
   firstRechargeText: {
-    color: '#fff',
+    color: colors.textInverse,
     fontSize: 12,
     fontWeight: '600',
   },
   packageBenefits: {
-    backgroundColor: '#f8f9fa',
-    borderRadius: 8,
+    backgroundColor: colors.background,
+    borderRadius: radius.sm,
     padding: 16,
   },
   benefitRow: {
@@ -481,21 +474,21 @@ const styles = StyleSheet.create({
   },
   benefitLabel: {
     fontSize: 14,
-    color: '#666',
+    color: colors.textSecondary,
   },
   benefitValue: {
     fontSize: 14,
     fontWeight: '500',
-    color: '#333',
+    color: colors.textPrimary,
   },
   bonusValue: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#4CAF50',
+    color: colors.success,
   },
   totalBenefitRow: {
     borderTopWidth: 1,
-    borderTopColor: '#e9ecef',
+    borderTopColor: colors.divider,
     paddingTop: 8,
     marginTop: 8,
     marginBottom: 0,
@@ -503,17 +496,17 @@ const styles = StyleSheet.create({
   totalBenefitLabel: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#333',
+    color: colors.textPrimary,
   },
   totalBenefitValue: {
     fontSize: 16,
     fontWeight: '700',
-    color: '#F97316',
+    color: colors.primary,
   },
   cardTitle: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#333',
+    color: colors.textPrimary,
     marginBottom: 16,
     textAlign: 'center',
   },
@@ -525,16 +518,16 @@ const styles = StyleSheet.create({
   },
   amountLabel: {
     fontSize: 16,
-    color: '#666',
+    color: colors.textSecondary,
   },
   amountValue: {
     fontSize: 16,
     fontWeight: '500',
-    color: '#333',
+    color: colors.textPrimary,
   },
   divider: {
     height: 1,
-    backgroundColor: '#e9ecef',
+    backgroundColor: colors.divider,
     marginVertical: 4,
   },
   totalRow: {
@@ -542,7 +535,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingVertical: 16,
-    backgroundColor: '#f8f9fa',
+    backgroundColor: colors.background,
     marginHorizontal: -20,
     paddingHorizontal: 20,
     marginTop: 8,
@@ -551,20 +544,20 @@ const styles = StyleSheet.create({
   totalLabel: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#333',
+    color: colors.textPrimary,
   },
   totalValue: {
     fontSize: 20,
     fontWeight: '700',
-    color: '#F97316',
+    color: colors.primary,
   },
   infoCard: {
-    backgroundColor: '#fff',
-    borderRadius: 12,
+    backgroundColor: colors.surface,
+    borderRadius: radius.md,
     padding: 16,
     marginBottom: 16,
     borderLeftWidth: 4,
-    borderLeftColor: '#F97316',
+    borderLeftColor: colors.primary,
   },
   infoHeader: {
     flexDirection: 'row',
@@ -574,24 +567,24 @@ const styles = StyleSheet.create({
   infoTitle: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#333',
+    color: colors.textPrimary,
     marginLeft: 8,
   },
   infoText: {
     fontSize: 14,
-    color: '#666',
+    color: colors.textSecondary,
     lineHeight: 20,
   },
   breakdownCard: {
-    backgroundColor: '#fff',
-    borderRadius: 12,
+    backgroundColor: colors.surface,
+    borderRadius: radius.md,
     padding: 16,
     marginBottom: 16,
   },
   breakdownTitle: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#333',
+    color: colors.textPrimary,
     marginBottom: 12,
   },
   breakdownItem: {
@@ -603,48 +596,44 @@ const styles = StyleSheet.create({
     width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: '#4CAF50',
+    backgroundColor: colors.success,
     marginTop: 6,
     marginRight: 12,
   },
   breakdownText: {
     flex: 1,
     fontSize: 14,
-    color: '#666',
+    color: colors.textSecondary,
     lineHeight: 20,
   },
   footer: {
     padding: 16,
-    backgroundColor: '#fff',
+    backgroundColor: colors.surface,
     borderTopWidth: 1,
-    borderTopColor: '#e9ecef',
+    borderTopColor: colors.divider,
   },
   proceedButton: {
-    backgroundColor: '#F97316',
-    borderRadius: 12,
+    backgroundColor: colors.primary,
+    borderRadius: radius.md,
     paddingVertical: 16,
     paddingHorizontal: 24,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#F97316',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 5,
+    ...shadows.elevated,
   },
   disabledButton: {
-    backgroundColor: '#ccc',
+    backgroundColor: colors.surfaceTertiary,
     shadowOpacity: 0,
     elevation: 0,
   },
   proceedButtonText: {
-    color: '#fff',
+    color: colors.textInverse,
     fontSize: 16,
     fontWeight: '600',
     marginBottom: 2,
   },
   proceedButtonAmount: {
-    color: '#fff',
+    color: colors.textInverse,
     fontSize: 18,
     fontWeight: '700',
   },

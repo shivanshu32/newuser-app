@@ -16,6 +16,7 @@ import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import poojaAPI from '../../services/poojaAPI';
+import { colors, spacing, radius, shadows } from '../../theme';
 
 const PoojaDetailsForm = ({ navigation, route }) => {
   const { booking } = route.params || {};
@@ -314,7 +315,7 @@ const PoojaDetailsForm = ({ navigation, route }) => {
             {/* Sankalp Details */}
             <View style={styles.section}>
               <Text style={styles.sectionTitle}>
-                <MaterialCommunityIcons name="heart-outline" size={18} color="#9b59b6" />
+                <MaterialCommunityIcons name="heart-outline" size={18} color={colors.secondary} />
                 {' '}Sankalp (Purpose of Pooja)
               </Text>
               
@@ -325,7 +326,7 @@ const PoojaDetailsForm = ({ navigation, route }) => {
             {/* Prasad Delivery Address */}
             <View style={styles.section}>
               <Text style={styles.sectionTitle}>
-                <MaterialCommunityIcons name="truck-delivery" size={18} color="#9b59b6" />
+                <MaterialCommunityIcons name="truck-delivery" size={18} color={colors.secondary} />
                 {' '}Prasad Delivery Address
               </Text>
               
@@ -340,7 +341,7 @@ const PoojaDetailsForm = ({ navigation, route }) => {
             {/* Additional Notes */}
             <View style={styles.section}>
               <Text style={styles.sectionTitle}>
-                <MaterialCommunityIcons name="note-text" size={18} color="#9b59b6" />
+                <MaterialCommunityIcons name="note-text" size={18} color={colors.secondary} />
                 {' '}Additional Notes
               </Text>
               
@@ -354,16 +355,16 @@ const PoojaDetailsForm = ({ navigation, route }) => {
               disabled={loading}
             >
               <LinearGradient
-                colors={['#9b59b6', '#8e44ad']}
+                colors={[colors.secondary, '#8e44ad']}
                 style={styles.submitGradient}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 0 }}
               >
                 {loading ? (
-                  <ActivityIndicator color="#fff" />
+                  <ActivityIndicator color={colors.textInverse} />
                 ) : (
                   <>
-                    <MaterialCommunityIcons name="check-circle" size={22} color="#fff" />
+                    <MaterialCommunityIcons name="check-circle" size={22} color={colors.textInverse} />
                     <Text style={styles.submitText}>Submit Pooja Details</Text>
                   </>
                 )}
@@ -381,7 +382,7 @@ const PoojaDetailsForm = ({ navigation, route }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#0f0f23',
+    backgroundColor: colors.darkBackground,
   },
   gradient: {
     flex: 1,
@@ -401,7 +402,7 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: 18,
     fontWeight: '700',
-    color: '#fff',
+    color: colors.textPrimary,
   },
   headerRight: {
     width: 40,
@@ -432,11 +433,11 @@ const styles = StyleSheet.create({
   poojaName: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#fff',
+    color: colors.textPrimary,
   },
   packageName: {
     fontSize: 13,
-    color: '#9b59b6',
+    color: colors.secondary,
     marginTop: 2,
   },
   section: {
@@ -450,7 +451,7 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#fff',
+    color: colors.textPrimary,
     marginBottom: 12,
   },
   addButton: {
@@ -461,11 +462,11 @@ const styles = StyleSheet.create({
   },
   inputLabel: {
     fontSize: 13,
-    color: '#aaa',
+    color: colors.textMuted,
     marginBottom: 6,
   },
   required: {
-    color: '#e74c3c',
+    color: colors.error,
   },
   input: {
     backgroundColor: 'rgba(255, 255, 255, 0.08)',
@@ -473,7 +474,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 12,
     fontSize: 15,
-    color: '#fff',
+    color: colors.textPrimary,
     borderWidth: 1,
     borderColor: 'rgba(155, 89, 182, 0.2)',
   },
@@ -494,11 +495,11 @@ const styles = StyleSheet.create({
   },
   dateText: {
     fontSize: 15,
-    color: '#fff',
+    color: colors.textPrimary,
   },
   datePlaceholder: {
     fontSize: 15,
-    color: '#666',
+    color: colors.textSecondary,
   },
   familyMemberCard: {
     backgroundColor: 'rgba(255, 255, 255, 0.05)',
@@ -517,11 +518,11 @@ const styles = StyleSheet.create({
   familyMemberTitle: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#9b59b6',
+    color: colors.secondary,
   },
   emptyText: {
     fontSize: 13,
-    color: '#666',
+    color: colors.textSecondary,
     fontStyle: 'italic',
     textAlign: 'center',
     paddingVertical: 12,
@@ -538,7 +539,7 @@ const styles = StyleSheet.create({
     paddingVertical: 16,
   },
   submitText: {
-    color: '#fff',
+    color: colors.textInverse,
     fontSize: 16,
     fontWeight: '700',
     marginLeft: 8,

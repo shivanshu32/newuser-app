@@ -19,6 +19,7 @@ import { useAuth } from '../../context/AuthContext';
 import { bookingsAPI, sessionsAPI, chatHistoryAPI } from '../../services/api';
 import io from 'socket.io-client';
 import * as socketService from '../../services/socketService';
+import { colors, spacing, radius, shadows } from '../../theme';
 
 const ChatScreen = ({ route, navigation }) => {
   // Extract and validate bookingId from route params
@@ -578,18 +579,18 @@ const ChatScreen = ({ route, navigation }) => {
       
       switch (item.status) {
         case 'sending':
-          return <Ionicons name="time-outline" size={12} color="#888" style={styles.statusIcon} />;
+          return <Ionicons name="time-outline" size={12} color={colors.textMuted} style={styles.statusIcon} />;
         case 'sent':
-          return <Ionicons name="checkmark-outline" size={12} color="#888" style={styles.statusIcon} />;
+          return <Ionicons name="checkmark-outline" size={12} color={colors.textMuted} style={styles.statusIcon} />;
         case 'read':
           return (
             <View style={styles.doubleTickContainer}>
-              <Ionicons name="checkmark-outline" size={12} color="#4CAF50" style={styles.statusIcon} />
-              <Ionicons name="checkmark-outline" size={12} color="#4CAF50" style={[styles.statusIcon, styles.secondTick]} />
+              <Ionicons name="checkmark-outline" size={12} color={colors.success} style={styles.statusIcon} />
+              <Ionicons name="checkmark-outline" size={12} color={colors.success} style={[styles.statusIcon, styles.secondTick]} />
             </View>
           );
         default:
-          return <Ionicons name="checkmark-outline" size={12} color="#888" style={styles.statusIcon} />;
+          return <Ionicons name="checkmark-outline" size={12} color={colors.textMuted} style={styles.statusIcon} />;
       }
     };
     
@@ -609,7 +610,7 @@ const ChatScreen = ({ route, navigation }) => {
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#F97316" />
+        <ActivityIndicator size="large" color={colors.primary} />
       </View>
     );
   }
@@ -624,7 +625,7 @@ const ChatScreen = ({ route, navigation }) => {
       <View style={styles.header}>
         <View style={styles.headerLeft}>
           <TouchableOpacity onPress={() => navigation.goBack()}>
-            <Ionicons name="arrow-back" size={24} color="#333" />
+            <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
           </TouchableOpacity>
           <Image source={{ uri: astrologer?.image }} style={styles.astrologerImage} />
           <View>
@@ -634,14 +635,14 @@ const ChatScreen = ({ route, navigation }) => {
         </View>
         
         <View style={styles.timerContainer}>
-          <Ionicons name="time-outline" size={16} color="#F97316" />
+          <Ionicons name="time-outline" size={16} color={colors.primary} />
           <Text style={styles.timerText}>{formatTime(sessionTime)}</Text>
         </View>
       </View>
       
       {connecting ? (
         <View style={styles.connectingContainer}>
-          <ActivityIndicator size="large" color="#F97316" />
+          <ActivityIndicator size="large" color={colors.primary} />
           <Text style={styles.connectingText}>Connecting to astrologer...</Text>
         </View>
       ) : (
@@ -696,7 +697,7 @@ const ChatScreen = ({ route, navigation }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f8f8f8',
+    backgroundColor: colors.background,
   },
   loadingContainer: {
     flex: 1,
@@ -708,9 +709,9 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     padding: 15,
-    backgroundColor: '#fff',
+    backgroundColor: colors.surface,
     borderBottomWidth: 1,
-    borderBottomColor: '#eee',
+    borderBottomColor: colors.divider,
   },
   headerLeft: {
     flexDirection: 'row',
@@ -728,18 +729,18 @@ const styles = StyleSheet.create({
   },
   sessionType: {
     fontSize: 12,
-    color: '#666',
+    color: colors.textSecondary,
   },
   timerContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#f0e6ff',
+    backgroundColor: colors.primaryMuted,
     paddingVertical: 5,
     paddingHorizontal: 10,
     borderRadius: 15,
   },
   timerText: {
-    color: '#8A2BE2',
+    color: colors.primary,
     fontWeight: 'bold',
     marginLeft: 5,
   },
@@ -751,7 +752,7 @@ const styles = StyleSheet.create({
   connectingText: {
     marginTop: 15,
     fontSize: 16,
-    color: '#666',
+    color: colors.textSecondary,
   },
   messageList: {
     padding: 15,
@@ -764,20 +765,20 @@ const styles = StyleSheet.create({
   },
   userMessage: {
     alignSelf: 'flex-end',
-    backgroundColor: '#8A2BE2',
+    backgroundColor: colors.primary,
     borderBottomRightRadius: 0,
     elevation: 2,
-    shadowColor: '#000',
+    shadowColor: colors.shadow,
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.2,
     shadowRadius: 1.5,
   },
   astrologerMessage: {
     alignSelf: 'flex-start',
-    backgroundColor: '#fff',
+    backgroundColor: colors.surface,
     borderBottomLeftRadius: 0,
     elevation: 1,
-    shadowColor: '#000',
+    shadowColor: colors.shadow,
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.1,
     shadowRadius: 1,
@@ -787,15 +788,15 @@ const styles = StyleSheet.create({
     lineHeight: 22,
   },
   userMessageText: {
-    color: '#fff',
+    color: colors.textInverse,
     fontWeight: '500',
   },
   astrologerMessageText: {
-    color: '#333',
+    color: colors.textPrimary,
   },
   messageTime: {
     fontSize: 10,
-    color: '#888',
+    color: colors.textMuted,
     marginTop: 4,
     marginRight: 4,
   },
@@ -816,36 +817,36 @@ const styles = StyleSheet.create({
   },
   typingIndicatorContainer: {
     padding: 8,
-    backgroundColor: '#f0f0f0',
+    backgroundColor: colors.surfaceTertiary,
     borderRadius: 16,
     marginHorizontal: 16,
     marginBottom: 8,
   },
   typingIndicatorText: {
-    color: '#666',
+    color: colors.textSecondary,
     fontStyle: 'italic',
     fontSize: 12,
   },
   typingIndicator: {
     padding: 8,
-    backgroundColor: '#f0f0f0',
+    backgroundColor: colors.surfaceTertiary,
     borderRadius: 16,
     marginHorizontal: 16,
     marginBottom: 8,
   },
   typingText: {
     fontSize: 12,
-    color: '#666',
+    color: colors.textSecondary,
     fontStyle: 'italic',
   },
   inputContainer: {
     flexDirection: 'row',
     padding: 12,
-    backgroundColor: '#fff',
+    backgroundColor: colors.surface,
     borderTopWidth: 1,
-    borderTopColor: '#eee',
+    borderTopColor: colors.divider,
     alignItems: 'center',
-    shadowColor: '#000',
+    shadowColor: colors.shadow,
     shadowOffset: { width: 0, height: -2 },
     shadowOpacity: 0.05,
     shadowRadius: 3,
@@ -853,36 +854,36 @@ const styles = StyleSheet.create({
   },
   input: {
     flex: 1,
-    backgroundColor: '#f0f0f0',
+    backgroundColor: colors.surfaceTertiary,
     borderRadius: 20,
     paddingHorizontal: 15,
     paddingVertical: 10,
     maxHeight: 100,
     fontSize: 15,
     borderWidth: 1,
-    borderColor: '#e0e0e0',
+    borderColor: colors.divider,
   },
   sendButton: {
-    backgroundColor: '#8A2BE2',
+    backgroundColor: colors.primary,
     width: 40,
     height: 40,
     borderRadius: 20,
     justifyContent: 'center',
     alignItems: 'center',
     marginLeft: 10,
-    shadowColor: '#8A2BE2',
+    shadowColor: colors.primary,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.3,
     shadowRadius: 2,
     elevation: 3,
   },
   endSessionButton: {
-    backgroundColor: '#F44336',
+    backgroundColor: colors.error,
     padding: 15,
     alignItems: 'center',
   },
   endSessionText: {
-    color: '#fff',
+    color: colors.textInverse,
     fontSize: 16,
     fontWeight: 'bold',
   },

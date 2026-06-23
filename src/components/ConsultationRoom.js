@@ -11,6 +11,7 @@ import {
   KeyboardAvoidingView, 
   Platform 
 } from 'react-native';
+import { colors, spacing, radius, shadows } from '../theme';
 import { 
   joinConsultationRoom, 
   leaveConsultationRoom, 
@@ -225,7 +226,7 @@ const ConsultationRoom = ({ booking, roomId, sessionId, onSessionEnd }) => {
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#F97316" />
+        <ActivityIndicator size="large" color={colors.primary} />
         <Text style={styles.loadingText}>Joining consultation room...</Text>
       </View>
     );
@@ -278,7 +279,7 @@ const ConsultationRoom = ({ booking, roomId, sessionId, onSessionEnd }) => {
       <View style={styles.contentArea}>
         {!astrologerPresent ? (
           <View style={styles.waitingContainer}>
-            <ActivityIndicator size="large" color="#F97316" />
+            <ActivityIndicator size="large" color={colors.primary} />
             <Text style={styles.waitingText}>Waiting for astrologer to join...</Text>
           </View>
         ) : (
@@ -327,7 +328,7 @@ const ConsultationRoom = ({ booking, roomId, sessionId, onSessionEnd }) => {
                 disabled={sendingMessage || !messageInput.trim()}
               >
                 {sendingMessage ? (
-                  <ActivityIndicator size="small" color="#FFFFFF" />
+                  <ActivityIndicator size="small" color={colors.textInverse} />
                 ) : (
                   <Text style={styles.sendButtonText}>Send</Text>
                 )}
@@ -353,29 +354,29 @@ const ConsultationRoom = ({ booking, roomId, sessionId, onSessionEnd }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F5F5F5',
+    backgroundColor: colors.surfaceSecondary,
   },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#F5F5F5',
+    backgroundColor: colors.surfaceSecondary,
   },
   loadingText: {
     marginTop: 16,
     fontSize: 16,
-    color: '#673AB7',
+    color: colors.primary,
   },
   errorContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
     padding: 20,
-    backgroundColor: '#F5F5F5',
+    backgroundColor: colors.surfaceSecondary,
   },
   errorText: {
     fontSize: 16,
-    color: '#F44336',
+    color: colors.error,
     marginBottom: 20,
     textAlign: 'center',
   },
@@ -384,9 +385,9 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     padding: 16,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
     borderBottomWidth: 1,
-    borderBottomColor: '#EEEEEE',
+    borderBottomColor: colors.border,
   },
   statusContainer: {
     flexDirection: 'row',
@@ -399,16 +400,16 @@ const styles = StyleSheet.create({
     marginRight: 8,
   },
   connectingIndicator: {
-    backgroundColor: '#FFA000',
+    backgroundColor: colors.warning,
   },
   connectedIndicator: {
-    backgroundColor: '#4CAF50',
+    backgroundColor: colors.success,
   },
   disconnectedIndicator: {
-    backgroundColor: '#F44336',
+    backgroundColor: colors.error,
   },
   completedIndicator: {
-    backgroundColor: '#9E9E9E',
+    backgroundColor: colors.textMuted,
   },
   statusText: {
     fontSize: 14,
@@ -419,32 +420,32 @@ const styles = StyleSheet.create({
   },
   timerLabel: {
     fontSize: 12,
-    color: '#757575',
+    color: colors.textMuted,
   },
   timerText: {
     fontSize: 16,
     fontWeight: 'bold',
-    color: '#212121',
+    color: colors.textPrimary,
   },
   billingContainer: {
-    padding: 16,
-    backgroundColor: '#673AB7',
+    padding: spacing.lg,
+    backgroundColor: colors.secondary,
     alignItems: 'center',
   },
   billingLabel: {
     fontSize: 14,
-    color: '#E1BEE7',
+    color: colors.secondaryMuted,
     marginBottom: 4,
   },
   billingAmount: {
     fontSize: 24,
     fontWeight: 'bold',
-    color: '#FFFFFF',
+    color: colors.textInverse,
     marginBottom: 4,
   },
   billingRate: {
     fontSize: 12,
-    color: '#E1BEE7',
+    color: colors.secondaryMuted,
   },
   contentArea: {
     flex: 1,
@@ -457,7 +458,7 @@ const styles = StyleSheet.create({
   },
   waitingText: {
     fontSize: 16,
-    color: '#666666',
+    color: colors.textSecondary,
     textAlign: 'center',
     marginTop: 16,
   },
@@ -481,40 +482,40 @@ const styles = StyleSheet.create({
   },
   userMessage: {
     alignSelf: 'flex-end',
-    backgroundColor: '#673AB7',
+    backgroundColor: colors.secondary,
   },
   astrologerMessage: {
     alignSelf: 'flex-start',
-    backgroundColor: '#E1E1E1',
+    backgroundColor: colors.surfaceSecondary,
   },
   messageText: {
     fontSize: 16,
-    color: '#FFFFFF',
+    color: colors.textInverse,
   },
   messageTime: {
     fontSize: 12,
-    color: 'rgba(255, 255, 255, 0.7)',
+    color: colors.textMuted,
     alignSelf: 'flex-end',
     marginTop: 4,
   },
   emptyChat: {
     textAlign: 'center',
-    color: '#999',
+    color: colors.textMuted,
     padding: 20,
   },
   inputContainer: {
     flexDirection: 'row',
     padding: 10,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
     borderTopWidth: 1,
-    borderTopColor: '#EEEEEE',
+    borderTopColor: colors.border,
   },
   input: {
     flex: 1,
     minHeight: 40,
     maxHeight: 100,
-    backgroundColor: '#F5F5F5',
-    borderRadius: 20,
+    backgroundColor: colors.background,
+    borderRadius: radius.full,
     paddingHorizontal: 15,
     paddingVertical: 10,
     marginRight: 10,
@@ -522,35 +523,35 @@ const styles = StyleSheet.create({
   sendButton: {
     width: 60,
     height: 40,
-    backgroundColor: '#673AB7',
-    borderRadius: 20,
+    backgroundColor: colors.secondary,
+    borderRadius: radius.full,
     justifyContent: 'center',
     alignItems: 'center',
   },
   sendButtonDisabled: {
-    backgroundColor: '#B39DDB',
+    backgroundColor: colors.secondaryMuted,
   },
   sendButtonText: {
-    color: '#FFFFFF',
+    color: colors.textInverse,
     fontWeight: 'bold',
   },
   actionsContainer: {
-    padding: 16,
-    backgroundColor: '#FFFFFF',
+    padding: spacing.lg,
+    backgroundColor: colors.surface,
     borderTopWidth: 1,
-    borderTopColor: '#EEEEEE',
+    borderTopColor: colors.border,
   },
   button: {
-    backgroundColor: '#673AB7',
+    backgroundColor: colors.secondary,
     paddingVertical: 12,
-    borderRadius: 8,
+    borderRadius: radius.sm,
     alignItems: 'center',
   },
   endButton: {
-    backgroundColor: '#F44336',
+    backgroundColor: colors.error,
   },
   buttonText: {
-    color: '#FFFFFF',
+    color: colors.textInverse,
     fontWeight: 'bold',
     fontSize: 16,
   },

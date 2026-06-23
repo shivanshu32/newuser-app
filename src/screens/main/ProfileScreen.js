@@ -13,6 +13,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import { colors, spacing, radius, shadows } from '../../theme';
 import { useAuth } from '../../context/AuthContext';
 import { useNotification } from '../../context/NotificationContext';
 import { APP_CONFIG } from '../../config/appConfig';
@@ -153,7 +154,7 @@ const ProfileScreen = ({ navigation }) => {
           style={styles.backButton} 
           onPress={() => navigation.navigate('Home')}
         >
-          <Ionicons name="arrow-back" size={24} color="#333" />
+          <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
         </TouchableOpacity>
         <Text style={styles.title}>Profile</Text>
       </View>
@@ -187,7 +188,7 @@ const ProfileScreen = ({ navigation }) => {
               <Ionicons
                 name={item.icon}
                 size={24}
-                color={item.danger ? '#F44336' : item.whatsapp ? '#25D366' : '#333'}
+                color={item.danger ? colors.error : item.whatsapp ? colors.success : colors.textPrimary}
               />
               <View style={styles.menuItemTextContainer}>
                 <Text
@@ -211,11 +212,11 @@ const ProfileScreen = ({ navigation }) => {
               <Switch
                 value={item.value}
                 onValueChange={item.onToggle}
-                trackColor={{ false: '#ccc', true: '#8A2BE2' }}
+                trackColor={{ false: colors.surfaceTertiary, true: colors.secondary }}
                 thumbColor="#fff"
               />
             ) : (
-              <Ionicons name="chevron-forward" size={24} color="#ccc" />
+              <Ionicons name="chevron-forward" size={24} color={colors.textMuted} />
             )}
           </TouchableOpacity>
         ))}
@@ -225,7 +226,7 @@ const ProfileScreen = ({ navigation }) => {
       
       {loading && (
         <View style={styles.loadingOverlay}>
-          <ActivityIndicator size="large" color="#F97316" />
+          <ActivityIndicator size="large" color={colors.primary} />
         </View>
       )}
       </ScrollView>
@@ -237,7 +238,7 @@ const ProfileScreen = ({ navigation }) => {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: '#f8f8f8',
+    backgroundColor: colors.background,
   },
   contentWrapper: {
     flex: 1,
@@ -246,36 +247,36 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   headerBar: {
-    padding: 16,
-    paddingTop: 8, // SafeAreaView now handles safe area properly
-    backgroundColor: '#fff',
+    padding: spacing.lg,
+    paddingTop: spacing.sm,
+    backgroundColor: colors.surface,
     borderBottomWidth: 1,
-    borderBottomColor: '#eee',
+    borderBottomColor: colors.divider,
     flexDirection: 'row',
     justifyContent: 'flex-start',
     alignItems: 'center',
   },
   backButton: {
-    marginRight: 16,
-    padding: 8,
-    borderRadius: 20,
-    backgroundColor: '#f0f0f0',
+    marginRight: spacing.lg,
+    padding: spacing.sm,
+    borderRadius: radius.full,
+    backgroundColor: colors.surfaceSecondary,
   },
   title: {
     fontSize: 20,
     fontWeight: 'bold',
-    color: '#333',
+    color: colors.textPrimary,
     flex: 1,
   },
   container: {
     flex: 1,
   },
   header: {
-    backgroundColor: '#fff',
-    padding: 20,
+    backgroundColor: colors.surface,
+    padding: spacing.xl,
     alignItems: 'center',
     borderBottomWidth: 1,
-    borderBottomColor: '#eee',
+    borderBottomColor: colors.divider,
   },
   profileImageContainer: {
     position: 'relative',
@@ -290,7 +291,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     bottom: 0,
     right: 0,
-    backgroundColor: '#8A2BE2',
+    backgroundColor: colors.secondary,
     width: 30,
     height: 30,
     borderRadius: 15,
@@ -300,18 +301,19 @@ const styles = StyleSheet.create({
   userName: {
     fontSize: 20,
     fontWeight: 'bold',
+    color: colors.textPrimary,
     marginBottom: 5,
   },
   userPhone: {
     fontSize: 16,
-    color: '#666',
+    color: colors.textMuted,
     marginBottom: 20,
   },
   statsContainer: {
     flexDirection: 'row',
     width: '100%',
     borderTopWidth: 1,
-    borderTopColor: '#eee',
+    borderTopColor: colors.divider,
     paddingTop: 20,
   },
   statItem: {
@@ -320,26 +322,27 @@ const styles = StyleSheet.create({
   },
   statDivider: {
     borderLeftWidth: 1,
-    borderLeftColor: '#eee',
+    borderLeftColor: colors.divider,
     borderRightWidth: 1,
-    borderRightColor: '#eee',
+    borderRightColor: colors.divider,
   },
   statValue: {
     fontSize: 18,
     fontWeight: 'bold',
+    color: colors.textPrimary,
     marginBottom: 5,
   },
   statLabel: {
     fontSize: 14,
-    color: '#666',
+    color: colors.textMuted,
   },
   menuContainer: {
-    backgroundColor: '#fff',
+    backgroundColor: colors.surface,
     marginTop: 20,
     borderTopWidth: 1,
-    borderTopColor: '#eee',
+    borderTopColor: colors.divider,
     borderBottomWidth: 1,
-    borderBottomColor: '#eee',
+    borderBottomColor: colors.divider,
   },
   menuItem: {
     flexDirection: 'row',
@@ -348,7 +351,7 @@ const styles = StyleSheet.create({
     paddingVertical: 15,
     paddingHorizontal: 20,
     borderBottomWidth: 1,
-    borderBottomColor: '#eee',
+    borderBottomColor: colors.divider,
   },
   menuItemLeft: {
     flexDirection: 'row',
@@ -361,23 +364,24 @@ const styles = StyleSheet.create({
   },
   menuItemTitle: {
     fontSize: 16,
+    color: colors.textPrimary,
   },
   menuItemTitleDanger: {
-    color: '#F44336',
+    color: colors.error,
   },
   menuItemTitleWhatsApp: {
-    color: '#25D366',
+    color: colors.success,
     fontWeight: '600',
   },
   menuItemSubtitle: {
     fontSize: 12,
-    color: '#666',
+    color: colors.textMuted,
     marginTop: 2,
   },
   versionText: {
     textAlign: 'center',
     marginVertical: 20,
-    color: '#666',
+    color: colors.textMuted,
     fontSize: 14,
   },
   loadingOverlay: {
@@ -386,7 +390,7 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: 'rgba(255, 255, 255, 0.7)',
+    backgroundColor: colors.overlay,
     justifyContent: 'center',
     alignItems: 'center',
   },

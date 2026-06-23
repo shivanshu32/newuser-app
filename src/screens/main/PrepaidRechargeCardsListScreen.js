@@ -8,6 +8,7 @@ import {
   ActivityIndicator,
   Alert,
 } from 'react-native';
+import { colors } from '../../theme';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons, Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
@@ -86,12 +87,12 @@ const PrepaidRechargeCardsListScreen = () => {
           </Text>
 
           <View style={styles.infoRow}>
-            <Ionicons name="time-outline" size={16} color="#4CAF50" />
+            <Ionicons name="time-outline" size={16} color="colors.success" />
             <Text style={styles.infoText}>{card.durationMinutes} min chat</Text>
           </View>
 
           <View style={styles.applicabilityRow}>
-            <Ionicons name="people-outline" size={14} color="#FF6B35" />
+            <Ionicons name="people-outline" size={14} color="colors.primary" />
             <Text style={styles.applicabilityText}>
               {card.astrologerAssignment === 'specific'
                 ? 'Selected astrologers'
@@ -110,7 +111,7 @@ const PrepaidRechargeCardsListScreen = () => {
             <View style={styles.features}>
               {card.features.slice(0, 2).map((feature, index) => (
                 <View key={index} style={styles.featureRow}>
-                  <Ionicons name="checkmark-circle" size={14} color="#4CAF50" />
+                  <Ionicons name="checkmark-circle" size={14} color="colors.success" />
                   <Text style={styles.featureText} numberOfLines={1}>
                     {feature}
                   </Text>
@@ -139,7 +140,7 @@ const PrepaidRechargeCardsListScreen = () => {
             activeOpacity={0.85}
           >
             <LinearGradient
-              colors={['#4CAF50', '#45B649']}
+              colors={[colors.success, '#45B649']}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 0 }}
               style={styles.buyButtonGradient}
@@ -157,13 +158,13 @@ const PrepaidRechargeCardsListScreen = () => {
       <SafeAreaView style={styles.container}>
         <View style={styles.header}>
           <TouchableOpacity onPress={() => navigation.goBack()}>
-            <MaterialIcons name="arrow-back" size={24} color="#333" />
+            <MaterialIcons name="arrow-back" size={24} color="colors.textPrimary" />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>Prepaid Chat Packs</Text>
           <View style={{ width: 24 }} />
         </View>
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#F97316" />
+          <ActivityIndicator size="large" color="colors.primary" />
           <Text style={styles.loadingText}>Loading prepaid chat packs...</Text>
         </View>
       </SafeAreaView>
@@ -174,7 +175,7 @@ const PrepaidRechargeCardsListScreen = () => {
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()}>
-          <MaterialIcons name="arrow-back" size={24} color="#333" />
+          <MaterialIcons name="arrow-back" size={24} color="colors.textPrimary" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Prepaid Chat Packs</Text>
         <View style={{ width: 24 }} />
@@ -182,7 +183,7 @@ const PrepaidRechargeCardsListScreen = () => {
 
       {cards.length === 0 ? (
         <View style={styles.emptyContainer}>
-          <Ionicons name="card-outline" size={60} color="#ccc" />
+          <Ionicons name="card-outline" size={60} color="colors.border" />
           <Text style={styles.emptyText}>No prepaid chat packs available</Text>
         </View>
       ) : (
@@ -202,7 +203,7 @@ const PrepaidRechargeCardsListScreen = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F8F9FA',
+    backgroundColor: colors.background,
   },
   header: {
     flexDirection: 'row',
@@ -210,14 +211,14 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: 20,
     paddingVertical: 15,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
     borderBottomWidth: 1,
-    borderBottomColor: '#E0E0E0',
+    borderBottomColor: colors.border,
   },
   headerTitle: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#333',
+    color: colors.textPrimary,
   },
   loadingContainer: {
     flex: 1,
@@ -227,7 +228,7 @@ const styles = StyleSheet.create({
   loadingText: {
     marginTop: 10,
     fontSize: 16,
-    color: '#666',
+    color: colors.textSecondary,
   },
   emptyContainer: {
     flex: 1,
@@ -238,7 +239,7 @@ const styles = StyleSheet.create({
   emptyText: {
     marginTop: 10,
     fontSize: 16,
-    color: '#666',
+    color: colors.textSecondary,
     textAlign: 'center',
   },
   listContent: {
@@ -252,7 +253,7 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   card: {
-    backgroundColor: '#fff',
+    backgroundColor: colors.surface,
     borderRadius: 12,
     padding: 12,
     shadowColor: '#000',
@@ -287,7 +288,7 @@ const styles = StyleSheet.create({
     elevation: 5,
   },
   ribbonBadgeText: {
-    color: '#fff',
+    color: colors.surface,
     fontSize: 8,
     fontWeight: '800',
     letterSpacing: 0.8,
@@ -320,7 +321,7 @@ const styles = StyleSheet.create({
   cardTitle: {
     fontSize: 15,
     fontWeight: '700',
-    color: '#333',
+    color: colors.textPrimary,
     marginBottom: 8,
     textAlign: 'center',
     marginTop: 18,
@@ -329,7 +330,7 @@ const styles = StyleSheet.create({
   infoRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#E8F5E9',
+    backgroundColor: colors.successMuted,
     paddingVertical: 6,
     paddingHorizontal: 8,
     borderRadius: 6,
@@ -338,7 +339,7 @@ const styles = StyleSheet.create({
   infoText: {
     fontSize: 13,
     fontWeight: '600',
-    color: '#2E7D32',
+    color: colors.success,
     marginLeft: 6,
   },
   applicabilityRow: {
@@ -350,7 +351,7 @@ const styles = StyleSheet.create({
     borderRadius: 6,
     marginTop: 6,
     borderLeftWidth: 2,
-    borderLeftColor: '#FF6B35',
+    borderLeftColor: colors.primary,
   },
   applicabilityText: {
     fontSize: 12,
@@ -368,7 +369,7 @@ const styles = StyleSheet.create({
   },
   featureText: {
     fontSize: 12,
-    color: '#666',
+    color: colors.textSecondary,
     marginLeft: 6,
     flex: 1,
   },
@@ -378,24 +379,24 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingTop: 12,
     borderTopWidth: 1,
-    borderTopColor: '#f0f0f0',
+    borderTopColor: colors.surfaceSecondary,
   },
   priceContainer: {
     flex: 1,
   },
   priceLabel: {
     fontSize: 12,
-    color: '#666',
+    color: colors.textSecondary,
   },
   priceValue: {
     fontSize: 18,
     fontWeight: '700',
-    color: '#F97316',
+    color: colors.primary,
   },
   perMinute: {
     fontSize: 11,
     fontWeight: '600',
-    color: '#666',
+    color: colors.textSecondary,
     marginTop: 2,
   },
   buyButton: {
@@ -409,7 +410,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   buyButtonText: {
-    color: '#fff',
+    color: colors.surface,
     fontSize: 14,
     fontWeight: '700',
   },

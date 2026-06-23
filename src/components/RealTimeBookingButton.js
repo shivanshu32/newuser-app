@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator, Alert } from 'react-native';
+import { colors } from '../theme';
 import { useSocket } from '../context/SocketContext';
 import { bookingsAPI } from '../services/api';
 
@@ -129,17 +130,17 @@ const RealTimeBookingButton = ({ astrologer, type, onBookingInitiated, onBooking
   const getButtonColor = () => {
     switch (status) {
       case 'idle':
-        return '#FF5722';
+        return colors.primary;
       case 'pending':
-        return '#FF9800';
+        return colors.warning;
       case 'accepted':
-        return '#4CAF50';
+        return colors.success;
       case 'rejected':
       case 'expired':
       case 'cancelled':
-        return '#F44336';
+        return colors.error;
       default:
-        return '#FF5722';
+        return colors.primary;
     }
   };
 
@@ -286,7 +287,7 @@ const RealTimeBookingButton = ({ astrologer, type, onBookingInitiated, onBooking
         disabled={isDisabled}
       >
         {loading && status === 'pending' ? (
-          <ActivityIndicator size="small" color="#fff" />
+          <ActivityIndicator size="small" color={colors.textInverse} />
         ) : (
           <Text style={styles.buttonText}>{getButtonText()}</Text>
         )}
@@ -311,7 +312,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   button: {
-    backgroundColor: '#FF5722',
+    backgroundColor: colors.primary,
     paddingVertical: 12,
     paddingHorizontal: 20,
     borderRadius: 8,
@@ -323,12 +324,12 @@ const styles = StyleSheet.create({
     opacity: 0.6,
   },
   buttonText: {
-    color: '#fff',
+    color: colors.textInverse,
     fontSize: 16,
     fontWeight: 'bold',
   },
   cancelButton: {
-    backgroundColor: '#fff',
+    backgroundColor: colors.surface,
     borderWidth: 1,
     borderColor: '#F44336',
     paddingVertical: 8,
@@ -337,21 +338,21 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   cancelButtonText: {
-    color: '#F44336',
+    color: colors.error,
     fontSize: 14,
     fontWeight: '500',
   },
   retryButton: {
-    backgroundColor: '#fff',
+    backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: '#FF5722',
+    borderColor: colors.primary,
     paddingVertical: 8,
     paddingHorizontal: 16,
     borderRadius: 6,
     alignItems: 'center',
   },
   retryButtonText: {
-    color: '#FF5722',
+    color: colors.primary,
     fontSize: 14,
     fontWeight: '500',
   },

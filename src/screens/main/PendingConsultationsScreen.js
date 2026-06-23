@@ -17,6 +17,7 @@ import { useSocket } from '../../context/SocketContext';
 import { useAuth } from '../../context/AuthContext';
 import { bookingsAPI } from '../../services/api';
 import { getPendingConsultations, removePendingConsultation } from '../../utils/pendingConsultationsStore';
+import { colors, spacing, radius, shadows } from '../../theme';
 
 const PendingConsultationsScreen = () => {
   const navigation = useNavigation();
@@ -296,7 +297,7 @@ const PendingConsultationsScreen = () => {
             
             {/* Live Timer Display */}
             <View style={styles.timerContainer}>
-              <Ionicons name="time-outline" size={16} color="#007AFF" />
+              <Ionicons name="time-outline" size={16} color={colors.secondary} />
               <Text style={styles.timerText}>
                 {isTimerActive ? (
                   timerData.isCountdown ? 
@@ -317,7 +318,7 @@ const PendingConsultationsScreen = () => {
             <Ionicons 
               name={bookingType === 'chat' ? 'chatbubble' : bookingType === 'video' ? 'videocam' : 'call'} 
               size={24} 
-              color="#007AFF" 
+              color={colors.secondary} 
             />
           </View>
         </View>
@@ -367,7 +368,7 @@ const PendingConsultationsScreen = () => {
             <Ionicons 
               name={bookingType === 'chat' ? 'chatbubble' : bookingType === 'video' ? 'videocam' : 'call'} 
               size={24} 
-              color="#007AFF" 
+              color={colors.secondary} 
             />
           </View>
         </View>
@@ -386,7 +387,7 @@ const PendingConsultationsScreen = () => {
 
   const renderEmptyState = () => (
     <View style={styles.emptyState}>
-      <Ionicons name="calendar-outline" size={64} color="#C7C7CC" />
+      <Ionicons name="calendar-outline" size={64} color={colors.textMuted} />
       <Text style={styles.emptyStateTitle}>No Pending Consultations</Text>
       <Text style={styles.emptyStateSubtitle}>
         Your accepted booking requests will appear here
@@ -420,14 +421,14 @@ const PendingConsultationsScreen = () => {
           style={styles.backButton}
           onPress={() => navigation.goBack()}
         >
-          <Ionicons name="arrow-back" size={24} color="#333" />
+          <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Consultations</Text>
         <TouchableOpacity 
           style={styles.refreshButton}
           onPress={onRefresh}
         >
-          <Ionicons name="refresh" size={24} color="#007AFF" />
+          <Ionicons name="refresh" size={24} color={colors.secondary} />
         </TouchableOpacity>
       </View>
 
@@ -477,7 +478,7 @@ const PendingConsultationsScreen = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F8F9FA',
+    backgroundColor: colors.background,
   },
   header: {
     flexDirection: 'row',
@@ -485,9 +486,9 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: 20,
     paddingVertical: 15,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
     borderBottomWidth: 1,
-    borderBottomColor: '#E5E5EA',
+    borderBottomColor: colors.divider,
   },
   backButton: {
     padding: 8,
@@ -495,7 +496,7 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#000000',
+    color: colors.textPrimary,
   },
   refreshButton: {
     padding: 8,
@@ -521,10 +522,10 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 18,
     fontWeight: '700',
-    color: '#000000',
+    color: colors.textPrimary,
   },
   countBadge: {
-    backgroundColor: '#007AFF',
+    backgroundColor: colors.secondary,
     borderRadius: 12,
     paddingHorizontal: 8,
     paddingVertical: 4,
@@ -532,17 +533,17 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   countText: {
-    color: '#FFFFFF',
+    color: colors.textInverse,
     fontSize: 12,
     fontWeight: '600',
   },
   // Consultation Cards
   consultationCard: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
     borderRadius: 12,
     padding: 16,
     marginBottom: 12,
-    shadowColor: '#000',
+    shadowColor: colors.shadow,
     shadowOffset: {
       width: 0,
       height: 2,
@@ -553,15 +554,15 @@ const styles = StyleSheet.create({
   },
   inProgressCard: {
     borderLeftWidth: 4,
-    borderLeftColor: '#34C759',
-    backgroundColor: '#F8FFF9',
+    borderLeftColor: colors.success,
+    backgroundColor: colors.successMuted,
   },
   // Status Badge for In-Progress
   statusBadge: {
     flexDirection: 'row',
     alignItems: 'center',
     alignSelf: 'flex-start',
-    backgroundColor: '#34C759',
+    backgroundColor: colors.success,
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 12,
@@ -571,11 +572,11 @@ const styles = StyleSheet.create({
     width: 6,
     height: 6,
     borderRadius: 3,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
     marginRight: 6,
   },
   statusText: {
-    color: '#FFFFFF',
+    color: colors.textInverse,
     fontSize: 10,
     fontWeight: '700',
     letterSpacing: 0.5,
@@ -597,17 +598,17 @@ const styles = StyleSheet.create({
   astrologerName: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#000000',
+    color: colors.textPrimary,
     marginBottom: 4,
   },
   consultationType: {
     fontSize: 14,
-    color: '#666666',
+    color: colors.textSecondary,
     marginBottom: 4,
   },
   consultationStatus: {
     fontSize: 12,
-    color: '#007AFF',
+    color: colors.secondary,
     fontWeight: '500',
   },
   // Timer Display
@@ -618,13 +619,13 @@ const styles = StyleSheet.create({
   },
   timerText: {
     fontSize: 14,
-    color: '#007AFF',
+    color: colors.secondary,
     fontWeight: '600',
     marginLeft: 4,
   },
   billingText: {
     fontSize: 12,
-    color: '#666666',
+    color: colors.textSecondary,
     fontWeight: '500',
   },
   typeIcon: {
@@ -637,36 +638,36 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   joinButton: {
-    backgroundColor: '#007AFF',
+    backgroundColor: colors.secondary,
     paddingHorizontal: 20,
     paddingVertical: 10,
     borderRadius: 8,
   },
   joinButtonText: {
-    color: '#FFFFFF',
+    color: colors.textInverse,
     fontSize: 14,
     fontWeight: '600',
   },
   rejoinButton: {
-    backgroundColor: '#007AFF',
+    backgroundColor: colors.secondary,
     paddingHorizontal: 16,
     paddingVertical: 8,
     borderRadius: 8,
     marginRight: 8,
   },
   rejoinButtonText: {
-    color: '#FFFFFF',
+    color: colors.textInverse,
     fontSize: 12,
     fontWeight: '600',
   },
   endButton: {
-    backgroundColor: '#FF3B30',
+    backgroundColor: colors.error,
     paddingHorizontal: 16,
     paddingVertical: 8,
     borderRadius: 8,
   },
   endButtonText: {
-    color: '#FFFFFF',
+    color: colors.textInverse,
     fontSize: 12,
     fontWeight: '600',
   },
@@ -678,25 +679,25 @@ const styles = StyleSheet.create({
   emptyStateTitle: {
     fontSize: 20,
     fontWeight: '600',
-    color: '#000000',
+    color: colors.textPrimary,
     marginTop: 16,
     marginBottom: 8,
   },
   emptyStateSubtitle: {
     fontSize: 16,
-    color: '#666666',
+    color: colors.textSecondary,
     textAlign: 'center',
     lineHeight: 22,
     marginBottom: 24,
   },
   browseButton: {
-    backgroundColor: '#007AFF',
+    backgroundColor: colors.secondary,
     paddingHorizontal: 24,
     paddingVertical: 12,
     borderRadius: 8,
   },
   browseButtonText: {
-    color: '#FFFFFF',
+    color: colors.textInverse,
     fontSize: 16,
     fontWeight: '600',
   },

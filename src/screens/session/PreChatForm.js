@@ -19,6 +19,7 @@ import { useAuth } from '../../context/AuthContext';
 import { useSocket } from '../../context/SocketContext';
 import { walletAPI } from '../../services/api';
 import GooglePlacesInput from '../../components/GooglePlacesInput';
+import { colors, spacing, radius, shadows } from '../../theme';
 
 const PreChatForm = ({ route, navigation }) => {
   const { astrologer, bookingType = 'chat' } = route.params || {};
@@ -475,7 +476,7 @@ const PreChatForm = ({ route, navigation }) => {
             style={styles.backButton} 
             onPress={() => navigation.goBack()}
           >
-            <Ionicons name="arrow-back" size={24} color="#333" />
+            <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>Consultation Details</Text>
           <View style={styles.headerSpacer} />
@@ -499,7 +500,7 @@ const PreChatForm = ({ route, navigation }) => {
 
           {/* Form Instructions */}
           <View style={styles.instructionsCard}>
-            <Ionicons name="information-circle" size={24} color="#F97316" />
+            <Ionicons name="information-circle" size={24} color={colors.primary} />
             <View style={styles.instructionsText}>
               <Text style={styles.instructionsTitle}>Required Information</Text>
               <Text style={styles.instructionsSubtitle}>
@@ -518,7 +519,7 @@ const PreChatForm = ({ route, navigation }) => {
                 value={formData.name}
                 onChangeText={(value) => handleInputChange('name', value)}
                 placeholder="Enter your full name"
-                placeholderTextColor="#999"
+                placeholderTextColor={colors.textMuted}
                 autoCapitalize="words"
                 autoCorrect={false}
               />
@@ -533,7 +534,7 @@ const PreChatForm = ({ route, navigation }) => {
                 onPress={() => setShowDatePicker(true)}
               >
                 <Text style={styles.dateText}>{formatDate(formData.dateOfBirth)}</Text>
-                <Ionicons name="calendar-outline" size={20} color="#666" />
+                <Ionicons name="calendar-outline" size={20} color={colors.textSecondary} />
               </TouchableOpacity>
               {errors.dateOfBirth && <Text style={styles.errorText}>{errors.dateOfBirth}</Text>}
             </View>
@@ -548,7 +549,7 @@ const PreChatForm = ({ route, navigation }) => {
                 onPress={() => handleTimeOfBirthUnknownChange(!isTimeOfBirthUnknown)}
               >
                 <View style={[styles.checkbox, isTimeOfBirthUnknown && styles.checkboxChecked]}>
-                  {isTimeOfBirthUnknown && <Ionicons name="checkmark" size={16} color="#fff" />}
+                  {isTimeOfBirthUnknown && <Ionicons name="checkmark" size={16} color={colors.textInverse} />}
                 </View>
                 <Text style={styles.checkboxLabel}>I don't know my time of birth</Text>
               </TouchableOpacity>
@@ -572,7 +573,7 @@ const PreChatForm = ({ route, navigation }) => {
                 <Ionicons 
                   name="time-outline" 
                   size={20} 
-                  color={isTimeOfBirthUnknown ? "#ccc" : "#666"} 
+                  color={isTimeOfBirthUnknown ? colors.surfaceTertiary : colors.textSecondary} 
                 />
               </TouchableOpacity>
               {errors.timeOfBirth && <Text style={styles.errorText}>{errors.timeOfBirth}</Text>}
@@ -591,7 +592,7 @@ const PreChatForm = ({ route, navigation }) => {
                 ]}>
                   {getGenderDisplayText(formData.gender)}
                 </Text>
-                <Ionicons name="chevron-down" size={20} color="#666" />
+                <Ionicons name="chevron-down" size={20} color={colors.textSecondary} />
               </TouchableOpacity>
               {errors.gender && <Text style={styles.errorText}>{errors.gender}</Text>}
             </View>
@@ -617,7 +618,7 @@ const PreChatForm = ({ route, navigation }) => {
                   }
                 }}
                 placeholder="Search for your birth city..."
-                inputStyle={errors.placeOfBirth ? { borderColor: '#ef4444' } : {}}
+                inputStyle={errors.placeOfBirth ? { borderColor: colors.error } : {}}
               />
               {errors.placeOfBirth && <Text style={styles.errorText}>{errors.placeOfBirth}</Text>}
             </View>
@@ -625,7 +626,7 @@ const PreChatForm = ({ route, navigation }) => {
 
           {/* Privacy Note */}
           <View style={styles.privacyNote}>
-            <Ionicons name="shield-checkmark" size={20} color="#10B981" />
+            <Ionicons name="shield-checkmark" size={20} color={colors.success} />
             <Text style={styles.privacyText}>
               Your information is secure and will only be shared with your astrologer for consultation purposes.
             </Text>
@@ -640,13 +641,13 @@ const PreChatForm = ({ route, navigation }) => {
             disabled={loading}
           >
             {loading ? (
-              <ActivityIndicator color="#fff" size="small" />
+              <ActivityIndicator color={colors.textInverse} size="small" />
             ) : (
               <>
                 <Text style={styles.submitButtonText}>
                   Start {bookingType.charAt(0).toUpperCase() + bookingType.slice(1)} Consultation
                 </Text>
-                <Ionicons name="arrow-forward" size={20} color="#fff" />
+                <Ionicons name="arrow-forward" size={20} color={colors.textInverse} />
               </>
             )}
           </TouchableOpacity>
@@ -689,7 +690,7 @@ const PreChatForm = ({ route, navigation }) => {
                   style={styles.modalCloseButton}
                   onPress={() => setShowGenderModal(false)}
                 >
-                  <Ionicons name="close" size={24} color="#666" />
+                  <Ionicons name="close" size={24} color={colors.textSecondary} />
                 </TouchableOpacity>
               </View>
               
@@ -710,7 +711,7 @@ const PreChatForm = ({ route, navigation }) => {
                       {option.label}
                     </Text>
                     {formData.gender === option.value && (
-                      <Ionicons name="checkmark" size={20} color="#F97316" />
+                      <Ionicons name="checkmark" size={20} color={colors.primary} />
                     )}
                   </TouchableOpacity>
                 ))}
@@ -726,7 +727,7 @@ const PreChatForm = ({ route, navigation }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f8f9fa',
+    backgroundColor: colors.background,
   },
   keyboardAvoid: {
     flex: 1,
@@ -736,9 +737,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 16,
     paddingVertical: 12,
-    backgroundColor: '#fff',
+    backgroundColor: colors.surface,
     borderBottomWidth: 1,
-    borderBottomColor: '#e5e7eb',
+    borderBottomColor: colors.divider,
   },
   backButton: {
     padding: 8,
@@ -748,7 +749,7 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 18,
     fontWeight: '600',
-    color: '#1f2937',
+    color: colors.textPrimary,
     textAlign: 'center',
   },
   headerSpacer: {
@@ -759,12 +760,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
   },
   astrologerCard: {
-    backgroundColor: '#fff',
+    backgroundColor: colors.surface,
     borderRadius: 12,
     padding: 16,
     marginTop: 16,
     alignItems: 'center',
-    shadowColor: '#000',
+    shadowColor: colors.shadow,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 4,
@@ -773,17 +774,17 @@ const styles = StyleSheet.create({
   astrologerName: {
     fontSize: 20,
     fontWeight: '700',
-    color: '#1f2937',
+    color: colors.textPrimary,
     marginBottom: 4,
   },
   consultationType: {
     fontSize: 16,
-    color: '#F97316',
+    color: colors.primary,
     fontWeight: '500',
   },
   instructionsCard: {
     flexDirection: 'row',
-    backgroundColor: '#FEF3E2',
+    backgroundColor: colors.primaryMuted,
     borderRadius: 12,
     padding: 16,
     marginTop: 16,
@@ -796,12 +797,12 @@ const styles = StyleSheet.create({
   instructionsTitle: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#92400E',
+    color: colors.warning,
     marginBottom: 4,
   },
   instructionsSubtitle: {
     fontSize: 14,
-    color: '#A16207',
+    color: colors.warningMuted,
     lineHeight: 20,
   },
   formContainer: {
@@ -813,21 +814,21 @@ const styles = StyleSheet.create({
   fieldLabel: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#374151',
+    color: colors.textSecondary,
     marginBottom: 8,
   },
   textInput: {
-    backgroundColor: '#fff',
+    backgroundColor: colors.surface,
     borderRadius: 8,
     paddingHorizontal: 16,
     paddingVertical: 12,
     fontSize: 16,
-    color: '#1f2937',
+    color: colors.textPrimary,
     borderWidth: 1,
-    borderColor: '#d1d5db',
+    borderColor: colors.border,
   },
   dateInput: {
-    backgroundColor: '#fff',
+    backgroundColor: colors.surface,
     borderRadius: 8,
     paddingHorizontal: 16,
     paddingVertical: 12,
@@ -835,23 +836,23 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: '#d1d5db',
+    borderColor: colors.border,
   },
   dateText: {
     fontSize: 16,
-    color: '#1f2937',
+    color: colors.textPrimary,
   },
   inputError: {
-    borderColor: '#ef4444',
+    borderColor: colors.error,
   },
   errorText: {
     fontSize: 14,
-    color: '#ef4444',
+    color: colors.error,
     marginTop: 4,
   },
   privacyNote: {
     flexDirection: 'row',
-    backgroundColor: '#ECFDF5',
+    backgroundColor: colors.successMuted,
     borderRadius: 8,
     padding: 12,
     marginTop: 16,
@@ -861,19 +862,19 @@ const styles = StyleSheet.create({
   privacyText: {
     flex: 1,
     fontSize: 14,
-    color: '#065F46',
+    color: colors.success,
     marginLeft: 8,
     lineHeight: 18,
   },
   submitContainer: {
     paddingHorizontal: 16,
     paddingVertical: 16,
-    backgroundColor: '#fff',
+    backgroundColor: colors.surface,
     borderTopWidth: 1,
-    borderTopColor: '#e5e7eb',
+    borderTopColor: colors.divider,
   },
   submitButton: {
-    backgroundColor: '#F97316',
+    backgroundColor: colors.primary,
     borderRadius: 12,
     paddingVertical: 16,
     paddingHorizontal: 24,
@@ -882,12 +883,12 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   submitButtonDisabled: {
-    backgroundColor: '#d1d5db',
+    backgroundColor: colors.surfaceTertiary,
   },
   submitButtonText: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#fff',
+    color: colors.textInverse,
     marginRight: 8,
   },
   // Checkbox styles
@@ -901,30 +902,30 @@ const styles = StyleSheet.create({
     height: 20,
     borderRadius: 4,
     borderWidth: 2,
-    borderColor: '#d1d5db',
-    backgroundColor: '#fff',
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
     marginRight: 8,
     alignItems: 'center',
     justifyContent: 'center',
   },
   checkboxChecked: {
-    backgroundColor: '#F97316',
-    borderColor: '#F97316',
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
   },
   checkboxLabel: {
     fontSize: 14,
-    color: '#6b7280',
+    color: colors.textSecondary,
   },
   // Disabled input styles
   inputDisabled: {
-    backgroundColor: '#f9fafb',
-    borderColor: '#e5e7eb',
+    backgroundColor: colors.surfaceSecondary,
+    borderColor: colors.divider,
   },
   disabledText: {
-    color: '#9ca3af',
+    color: colors.textMuted,
   },
   placeholderText: {
-    color: '#9ca3af',
+    color: colors.textMuted,
   },
   // Modal styles
   modalOverlay: {
@@ -933,7 +934,7 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   modalContent: {
-    backgroundColor: '#fff',
+    backgroundColor: colors.surface,
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
     paddingBottom: 34,
@@ -955,19 +956,19 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     borderRadius: 8,
     marginVertical: 4,
-    backgroundColor: '#f9fafb',
+    backgroundColor: colors.surfaceSecondary,
   },
   genderOptionSelected: {
-    backgroundColor: '#FEF3E2',
+    backgroundColor: colors.primaryMuted,
     borderWidth: 1,
-    borderColor: '#F97316',
+    borderColor: colors.primary,
   },
   genderOptionText: {
     fontSize: 16,
-    color: '#1f2937',
+    color: colors.textPrimary,
   },
   genderOptionTextSelected: {
-    color: '#F97316',
+    color: colors.primary,
     fontWeight: '600',
   },
   googlePlacesContainer: {

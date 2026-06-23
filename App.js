@@ -5,6 +5,7 @@ import { NavigationContainer } from '@react-navigation/native';
 import { ActivityIndicator, View, Text } from 'react-native';
 // import LogRocket from '@logrocket/react-native'; // Temporarily disabled due to build issues
 import Constants from 'expo-constants';
+import { colors } from './src/theme';
 
 // Initialize LogRocket safely - only in development or when safe
 try {
@@ -51,7 +52,7 @@ function AppContent() {
   const { checkForUpdatesOnLaunch } = useVersionCheck();
   const [updateRequired, setUpdateRequired] = useState(null);
   const [versionCheckComplete, setVersionCheckComplete] = useState(false);
-  
+
   // Analytics and crash tracking initialization (completely non-blocking)
   useEffect(() => {
     console.log('📊 [APP] Analytics disabled - skipping initialization');
@@ -125,10 +126,10 @@ function AppContent() {
   // Show loading only during initial auth check
   if (initialLoading) {
     return (
-      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-        <ActivityIndicator size="large" color="#F97316" />
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: colors.background }}>
+        <ActivityIndicator size="large" color={colors.primary} />
         <View style={{ marginTop: 16, alignItems: 'center' }}>
-          <Text style={{ color: '#6B7280', fontSize: 16 }}>Loading...</Text>
+          <Text style={{ color: colors.textMuted, fontSize: 16 }}>Loading...</Text>
         </View>
       </View>
     );
@@ -204,7 +205,7 @@ export default function App() {
               </ContextErrorBoundary>
             </AuthProvider>
           </ContextErrorBoundary>
-          <StatusBar style="auto" />
+          <StatusBar style="dark" backgroundColor={colors.background} />
         </EdgeToEdgeHandler>
       </SafeAreaProvider>
     </ErrorBoundary>

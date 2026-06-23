@@ -13,6 +13,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 import versionService from '../services/versionService';
 import { APP_CONFIG } from '../config/appConfig';
+import { colors, spacing, radius, shadows } from '../theme';
 
 const UpdateRequiredScreen = ({ route }) => {
   const {
@@ -59,7 +60,7 @@ const UpdateRequiredScreen = ({ route }) => {
       <View style={styles.content}>
         {/* App Icon/Logo */}
         <View style={styles.iconContainer}>
-          <Ionicons name="refresh-circle" size={120} color="#F97316" />
+          <Ionicons name="refresh-circle" size={120} color={colors.primary} />
         </View>
 
         {/* Title */}
@@ -87,11 +88,11 @@ const UpdateRequiredScreen = ({ route }) => {
         <View style={styles.featuresContainer}>
           <Text style={styles.featuresTitle}>What's New:</Text>
           <View style={styles.featureItem}>
-            <Ionicons name="checkmark-circle" size={20} color="#4CAF50" />
+            <Ionicons name="checkmark-circle" size={20} color={colors.success} />
             <Text style={styles.featureText}>Enhanced user experience</Text>
           </View>
           <View style={styles.featureItem}>
-            <Ionicons name="checkmark-circle" size={20} color="#4CAF50" />
+            <Ionicons name="checkmark-circle" size={20} color={colors.success} />
             <Text style={styles.featureText}>Bug fixes and improvements</Text>
           </View>
           
@@ -99,7 +100,7 @@ const UpdateRequiredScreen = ({ route }) => {
 
         {/* Update Button */}
         <TouchableOpacity style={styles.updateButton} onPress={handleUpdatePress}>
-          <Ionicons name="download" size={24} color="#FFFFFF" />
+          <Ionicons name="download" size={24} color={colors.textInverse} />
           <Text style={styles.updateButtonText}>Update Now</Text>
         </TouchableOpacity>
 
@@ -118,7 +119,7 @@ const UpdateRequiredScreen = ({ route }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
   },
   content: {
     flex: 1,
@@ -134,18 +135,18 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 28,
     fontWeight: 'bold',
-    color: '#1F2937',
+    color: colors.textPrimary,
     marginBottom: 24,
     textAlign: 'center',
   },
   versionContainer: {
-    backgroundColor: '#F9FAFB',
+    backgroundColor: colors.background,
     borderRadius: 12,
     padding: 16,
     marginBottom: 24,
     width: '100%',
     borderWidth: 1,
-    borderColor: '#E5E7EB',
+    borderColor: colors.surfaceTertiary,
   },
   versionRow: {
     flexDirection: 'row',
@@ -155,22 +156,22 @@ const styles = StyleSheet.create({
   },
   versionLabel: {
     fontSize: 16,
-    color: '#6B7280',
+    color: colors.textMuted,
     fontWeight: '500',
   },
   versionValue: {
     fontSize: 16,
-    color: '#1F2937',
+    color: colors.textPrimary,
     fontWeight: '600',
   },
   versionValueLatest: {
     fontSize: 16,
-    color: '#F97316',
+    color: colors.primary,
     fontWeight: '700',
   },
   message: {
     fontSize: 16,
-    color: '#4B5563',
+    color: colors.textSecondary,
     textAlign: 'center',
     lineHeight: 24,
     marginBottom: 32,
@@ -182,7 +183,7 @@ const styles = StyleSheet.create({
   featuresTitle: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#1F2937',
+    color: colors.textPrimary,
     marginBottom: 16,
   },
   featureItem: {
@@ -192,11 +193,11 @@ const styles = StyleSheet.create({
   },
   featureText: {
     fontSize: 16,
-    color: '#4B5563',
+    color: colors.textSecondary,
     marginLeft: 12,
   },
   updateButton: {
-    backgroundColor: '#F97316',
+    backgroundColor: colors.primary,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
@@ -205,7 +206,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     width: '100%',
     marginBottom: 24,
-    shadowColor: '#F97316',
+    shadowColor: colors.primary,
     shadowOffset: {
       width: 0,
       height: 4,
@@ -215,14 +216,14 @@ const styles = StyleSheet.create({
     elevation: 8,
   },
   updateButtonText: {
-    color: '#FFFFFF',
+    color: colors.textInverse,
     fontSize: 18,
     fontWeight: '600',
     marginLeft: 8,
   },
   footer: {
     fontSize: 14,
-    color: '#6B7280',
+    color: colors.textMuted,
     textAlign: 'center',
     lineHeight: 20,
   },

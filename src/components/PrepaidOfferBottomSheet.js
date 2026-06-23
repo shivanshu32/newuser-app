@@ -11,6 +11,7 @@ import {
   Alert
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
+import { colors, spacing, radius, shadows } from '../theme';
 import prepaidOffersAPI from '../services/prepaidOffersAPI';
 
 const { height: screenHeight } = Dimensions.get('window');
@@ -117,7 +118,7 @@ const PrepaidOfferBottomSheet = ({
               Continue Chat with {astrologer?.name || 'Astrologer'}
             </Text>
             <TouchableOpacity onPress={onClose} style={styles.closeButton}>
-              <MaterialIcons name="close" size={24} color="#666" />
+              <MaterialIcons name="close" size={24} color={colors.textMuted} />
             </TouchableOpacity>
           </View>
 
@@ -142,7 +143,7 @@ const PrepaidOfferBottomSheet = ({
           {/* Offer Details */}
           <View style={styles.offerContainer}>
             <View style={styles.offerHeader}>
-              <MaterialIcons name="local-fire-department" size={24} color="#FF6B35" />
+              <MaterialIcons name="local-fire-department" size={24} color={colors.primary} />
               <Text style={styles.offerTitle}>Special One-Time Offer!</Text>
             </View>
             
@@ -158,15 +159,15 @@ const PrepaidOfferBottomSheet = ({
 
             <View style={styles.benefitsList}>
               <View style={styles.benefitItem}>
-                <MaterialIcons name="check-circle" size={16} color="#4CAF50" />
+                <MaterialIcons name="check-circle" size={16} color={colors.success} />
                 <Text style={styles.benefitText}>{offerData?.durationMinutes || 5} minutes of chat</Text>
               </View>
               <View style={styles.benefitItem}>
-                <MaterialIcons name="check-circle" size={16} color="#4CAF50" />
+                <MaterialIcons name="check-circle" size={16} color={colors.success} />
                 <Text style={styles.benefitText}>Same astrologer</Text>
               </View>
               <View style={styles.benefitItem}>
-                <MaterialIcons name="check-circle" size={16} color="#4CAF50" />
+                <MaterialIcons name="check-circle" size={16} color={colors.success} />
                 <Text style={styles.benefitText}>Instant start</Text>
               </View>
             </View>
@@ -206,16 +207,16 @@ const PrepaidOfferBottomSheet = ({
 const styles = StyleSheet.create({
   overlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    backgroundColor: colors.overlay,
     justifyContent: 'flex-end',
   },
   backdrop: {
     flex: 1,
   },
   bottomSheet: {
-    backgroundColor: '#FFFFFF',
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
+    backgroundColor: colors.surface,
+    borderTopLeftRadius: radius.xxl,
+    borderTopRightRadius: radius.xxl,
     paddingHorizontal: 20,
     paddingBottom: 30,
     maxHeight: screenHeight * 0.8,
@@ -223,7 +224,7 @@ const styles = StyleSheet.create({
   handleBar: {
     width: 40,
     height: 4,
-    backgroundColor: '#E0E0E0',
+    backgroundColor: colors.surfaceTertiary,
     borderRadius: 2,
     alignSelf: 'center',
     marginTop: 8,
@@ -238,7 +239,7 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: '#333',
+    color: colors.textPrimary,
     flex: 1,
   },
   closeButton: {
@@ -249,8 +250,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 20,
     padding: 15,
-    backgroundColor: '#F8F9FA',
-    borderRadius: 12,
+    backgroundColor: colors.background,
+    borderRadius: radius.md,
   },
   astrologerImage: {
     width: 60,
@@ -264,20 +265,20 @@ const styles = StyleSheet.create({
   astrologerName: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#333',
+    color: colors.textPrimary,
     marginBottom: 4,
   },
   specializations: {
     fontSize: 14,
-    color: '#666',
+    color: colors.textSecondary,
   },
   offerContainer: {
-    backgroundColor: '#FFF8F0',
-    borderRadius: 12,
+    backgroundColor: colors.primaryMuted,
+    borderRadius: radius.md,
     padding: 20,
     marginBottom: 20,
     borderWidth: 1,
-    borderColor: '#FFE4CC',
+    borderColor: colors.primaryMuted,
   },
   offerHeader: {
     flexDirection: 'row',
@@ -287,12 +288,12 @@ const styles = StyleSheet.create({
   offerTitle: {
     fontSize: 16,
     fontWeight: 'bold',
-    color: '#FF6B35',
+    color: colors.primary,
     marginLeft: 8,
   },
   offerDescription: {
     fontSize: 14,
-    color: '#666',
+    color: colors.textSecondary,
     marginBottom: 15,
   },
   priceContainer: {
@@ -302,18 +303,18 @@ const styles = StyleSheet.create({
   },
   priceLabel: {
     fontSize: 16,
-    color: '#333',
+    color: colors.textPrimary,
     marginRight: 8,
   },
   price: {
     fontSize: 24,
     fontWeight: 'bold',
-    color: '#FF6B35',
+    color: colors.primary,
     marginRight: 8,
   },
   gstNote: {
     fontSize: 12,
-    color: '#666',
+    color: colors.textSecondary,
   },
   benefitsList: {
     gap: 8,
@@ -324,7 +325,7 @@ const styles = StyleSheet.create({
   },
   benefitText: {
     fontSize: 14,
-    color: '#333',
+    color: colors.textPrimary,
     marginLeft: 8,
   },
   buttonContainer: {
@@ -335,34 +336,34 @@ const styles = StyleSheet.create({
   cancelButton: {
     flex: 1,
     paddingVertical: 12,
-    borderRadius: 8,
+    borderRadius: radius.sm,
     borderWidth: 1,
-    borderColor: '#E0E0E0',
+    borderColor: colors.border,
     alignItems: 'center',
   },
   cancelButtonText: {
     fontSize: 16,
-    color: '#666',
+    color: colors.textSecondary,
     fontWeight: '500',
   },
   proceedButton: {
     flex: 2,
     paddingVertical: 12,
-    borderRadius: 8,
-    backgroundColor: '#FF6B35',
+    borderRadius: radius.sm,
+    backgroundColor: colors.primary,
     alignItems: 'center',
   },
   proceedButtonText: {
     fontSize: 16,
-    color: '#FFFFFF',
+    color: colors.textInverse,
     fontWeight: '600',
   },
   disabledButton: {
-    backgroundColor: '#CCC',
+    backgroundColor: colors.surfaceTertiary,
   },
   disclaimer: {
     fontSize: 12,
-    color: '#666',
+    color: colors.textSecondary,
     textAlign: 'center',
     fontStyle: 'italic',
   },

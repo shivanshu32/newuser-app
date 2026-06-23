@@ -10,6 +10,7 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { Ionicons, MaterialIcons, FontAwesome } from '@expo/vector-icons';
+import { colors, spacing, radius, shadows } from '../theme';
 import { blogAPI } from '../services/api';
 
 const { width } = Dimensions.get('window');
@@ -98,51 +99,49 @@ const BlogSection = ({ navigation }) => {
       activeOpacity={0.9}
     >
       <Image source={{ uri: post.image }} style={styles.blogImage} />
-      <View style={styles.blogContent}>
-        <View style={styles.blogMeta}>
-          <Text style={styles.category}>{post.category}</Text>
-          <Text style={styles.readTime}>{post.readTime}</Text>
+      <View style={styles.imageOverlay} />
+      <View style={styles.glassContentCard}>
+        <View style={styles.categoryPill}>
+          <Text style={styles.category}>{post.category.toUpperCase()}</Text>
         </View>
         <Text style={styles.blogTitle} numberOfLines={2}>
           {post.title}
         </Text>
-        <Text style={styles.blogExcerpt} numberOfLines={2}>
-          {post.excerpt}
-        </Text>
-        <Text style={styles.publishedAt}>{post.publishedAt}</Text>
+        <View style={styles.readTimeRow}>
+          <Ionicons name="time-outline" size={10} color={colors.textMuted} />
+          <Text style={styles.readTime}>{post.readTime}</Text>
+        </View>
       </View>
     </TouchableOpacity>
   );
 
-  // Show section even with errors for debugging
   if (error) {
     console.log('🚫 [BLOG_SECTION] Error loading blogs:', error);
     return (
       <View style={styles.container}>
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Latest from Blog</Text>
+            <Text style={styles.sectionTitle}>Spiritual Journal</Text>
           </View>
         </View>
         <View style={styles.errorContainer}>
-          <Text style={styles.errorText}>Unable to load blogs. Please try again later.</Text>
+          <Text style={styles.errorText}>Unable to load articles.</Text>
         </View>
       </View>
     );
   }
-  
-  // Don't render if no blogs after loading
+
   if (!loading && blogPosts.length === 0) {
     console.log('🚫 [BLOG_SECTION] No blogs available');
     return (
       <View style={styles.container}>
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Latest from Blog</Text>
+            <Text style={styles.sectionTitle}>Spiritual Journal</Text>
           </View>
         </View>
         <View style={styles.errorContainer}>
-          <Text style={styles.errorText}>No blogs available at the moment.</Text>
+          <Text style={styles.errorText}>No articles available.</Text>
         </View>
       </View>
     );
@@ -150,28 +149,25 @@ const BlogSection = ({ navigation }) => {
 
   return (
     <View style={styles.container}>
-      {/* Section Header */}
       <View style={styles.section}>
         <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>Latest from Blog</Text>
+          <Text style={styles.sectionTitle}>Spiritual Journal</Text>
           <TouchableOpacity
             onPress={() => navigation.navigate('BlogList')}
             style={styles.viewAllButton}
           >
             <Text style={styles.viewAllText}>View All</Text>
-            <Ionicons name="chevron-forward" size={16} color="#F97316" />
+            <Ionicons name="chevron-forward" size={14} color={colors.textMuted} />
           </TouchableOpacity>
         </View>
       </View>
 
-      {/* Loading State */}
       {loading ? (
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#F97316" />
-          <Text style={styles.loadingText}>Loading blogs...</Text>
+          <ActivityIndicator size="large" color={colors.primary} />
+          <Text style={styles.loadingText}>Loading articles...</Text>
         </View>
       ) : (
-        /* Blog Posts Horizontal Scroll */
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
@@ -189,99 +185,112 @@ const BlogSection = ({ navigation }) => {
 
 const styles = StyleSheet.create({
   container: {
-    marginVertical: 20,
+    marginTop: 24,
+    marginBottom: 0,
   },
   section: {
-    paddingHorizontal: 16,
+    paddingHorizontal: 24,
     marginBottom: 16,
   },
   sectionHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 16,
   },
   sectionTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#1F2937',
+    fontSize: 24,
+    fontWeight: '800',
+    color: colors.textPrimary,
+    letterSpacing: -0.3,
   },
   viewAllButton: {
     flexDirection: 'row',
     alignItems: 'center',
   },
   viewAllText: {
-    fontSize: 14,
-    color: '#F97316',
-    fontWeight: '600',
+    fontSize: 13,
+    color: colors.textMuted,
+    fontWeight: '500',
     marginRight: 4,
   },
   scrollContainer: {
-    paddingLeft: 16,
+    paddingLeft: 24,
     paddingRight: 8,
   },
   blogCard: {
     width: 280,
-    backgroundColor: '#fff',
+    height: 300,
     borderRadius: 16,
     marginRight: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 4,
     overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.2,
+    shadowRadius: 6,
+    elevation: 4,
   },
-  firstCard: {
-    // Additional styling for first card if needed
-  },
+  firstCard: {},
   lastCard: {
-    marginRight: 16, // Ensure last card has proper spacing
+    marginRight: 24,
   },
   blogImage: {
     width: '100%',
-    height: 160,
-    backgroundColor: '#F3F4F6',
+    height: '100%',
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    backgroundColor: colors.surface,
   },
-  blogContent: {
+  imageOverlay: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: '40%',
+    backgroundColor: 'rgba(0, 0, 0, 0.4)',
+  },
+  glassContentCard: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
     padding: 16,
+    backgroundColor: 'rgba(26, 26, 26, 0.85)',
+    borderTopLeftRadius: 14,
+    borderTopRightRadius: 14,
   },
-  blogMeta: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+  categoryPill: {
+    alignSelf: 'flex-start',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(200, 164, 106, 0.4)',
+    backgroundColor: 'rgba(200, 164, 106, 0.08)',
     marginBottom: 8,
   },
   category: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#F97316',
-    backgroundColor: '#FEF3E2',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 6,
-  },
-  readTime: {
-    fontSize: 12,
-    color: '#6B7280',
-    fontWeight: '500',
+    fontSize: 9,
+    fontWeight: '700',
+    color: colors.primary,
+    letterSpacing: 1,
+    textTransform: 'uppercase',
   },
   blogTitle: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#1F2937',
-    lineHeight: 22,
+    fontSize: 15,
+    fontWeight: '700',
+    color: colors.textPrimary,
+    lineHeight: 21,
     marginBottom: 8,
   },
-  blogExcerpt: {
-    fontSize: 14,
-    color: '#4B5563',
-    lineHeight: 20,
-    marginBottom: 12,
+  readTimeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
   },
-  publishedAt: {
-    fontSize: 12,
-    color: '#9CA3AF',
+  readTime: {
+    fontSize: 11,
+    color: colors.textMuted,
     fontWeight: '500',
   },
   loadingContainer: {
@@ -292,18 +301,18 @@ const styles = StyleSheet.create({
   loadingText: {
     marginTop: 12,
     fontSize: 14,
-    color: '#6B7280',
+    color: colors.textMuted,
     fontWeight: '500',
   },
   errorContainer: {
     paddingVertical: 20,
-    paddingHorizontal: 16,
+    paddingHorizontal: 24,
     alignItems: 'center',
     justifyContent: 'center',
   },
   errorText: {
     fontSize: 14,
-    color: '#6B7280',
+    color: colors.textMuted,
     textAlign: 'center',
   },
 });

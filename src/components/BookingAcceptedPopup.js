@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
+import { colors, spacing, radius, shadows } from '../theme';
 
 const { width, height } = Dimensions.get('window');
 
@@ -201,7 +202,7 @@ const BookingAcceptedPopup = ({
               <Ionicons 
                 name={isVoiceConsultation ? "call" : "checkmark-circle"} 
                 size={24} 
-                color={isVoiceConsultation ? "#2196F3" : "#4CAF50"} 
+                color={isVoiceConsultation ? colors.secondary : colors.success} 
               />
             </View>
             
@@ -244,7 +245,7 @@ const BookingAcceptedPopup = ({
           {/* Booking Details */}
           <View style={styles.detailsContainer}>
             <View style={styles.detailRow}>
-              <Ionicons name="person" size={20} color="#666" />
+              <Ionicons name="person" size={20} color={colors.textSecondary} />
               <Text style={styles.detailText}>
                 Astrologer: {bookingData.astrologerName || 'Professional Astrologer'}
               </Text>
@@ -254,7 +255,7 @@ const BookingAcceptedPopup = ({
               <Ionicons 
                 name={bookingData.type === 'video' ? 'videocam' : bookingData.type === 'voice' ? 'call' : 'chatbubble'} 
                 size={20} 
-                color="#666" 
+                color={colors.textSecondary} 
               />
               <Text style={styles.detailText}>
                 {bookingData.type === 'video' ? 'Video' : bookingData.type === 'voice' ? 'Voice' : 'Chat'} Consultation
@@ -263,7 +264,7 @@ const BookingAcceptedPopup = ({
             
             {bookingData.rate && (
               <View style={styles.detailRow}>
-                <Ionicons name="cash" size={20} color="#666" />
+                <Ionicons name="cash" size={20} color={colors.textSecondary} />
                 <Text style={styles.detailText}>
                   ₹{bookingData.rate}/min
                 </Text>
@@ -276,7 +277,7 @@ const BookingAcceptedPopup = ({
             /* Voice Consultation - No Join Button, Only Informational */
             <View style={styles.voiceInfoContainer}>
               <View style={styles.voiceInfoBox}>
-                <Ionicons name="information-circle" size={24} color="#2196F3" />
+                <Ionicons name="information-circle" size={24} color={colors.secondary} />
                 <Text style={styles.voiceInfoText}>
                   You will receive a phone call shortly from our system. Please answer the call to connect with your astrologer.
                 </Text>
@@ -298,13 +299,13 @@ const BookingAcceptedPopup = ({
                 disabled={isJoining}
               >
                 {isJoining ? (
-                  <ActivityIndicator color="#fff" size="small" />
+                  <ActivityIndicator color={colors.textInverse} size="small" />
                 ) : (
                   <>
                     <Ionicons 
                       name={bookingData.type === 'video' ? 'videocam' : 'chatbubble'} 
                       size={20} 
-                      color="#fff" 
+                      color={colors.textInverse} 
                       style={styles.buttonIcon} 
                     />
                     <Text style={styles.joinButtonText}>Join Session</Text>
@@ -343,13 +344,13 @@ const styles = StyleSheet.create({
     padding: 20,
   },
   popup: {
-    backgroundColor: '#fff',
+    backgroundColor: colors.surface,
     borderRadius: 24,
     padding: 28,
     width: width * 0.9,
     minWidth: 320,
     maxWidth: 420,
-    shadowColor: '#000',
+    shadowColor: colors.shadow,
     shadowOffset: {
       width: 0,
       height: 15,
@@ -368,10 +369,10 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: -10,
     right: 10,
-    backgroundColor: '#fff',
+    backgroundColor: colors.surface,
     borderRadius: 15,
     padding: 5,
-    shadowColor: '#000',
+    shadowColor: colors.shadow,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 4,
@@ -390,7 +391,7 @@ const styles = StyleSheet.create({
     height: 80,
     borderRadius: 40,
     borderWidth: 3,
-    borderColor: '#F97316',
+    borderColor: colors.primary,
   },
   onlineIndicator: {
     position: 'absolute',
@@ -399,9 +400,9 @@ const styles = StyleSheet.create({
     width: 20,
     height: 20,
     borderRadius: 10,
-    backgroundColor: '#4CAF50',
+    backgroundColor: colors.success,
     borderWidth: 3,
-    borderColor: '#fff',
+    borderColor: colors.surface,
   },
   astrologerInfo: {
     alignItems: 'center',
@@ -409,13 +410,13 @@ const styles = StyleSheet.create({
   astrologerName: {
     fontSize: 20,
     fontWeight: 'bold',
-    color: '#333',
+    color: colors.textPrimary,
     marginBottom: 4,
     textAlign: 'center',
   },
   astrologerTitle: {
     fontSize: 14,
-    color: '#F97316',
+    color: colors.primary,
     fontWeight: '600',
     textTransform: 'uppercase',
     letterSpacing: 0.5,
@@ -427,13 +428,13 @@ const styles = StyleSheet.create({
   statusTitle: {
     fontSize: 22,
     fontWeight: 'bold',
-    color: '#2E7D32',
+    color: colors.success,
     marginBottom: 8,
     textAlign: 'center',
   },
   statusSubtitle: {
     fontSize: 15,
-    color: '#666',
+    color: colors.textSecondary,
     textAlign: 'center',
     lineHeight: 22,
   },
@@ -448,7 +449,7 @@ const styles = StyleSheet.create({
   },
   detailText: {
     fontSize: 16,
-    color: '#333',
+    color: colors.textPrimary,
     marginLeft: 12,
     flex: 1,
   },
@@ -465,8 +466,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   joinButton: {
-    backgroundColor: '#4CAF50',
-    shadowColor: '#4CAF50',
+    backgroundColor: colors.success,
+    shadowColor: colors.success,
     shadowOffset: {
       width: 0,
       height: 4,
@@ -476,7 +477,7 @@ const styles = StyleSheet.create({
     elevation: 5,
   },
   joinButtonText: {
-    color: '#fff',
+    color: colors.textInverse,
     fontSize: 18,
     fontWeight: 'bold',
   },
@@ -484,18 +485,18 @@ const styles = StyleSheet.create({
     marginRight: 8,
   },
   dismissButton: {
-    backgroundColor: '#f5f5f5',
+    backgroundColor: colors.background,
     borderWidth: 1,
-    borderColor: '#ddd',
+    borderColor: colors.divider,
   },
   dismissButtonText: {
-    color: '#666',
+    color: colors.textSecondary,
     fontSize: 16,
     fontWeight: '600',
   },
   infoText: {
     fontSize: 14,
-    color: '#888',
+    color: colors.textMuted,
     textAlign: 'center',
     lineHeight: 18,
   },
@@ -504,7 +505,7 @@ const styles = StyleSheet.create({
     marginBottom: 15,
   },
   voiceInfoBox: {
-    backgroundColor: '#E3F2FD',
+    backgroundColor: colors.primaryMuted,
     borderRadius: 12,
     padding: 20,
     marginBottom: 20,
@@ -513,15 +514,15 @@ const styles = StyleSheet.create({
   },
   voiceInfoText: {
     fontSize: 16,
-    color: '#1976D2',
+    color: colors.secondary,
     marginLeft: 12,
     flex: 1,
     lineHeight: 22,
     fontWeight: '500',
   },
   okButton: {
-    backgroundColor: '#2196F3',
-    shadowColor: '#2196F3',
+    backgroundColor: colors.secondary,
+    shadowColor: colors.secondary,
     shadowOffset: {
       width: 0,
       height: 4,
@@ -531,7 +532,7 @@ const styles = StyleSheet.create({
     elevation: 5,
   },
   okButtonText: {
-    color: '#fff',
+    color: colors.textInverse,
     fontSize: 18,
     fontWeight: 'bold',
   },

@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   ActivityIndicator
 } from 'react-native';
+import { colors } from '../../theme';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import productAPI from '../../services/productAPI';
@@ -98,7 +99,7 @@ const OrderConfirmationScreen = ({ route, navigation }) => {
             <>
               <View style={styles.divider} />
               <View style={styles.deliveryInfo}>
-                <Ionicons name="time-outline" size={20} color="#F97316" />
+                <Ionicons name="time-outline" size={20} color={colors.primary} />
                 <View style={styles.deliveryText}>
                   <Text style={styles.deliveryLabel}>Estimated Delivery</Text>
                   <Text style={styles.deliveryDate}>
@@ -351,7 +352,7 @@ const styles = StyleSheet.create({
   },
   primaryButton: {
     paddingVertical: 14,
-    backgroundColor: '#F97316',
+    backgroundColor: colors.primary,
     borderRadius: 12,
     alignItems: 'center'
   },

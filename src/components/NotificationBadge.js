@@ -1,5 +1,6 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
+import { colors } from '../theme';
 
 /**
  * A simple notification badge component that displays a count
@@ -31,7 +32,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 4,
   },
   badgeText: {
-    color: '#FFFFFF',
+    color: colors.textInverse,
     fontSize: 12,
     fontWeight: 'bold',
   },

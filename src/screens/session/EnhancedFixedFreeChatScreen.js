@@ -14,6 +14,7 @@ import {
   SafeAreaView,
   AppState,
 } from 'react-native';
+import { colors } from '../../theme';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../context/AuthContext';
 import { useSocket } from '../../context/SocketContext';
@@ -533,27 +534,27 @@ const EnhancedFixedFreeChatScreen = memo(({ route, navigation }) => {
 
   const getStatusInfo = useCallback(() => {
     if (loading) {
-      return { text: 'Loading...', color: '#FFA500', backgroundColor: 'rgba(255, 165, 0, 0.1)' };
+      return { text: 'Loading...', color: colors.warning, backgroundColor: 'rgba(255, 165, 0, 0.1)' };
     }
     
     if (sessionData?.sessionEnded) {
-      return { text: 'Session Ended', color: '#FF6B6B', backgroundColor: 'rgba(255, 107, 107, 0.1)' };
+      return { text: 'Session Ended', color: colors.error, backgroundColor: 'rgba(255, 107, 107, 0.1)' };
     }
     
     if (!sessionData?.connected) {
-      return { text: 'Connecting...', color: '#FFA500', backgroundColor: 'rgba(255, 165, 0, 0.1)' };
+      return { text: 'Connecting...', color: colors.warning, backgroundColor: 'rgba(255, 165, 0, 0.1)' };
     }
     
     if (sessionData?.sessionActive) {
       const timeRemaining = sessionData?.timerData?.timeRemaining || 0;
       return { 
         text: `Connected - ${formatTime(timeRemaining)} remaining`, 
-        color: '#4CAF50', 
+        color: colors.success, 
         backgroundColor: 'rgba(76, 175, 80, 0.1)' 
       };
     }
     
-    return { text: 'Waiting for session...', color: '#FFA500', backgroundColor: 'rgba(255, 165, 0, 0.1)' };
+    return { text: 'Waiting for session...', color: colors.warning, backgroundColor: 'rgba(255, 165, 0, 0.1)' };
   }, [loading, sessionData, formatTime]);
 
   const statusInfo = getStatusInfo();
@@ -563,7 +564,7 @@ const EnhancedFixedFreeChatScreen = memo(({ route, navigation }) => {
     return (
       <SafeAreaView style={styles.safeArea}>
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#FFFFFF" />
+          <ActivityIndicator size="large" color={colors.textInverse} />
           <Text style={styles.loadingText}>Loading Free Chat...</Text>
         </View>
       </SafeAreaView>
@@ -572,12 +573,12 @@ const EnhancedFixedFreeChatScreen = memo(({ route, navigation }) => {
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <StatusBar barStyle="light-content" backgroundColor="#6B46C1" />
+      <StatusBar barStyle="light-content" backgroundColor={colors.background} />
       
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-          <Ionicons name="arrow-back" size={24} color="#FFFFFF" />
+          <Ionicons name="arrow-back" size={24} color={colors.textInverse} />
         </TouchableOpacity>
         <View style={styles.headerInfo}>
           <Text style={styles.headerTitle}>Free Chat</Text>
@@ -624,7 +625,7 @@ const EnhancedFixedFreeChatScreen = memo(({ route, navigation }) => {
             value={messageText}
             onChangeText={handleTyping}
             placeholder={sessionData?.sessionEnded ? "Session has ended" : "Type your message..."}
-            placeholderTextColor="#999"
+            placeholderTextColor={colors.textMuted}
             multiline
             maxLength={500}
             editable={!sessionData?.sessionEnded && sessionData?.sessionActive}
@@ -637,7 +638,7 @@ const EnhancedFixedFreeChatScreen = memo(({ route, navigation }) => {
             onPress={sendMessage}
             disabled={!messageText.trim() || sessionData?.sessionEnded || !sessionData?.sessionActive}
           >
-            <Ionicons name="send" size={20} color="#FFFFFF" />
+            <Ionicons name="send" size={20} color={colors.textInverse} />
           </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>
@@ -648,7 +649,7 @@ const EnhancedFixedFreeChatScreen = memo(({ route, navigation }) => {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: '#6B46C1',
+    backgroundColor: colors.primary,
   },
   loadingContainer: {
     flex: 1,
@@ -656,7 +657,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   loadingText: {
-    color: '#FFFFFF',
+    color: colors.textInverse,
     fontSize: 16,
     marginTop: 16,
   },
@@ -665,7 +666,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 16,
     paddingVertical: 12,
-    backgroundColor: '#6B46C1',
+    backgroundColor: colors.primary,
   },
   backButton: {
     marginRight: 16,
@@ -674,12 +675,12 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   headerTitle: {
-    color: '#FFFFFF',
+    color: colors.textInverse,
     fontSize: 18,
     fontWeight: 'bold',
   },
   headerSubtitle: {
-    color: '#E5E7EB',
+    color: colors.border,
     fontSize: 14,
   },
   statusBar: {
@@ -693,7 +694,7 @@ const styles = StyleSheet.create({
   },
   messagesList: {
     flex: 1,
-    backgroundColor: '#F3F4F6',
+    backgroundColor: colors.background,
   },
   messagesContainer: {
     padding: 16,
@@ -713,45 +714,45 @@ const styles = StyleSheet.create({
     borderRadius: 16,
   },
   ownMessageBubble: {
-    backgroundColor: '#6B46C1',
+    backgroundColor: colors.primary,
   },
   otherMessageBubble: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: '#E5E7EB',
+    borderColor: colors.border,
   },
   messageText: {
     fontSize: 16,
     lineHeight: 20,
   },
   ownMessageText: {
-    color: '#FFFFFF',
+    color: colors.textInverse,
   },
   otherMessageText: {
-    color: '#1F2937',
+    color: colors.textPrimary,
   },
   messageTime: {
     fontSize: 12,
     marginTop: 4,
   },
   ownMessageTime: {
-    color: '#E5E7EB',
+    color: colors.border,
   },
   otherMessageTime: {
-    color: '#9CA3AF',
+    color: colors.textMuted,
   },
   typingContainer: {
     paddingHorizontal: 16,
     paddingVertical: 8,
-    backgroundColor: '#F3F4F6',
+    backgroundColor: colors.background,
   },
   typingText: {
-    color: '#6B46C1',
+    color: colors.primary,
     fontSize: 14,
     fontStyle: 'italic',
   },
   inputContainer: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
     borderTopWidth: 1,
     borderTopColor: '#E5E7EB',
   },
@@ -764,7 +765,7 @@ const styles = StyleSheet.create({
   textInput: {
     flex: 1,
     borderWidth: 1,
-    borderColor: '#E5E7EB',
+    borderColor: colors.border,
     borderRadius: 20,
     paddingHorizontal: 16,
     paddingVertical: 12,
@@ -773,7 +774,7 @@ const styles = StyleSheet.create({
     marginRight: 12,
   },
   sendButton: {
-    backgroundColor: '#6B46C1',
+    backgroundColor: colors.primary,
     borderRadius: 20,
     width: 40,
     height: 40,

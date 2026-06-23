@@ -2,6 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { colors, spacing, radius, shadows } from '../theme';
 
 class ErrorBoundary extends React.Component {
   constructor(props) {
@@ -98,7 +99,7 @@ class ErrorBoundary extends React.Component {
       return (
         <View style={styles.container}>
           <View style={styles.content}>
-            <Ionicons name="warning-outline" size={64} color="#F97316" />
+            <Ionicons name="warning-outline" size={64} color={colors.primary} />
             <Text style={styles.title}>Something went wrong</Text>
             <Text style={styles.message}>
               The app encountered an unexpected error. This has been logged for our team to investigate.
@@ -129,7 +130,7 @@ class ErrorBoundary extends React.Component {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#ffffff',
+    backgroundColor: colors.surface,
     justifyContent: 'center',
     alignItems: 'center',
     padding: 20,
@@ -141,49 +142,45 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 24,
     fontWeight: 'bold',
-    color: '#1F2937',
+    color: colors.textPrimary,
     marginTop: 16,
     marginBottom: 8,
     textAlign: 'center',
   },
   message: {
     fontSize: 16,
-    color: '#6B7280',
+    color: colors.textSecondary,
     textAlign: 'center',
     lineHeight: 24,
     marginBottom: 24,
   },
   errorDetails: {
-    backgroundColor: '#FEF2F2',
+    backgroundColor: colors.errorMuted,
     padding: 12,
-    borderRadius: 8,
+    borderRadius: radius.sm,
     marginBottom: 24,
     width: '100%',
   },
   errorTitle: {
     fontSize: 14,
     fontWeight: 'bold',
-    color: '#DC2626',
+    color: colors.error,
     marginBottom: 8,
   },
   errorText: {
     fontSize: 12,
-    color: '#7F1D1D',
+    color: colors.error,
     fontFamily: 'monospace',
   },
   restartButton: {
-    backgroundColor: '#F97316',
+    backgroundColor: colors.primary,
     paddingHorizontal: 24,
     paddingVertical: 12,
-    borderRadius: 8,
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
+    borderRadius: radius.sm,
+    ...shadows.card,
   },
   restartButtonText: {
-    color: '#ffffff',
+    color: colors.textInverse,
     fontSize: 16,
     fontWeight: 'bold',
   },

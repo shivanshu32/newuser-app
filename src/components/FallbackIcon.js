@@ -1,7 +1,8 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
+import { colors } from '../theme';
 
-const FallbackIcon = ({ name, size = 24, color = '#333', style }) => {
+const FallbackIcon = ({ name, size = 24, color = colors.textPrimary, style }) => {
   // Clean monochrome icon mapping using simple Unicode symbols
   const iconMap = {
     'home': '⌂',

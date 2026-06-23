@@ -14,6 +14,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { blogAPI } from '../../services/api';
+import { colors } from '../../theme';
 
 const BlogListScreen = ({ navigation }) => {
   const [blogs, setBlogs] = useState([]);
@@ -144,7 +145,7 @@ const BlogListScreen = ({ navigation }) => {
     if (!loadingMore) return null;
     return (
       <View style={styles.footerLoader}>
-        <ActivityIndicator size="small" color="#F97316" />
+        <ActivityIndicator size="small" color={colors.primary} />
       </View>
     );
   };
@@ -153,7 +154,7 @@ const BlogListScreen = ({ navigation }) => {
     if (loading) return null;
     return (
       <View style={styles.emptyContainer}>
-        <Ionicons name="document-text-outline" size={64} color="#9CA3AF" />
+        <Ionicons name="document-text-outline" size={64} color={colors.textMuted} />
         <Text style={styles.emptyText}>No blogs found</Text>
         <Text style={styles.emptySubtext}>
           {searchQuery || selectedCategory !== 'all'
@@ -166,7 +167,7 @@ const BlogListScreen = ({ navigation }) => {
 
   return (
     <View style={styles.container}>
-      <StatusBar barStyle="dark-content" backgroundColor="#fff" />
+      <StatusBar barStyle="light-content" backgroundColor={colors.background} />
       
       {/* Header */}
       <View style={styles.header}>
@@ -174,7 +175,7 @@ const BlogListScreen = ({ navigation }) => {
           onPress={() => navigation.goBack()}
           style={styles.backButton}
         >
-          <Ionicons name="arrow-back" size={24} color="#1F2937" />
+          <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Blog</Text>
         <View style={{ width: 24 }} />
@@ -182,17 +183,17 @@ const BlogListScreen = ({ navigation }) => {
 
       {/* Search Bar */}
       <View style={styles.searchContainer}>
-        <Ionicons name="search" size={20} color="#9CA3AF" style={styles.searchIcon} />
+        <Ionicons name="search" size={20} color={colors.textMuted} style={styles.searchIcon} />
         <TextInput
           style={styles.searchInput}
           placeholder="Search blogs..."
-          placeholderTextColor="#9CA3AF"
+          placeholderTextColor={colors.textMuted}
           value={searchQuery}
           onChangeText={setSearchQuery}
         />
         {searchQuery.length > 0 && (
           <TouchableOpacity onPress={() => setSearchQuery('')}>
-            <Ionicons name="close-circle" size={20} color="#9CA3AF" />
+            <Ionicons name="close-circle" size={20} color={colors.textMuted} />
           </TouchableOpacity>
         )}
       </View>
@@ -228,7 +229,7 @@ const BlogListScreen = ({ navigation }) => {
       {/* Blog List */}
       {loading && page === 1 ? (
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#F97316" />
+          <ActivityIndicator size="large" color={colors.primary} />
           <Text style={styles.loadingText}>Loading blogs...</Text>
         </View>
       ) : (
@@ -241,8 +242,8 @@ const BlogListScreen = ({ navigation }) => {
             <RefreshControl 
               refreshing={refreshing} 
               onRefresh={handleRefresh}
-              colors={['#F97316']}
-              tintColor="#F97316"
+              colors={[colors.primary]}
+              tintColor={colors.primary}
             />
           }
           onEndReached={handleLoadMore}
@@ -259,7 +260,7 @@ const BlogListScreen = ({ navigation }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F9FAFB',
+    backgroundColor: colors.background,
   },
   header: {
     flexDirection: 'row',
@@ -268,9 +269,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingTop: 50,
     paddingBottom: 16,
-    backgroundColor: '#fff',
+    backgroundColor: colors.surface,
     borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
+    borderBottomColor: colors.border,
   },
   backButton: {
     padding: 4,
@@ -278,12 +279,12 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: 20,
     fontWeight: 'bold',
-    color: '#1F2937',
+    color: colors.textPrimary,
   },
   searchContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#fff',
+    backgroundColor: colors.surface,
     marginHorizontal: 16,
     marginTop: 16,
     marginBottom: 12,
@@ -291,7 +292,7 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#E5E7EB',
+    borderColor: colors.border,
   },
   searchIcon: {
     marginRight: 8,
@@ -299,7 +300,7 @@ const styles = StyleSheet.create({
   searchInput: {
     flex: 1,
     fontSize: 16,
-    color: '#1F2937',
+    color: colors.textPrimary,
   },
   categoryContainer: {
     marginBottom: 16,
@@ -312,29 +313,29 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 8,
     borderRadius: 20,
-    backgroundColor: '#fff',
+    backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: '#E5E7EB',
+    borderColor: colors.border,
     marginRight: 8,
   },
   categoryButtonActive: {
-    backgroundColor: '#F97316',
-    borderColor: '#F97316',
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
   },
   categoryButtonText: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#6B7280',
+    color: colors.textSecondary,
   },
   categoryButtonTextActive: {
-    color: '#fff',
+    color: colors.textInverse,
   },
   listContent: {
     paddingHorizontal: 16,
     paddingBottom: 20,
   },
   blogItem: {
-    backgroundColor: '#fff',
+    backgroundColor: colors.surface,
     borderRadius: 16,
     marginBottom: 16,
     shadowColor: '#000',
@@ -347,7 +348,7 @@ const styles = StyleSheet.create({
   blogItemImage: {
     width: '100%',
     height: 200,
-    backgroundColor: '#F3F4F6',
+    backgroundColor: colors.surfaceSecondary,
   },
   blogItemContent: {
     padding: 16,
@@ -361,33 +362,33 @@ const styles = StyleSheet.create({
   blogItemCategory: {
     fontSize: 12,
     fontWeight: '600',
-    color: '#F97316',
-    backgroundColor: '#FEF3E2',
+    color: colors.primary,
+    backgroundColor: colors.primaryMuted,
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 6,
   },
   blogItemReadTime: {
     fontSize: 12,
-    color: '#6B7280',
+    color: colors.textSecondary,
     fontWeight: '500',
   },
   blogItemTitle: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: '#1F2937',
+    color: colors.textPrimary,
     lineHeight: 24,
     marginBottom: 8,
   },
   blogItemExcerpt: {
     fontSize: 14,
-    color: '#4B5563',
+    color: colors.textSecondary,
     lineHeight: 20,
     marginBottom: 12,
   },
   blogItemDate: {
     fontSize: 12,
-    color: '#9CA3AF',
+    color: colors.textMuted,
     fontWeight: '500',
   },
   loadingContainer: {
@@ -399,7 +400,7 @@ const styles = StyleSheet.create({
   loadingText: {
     marginTop: 12,
     fontSize: 14,
-    color: '#6B7280',
+    color: colors.textSecondary,
     fontWeight: '500',
   },
   footerLoader: {
@@ -414,13 +415,13 @@ const styles = StyleSheet.create({
   emptyText: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#4B5563',
+    color: colors.textSecondary,
     marginTop: 16,
     marginBottom: 8,
   },
   emptySubtext: {
     fontSize: 14,
-    color: '#9CA3AF',
+    color: colors.textMuted,
     textAlign: 'center',
   },
 });

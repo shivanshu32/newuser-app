@@ -11,6 +11,7 @@ import {
   Dimensions,
   TextInput
 } from 'react-native';
+import { colors } from '../../theme';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
@@ -140,7 +141,7 @@ const PoojaDetailScreen = () => {
               contact: user.mobile // Use 'mobile' from user object
             },
             theme: {
-              color: '#FF6B35'
+              color: colors.primary
             }
           },
           finalAmount: booking.totalAmount,
@@ -171,7 +172,7 @@ const PoojaDetailScreen = () => {
   if (loading) {
     return (
       <SafeAreaView style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#FF6B35" />
+        <ActivityIndicator size="large" color={colors.primary} />
       </SafeAreaView>
     );
   }
@@ -199,7 +200,7 @@ const PoojaDetailScreen = () => {
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-          <Ionicons name="arrow-back" size={24} color="#1a1a1a" />
+          <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Pooja Details</Text>
         <View style={{ width: 40 }} />
@@ -231,11 +232,11 @@ const PoojaDetailScreen = () => {
           {/* Info Cards */}
           <View style={styles.infoCards}>
             <View style={styles.infoCard}>
-              <Ionicons name="location" size={20} color="#FF6B35" />
+              <Ionicons name="location" size={20} color={colors.primary} />
               <Text style={styles.infoCardText}>{pooja.location}</Text>
             </View>
             <View style={styles.infoCard}>
-              <Ionicons name="calendar" size={20} color="#FF6B35" />
+              <Ionicons name="calendar" size={20} color={colors.primary} />
               <Text style={styles.infoCardText}>{formatDate(pooja.dateTime)}</Text>
             </View>
           </View>
@@ -248,8 +249,8 @@ const PoojaDetailScreen = () => {
               source={{ html: pooja.aboutPooja }}
               tagsStyles={{
                 p: { color: '#666', fontSize: 14, lineHeight: 22, marginBottom: 8 },
-                h1: { color: '#1a1a1a', fontSize: 18, fontWeight: 'bold', marginBottom: 8 },
-                h2: { color: '#1a1a1a', fontSize: 16, fontWeight: 'bold', marginBottom: 8 },
+                h1: { color: colors.textPrimary, fontSize: 18, fontWeight: 'bold', marginBottom: 8 },
+                h2: { color: colors.textPrimary, fontSize: 16, fontWeight: 'bold', marginBottom: 8 },
                 li: { color: '#666', fontSize: 14, marginBottom: 4 }
               }}
             />
@@ -351,7 +352,7 @@ const PoojaDetailScreen = () => {
               disabled={bookingLoading}
             >
               {bookingLoading ? (
-                <ActivityIndicator color="#fff" />
+                <ActivityIndicator color={colors.textInverse} />
               ) : (
                 <Text style={styles.bookButtonText}>Book Now</Text>
               )}
@@ -399,7 +400,7 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: '#1a1a1a',
+    color: colors.textPrimary,
   },
   scrollView: {
     flex: 1,
@@ -414,7 +415,7 @@ const styles = StyleSheet.create({
   },
   catchyHeading: {
     fontSize: 12,
-    color: '#FF6B35',
+    color: colors.primary,
     fontWeight: '600',
     textTransform: 'uppercase',
     marginBottom: 8,
@@ -422,7 +423,7 @@ const styles = StyleSheet.create({
   mainHeading: {
     fontSize: 24,
     fontWeight: 'bold',
-    color: '#1a1a1a',
+    color: colors.textPrimary,
     marginBottom: 8,
     lineHeight: 32,
   },
@@ -445,7 +446,7 @@ const styles = StyleSheet.create({
   },
   infoCardText: {
     fontSize: 14,
-    color: '#1a1a1a',
+    color: colors.textPrimary,
     marginLeft: 12,
     flex: 1,
   },
@@ -455,7 +456,7 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: '#1a1a1a',
+    color: colors.textPrimary,
     marginBottom: 12,
   },
   packageCard: {
@@ -466,8 +467,8 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   packageCardSelected: {
-    borderColor: '#FF6B35',
-    backgroundColor: '#FFF5F2',
+    borderColor: colors.primary,
+    backgroundColor: colors.primaryMuted,
   },
   packageHeader: {
     flexDirection: 'row',
@@ -479,7 +480,7 @@ const styles = StyleSheet.create({
     height: 24,
     borderRadius: 12,
     borderWidth: 2,
-    borderColor: '#FF6B35',
+    borderColor: colors.primary,
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 12,
@@ -488,7 +489,7 @@ const styles = StyleSheet.create({
     width: 12,
     height: 12,
     borderRadius: 6,
-    backgroundColor: '#FF6B35',
+    backgroundColor: colors.primary,
   },
   packageInfo: {
     flex: 1,
@@ -496,7 +497,7 @@ const styles = StyleSheet.create({
   packageName: {
     fontSize: 16,
     fontWeight: 'bold',
-    color: '#1a1a1a',
+    color: colors.textPrimary,
   },
   packagePeople: {
     fontSize: 12,
@@ -506,7 +507,7 @@ const styles = StyleSheet.create({
   packagePrice: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: '#FF6B35',
+    color: colors.primary,
   },
   packageDescription: {
     fontSize: 14,
@@ -533,7 +534,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     padding: 12,
     fontSize: 14,
-    color: '#1a1a1a',
+    color: colors.textPrimary,
     minHeight: 100,
   },
   priceBreakdown: {
@@ -553,7 +554,7 @@ const styles = StyleSheet.create({
   },
   priceValue: {
     fontSize: 14,
-    color: '#1a1a1a',
+    color: colors.textPrimary,
     fontWeight: '500',
   },
   totalRow: {
@@ -565,12 +566,12 @@ const styles = StyleSheet.create({
   totalLabel: {
     fontSize: 16,
     fontWeight: 'bold',
-    color: '#1a1a1a',
+    color: colors.textPrimary,
   },
   totalValue: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: '#FF6B35',
+    color: colors.primary,
   },
   bottomBar: {
     position: 'absolute',
@@ -600,10 +601,10 @@ const styles = StyleSheet.create({
   bottomBarPrice: {
     fontSize: 20,
     fontWeight: 'bold',
-    color: '#1a1a1a',
+    color: colors.textPrimary,
   },
   bookButton: {
-    backgroundColor: '#FF6B35',
+    backgroundColor: colors.primary,
     paddingHorizontal: 32,
     paddingVertical: 14,
     borderRadius: 8,

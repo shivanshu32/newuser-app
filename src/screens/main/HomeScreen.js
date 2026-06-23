@@ -19,24 +19,26 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons, MaterialIcons, FontAwesome } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import Toast from 'react-native-toast-message';
+import { colors, spacing, radius, shadows } from '../../theme';
 import { useAuth } from '../../context/AuthContext';
 import { useSocket } from '../../context/SocketContext';
 import { astrologersAPI, walletAPI, versionAPI, freeChatAPI, sessionsAPI, categoriesAPI } from '../../services/api';
 import prepaidOffersAPI from '../../services/prepaidOffersAPI';
 import prepaidRechargeCardsAPI from '../../services/prepaidRechargeCardsAPI';
 import prepaidVoiceCardsAPI from '../../services/prepaidVoiceCardsAPI';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import BookingAcceptedModal from '../../components/BookingAcceptedModal';
 import FreeChatCard from '../../components/FreeChatCard';
 import PrepaidOfferCard from '../../components/PrepaidOfferCard';
 import PrepaidRechargeOfferCard from '../../components/PrepaidRechargeOfferCard';
 import RejoinChatBottomSheet from '../../components/RejoinChatBottomSheet';
-import BannerCarousel from '../../components/BannerCarousel';
 import BlogSection from '../../components/BlogSection';
 import PoojaSection from '../../components/PoojaSection';
 import RechargePackagesSection from '../../components/RechargePackagesSection';
 import HomePopup from '../../components/HomePopup';
 import FollowUpMessagesSection from '../../components/FollowUpMessagesSection';
 import PendingPoojaDetailsSection from '../../components/PendingPoojaDetailsSection';
+import AstrologyToolsSection from '../../components/AstrologyToolsSection';
 import poojaAPI from '../../services/poojaAPI';
 
 // Hardcoded app version - update this when releasing new versions
@@ -48,6 +50,7 @@ const HomeScreen = ({ navigation }) => {
   const [astrologers, setAstrologers] = useState([]);
   const [categories, setCategories] = useState([]);
   const [selectedCategory, setSelectedCategory] = useState('all');
+  const [showCategoryFilters, setShowCategoryFilters] = useState(false);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [walletBalance, setWalletBalance] = useState(0);
@@ -86,12 +89,48 @@ const HomeScreen = ({ navigation }) => {
   const [prepaidVoiceOffers, setPrepaidVoiceOffers] = useState([]);
   const [loadingVoiceOffers, setLoadingVoiceOffers] = useState(false);
 
-  // Home Popup State
+  // Home Popup State - TEMPORARILY DISABLED
   const [showHomePopup, setShowHomePopup] = useState(false);
+
+  // Recently consulted astrologers (local cache)
+  const [recentAstrologers, setRecentAstrologers] = useState([]);
+
+  // Discovery section expanded toggle
+  const [showDiscovery, setShowDiscovery] = useState(false);
 
   // Pending Pooja Details State
   const [pendingPoojaDetails, setPendingPoojaDetails] = useState([]);
   const [loadingPoojaDetails, setLoadingPoojaDetails] = useState(false);
+
+  // Load recently consulted astrologers from local cache
+  const loadRecentAstrologers = useCallback(async () => {
+    try {
+      const raw = await AsyncStorage.getItem('recentAstrologerIds');
+      if (!raw) return;
+      const ids = JSON.parse(raw);
+      const matched = ids
+        .map(id => astrologers.find(a => (a._id || a.id) === id))
+        .filter(Boolean)
+        .slice(0, 3);
+      setRecentAstrologers(matched);
+    } catch (e) {
+      // silent
+    }
+  }, [astrologers]);
+
+  // Persist a viewed astrologer id
+  const saveRecentAstrologer = useCallback(async (astrologer) => {
+    try {
+      const id = astrologer._id || astrologer.id;
+      if (!id) return;
+      const raw = await AsyncStorage.getItem('recentAstrologerIds');
+      const existing = raw ? JSON.parse(raw) : [];
+      const updated = [id, ...existing.filter(i => i !== id)].slice(0, 5);
+      await AsyncStorage.setItem('recentAstrologerIds', JSON.stringify(updated));
+    } catch (e) {
+      // silent
+    }
+  }, []);
 
   // Fetch categories from backend
   const fetchCategories = useCallback(async () => {
@@ -185,13 +224,28 @@ const HomeScreen = ({ navigation }) => {
       console.log('✅ Prepaid offers fetched:', data);
       
       if (data.success) {
-        console.log('🏠 [HOME_SCREEN] Prepaid offers received:', data.data?.map(offer => ({
+        console.log('🏠 [HOME_SCREEN] Prepaid offers received (summary):', data.data?.map(offer => ({
           offerId: offer.offerId,
           isPaid: offer.isPaid,
           isUsed: offer.isUsed,
           isAvailableToUse: offer.isAvailableToUse,
-          astrologer: offer.astrologer?.name
+          astrologerName: offer.astrologer?.name || offer.astrologer?.displayName,
         })));
+
+        // Deep debug for first 2 offers to inspect image and specialization fields
+        (data.data || []).slice(0, 2).forEach((offer, idx) => {
+          const a = offer?.astrologer || {};
+          console.log(`🔍 [OFFERS_DEBUG ${idx}] astrologer fields:`, {
+            keys: Object.keys(a || {}),
+            name: a.name || a.displayName,
+            profileImage: a.profileImage,
+            imageUrl: a.imageUrl,
+            profileImageUrl: a?.profileImage?.url,
+            specializations: a.specializations,
+            specialties: a.specialties,
+            categoryRefs: a.categoryRefs,
+          });
+        });
         setPrepaidOffers(data.data || []);
       }
     } catch (error) {
@@ -597,6 +651,13 @@ const HomeScreen = ({ navigation }) => {
       clearRemainingTimeTimer();
     };
   }, [clearRemainingTimeTimer]);
+
+  // Load recent astrologers once astrologers array is populated
+  useEffect(() => {
+    if (astrologers.length > 0) {
+      loadRecentAstrologers();
+    }
+  }, [astrologers, loadRecentAstrologers]);
 
   // Check app version and redirect to update screen if needed
   const checkAppVersion = useCallback(async () => {
@@ -1740,7 +1801,8 @@ const HomeScreen = ({ navigation }) => {
       
       refreshData();
       
-      // Show home popup after a short delay (to ensure user sees home screen first)
+      // Home popup TEMPORARILY DISABLED
+      /*
       const popupTimer = setTimeout(() => {
         console.log('🎯 [HOME_SCREEN] Triggering home popup display');
         setShowHomePopup(true);
@@ -1749,6 +1811,7 @@ const HomeScreen = ({ navigation }) => {
       return () => {
         clearTimeout(popupTimer);
       };
+      */
     }, [fetchUserPendingBookings, fetchAstrologers, fetchCategories, fetchWalletBalance, fetchPrepaidOffers, fetchPrepaidRechargeOffers, socket])
   );
   
@@ -2331,43 +2394,94 @@ const HomeScreen = ({ navigation }) => {
   );
 
   // Render header
-  const renderHeader = () => (
-    <View style={styles.header}>
-      <View style={styles.headerContent}>
-        <View style={styles.userInfo}>
-          <Text style={styles.greeting}>
-            Welcome, {user?.name || 'User'}!
-          </Text>
-          {/* <Text style={styles.subGreeting}>
-            Find your perfect astrologer
-          </Text> */}
-        </View>
-        <View style={styles.headerActions}>
-          <TouchableOpacity
-            style={styles.walletContainer}
-            onPress={() => navigation.navigate('Wallet')}
-          >
-            <View style={styles.walletContent}>
-              <Ionicons name="wallet-outline" size={16} color="#F97316" />
-              <View style={styles.walletInfo}>
-                <Text style={styles.walletLabel}>Wallet</Text>
-                <Text style={styles.walletBalance}>
-                  {loadingWallet ? '...' : `₹${walletBalance.toFixed(2)}`}
+  const renderHeader = () => {
+    const hasActivePendingBookings = pendingBookings.some(
+      (b) => b.status !== 'expired' && b.status !== 'cancelled'
+    );
+    const hasActiveSession = !!activeSessionData || hasActivePendingBookings;
+    const formatTime = (secs) => {
+      if (!secs && secs !== 0) return null;
+      const m = Math.max(0, Math.floor(secs / 60));
+      const s = Math.max(0, secs % 60);
+      return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+    };
+
+    const hour = new Date().getHours();
+    const timeGreeting = hour < 12 ? 'GOOD MORNING' : hour < 17 ? 'GOOD AFTERNOON' : 'GOOD EVENING';
+    const isLowBalance = !loadingWallet && walletBalance < 50;
+
+    return (
+      <View style={styles.header}>
+        <View style={styles.headerContent}>
+          {/* Top Row - Profile and Wallet */}
+          <View style={styles.headerTopRow}>
+            <TouchableOpacity
+              style={styles.profileButton}
+              onPress={() => navigation.navigate('AddUserProfile')}
+            >
+              <Ionicons name="person" size={20} color="#C8A46A" />
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.walletGlassCard, isLowBalance && { borderColor: 'rgba(248,113,113,0.4)' }]}
+              onPress={() => navigation.navigate('Wallet')}
+              activeOpacity={0.8}
+            >
+              <Ionicons name="wallet" size={14} color={isLowBalance ? '#F87171' : '#C8A46A'} />
+              <Text style={[styles.walletAmount, isLowBalance && { color: '#F87171' }]}>
+                {loadingWallet ? '…' : `₹${walletBalance.toFixed(0)}`}
+              </Text>
+              {isLowBalance
+                ? <Text style={{ fontSize: 10, color: '#F87171', fontWeight: '600', marginLeft: 2 }}>Low</Text>
+                : <Ionicons name="chevron-forward" size={12} color="#8A8A8A" />
+              }
+            </TouchableOpacity>
+          </View>
+
+          {/* Greeting Section */}
+          <View style={styles.greetingSection}>
+            <Text style={styles.greetingText}>{timeGreeting}</Text>
+            <Text style={styles.userName}>{user?.name?.split(' ')[0] || 'there'}</Text>
+            <Text style={styles.tagline}>your cosmic journey awaits</Text>
+          </View>
+
+          {/* Hero Action Row */}
+          <View style={styles.heroActionRow}>
+            {hasActiveSession && (
+              <TouchableOpacity
+                style={styles.rejoinPill}
+                onPress={handleRejoinChat}
+                activeOpacity={0.9}
+              >
+                <Ionicons name="play" size={14} color="#111111" />
+                <Text style={styles.rejoinPillText}>
+                  Rejoin now{typeof remainingTime === 'number' ? ` • ${formatTime(remainingTime)}` : ''}
                 </Text>
-              </View>
-            </View>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.profileButton}
-            onPress={() => navigation.navigate('AddUserProfile')}
-          >
-            <Ionicons name="person-circle-outline" size={32} color="#F97316" />
-          </TouchableOpacity>
+              </TouchableOpacity>
+            )}
+
+            <TouchableOpacity
+              style={styles.primaryCtaButton}
+              onPress={() => navigation.navigate('Astrologers')}
+              activeOpacity={0.9}
+            >
+              <Ionicons name="chatbubbles" size={16} color="#111111" />
+              <Text style={styles.ctaTextPrimary}>Start Consultation</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.secondaryCtaButton}
+              onPress={() => navigation.navigate('Wallet')}
+              activeOpacity={0.9}
+            >
+              <Ionicons name="add-circle-outline" size={16} color="#C8A46A" />
+              <Text style={styles.ctaTextSecondary}>Add Money</Text>
+            </TouchableOpacity>
+          </View>
         </View>
       </View>
-      
-    </View>
-  );
+    );
+  };
 
 
 
@@ -2379,30 +2493,16 @@ const HomeScreen = ({ navigation }) => {
     if (isOnline) {
       // Check if astrologer has legacy status field for busy state
       if (astrologer.status === 'busy') {
-        return '#FF9800'; // Orange for busy
+        return '#C8A46A'; // Gold for busy
       }
-      return '#4CAF50'; // Green for online
+      return '#C8A46A'; // Gold for online
     }
     return '#9E9E9E'; // Grey for offline
   };
 
   // Get badge colors based on badge type
   const getBadgeColors = (badge) => {
-    const badgeType = badge?.toLowerCase();
-    switch (badgeType) {
-      case 'limited':
-        return ['#EF4444', '#DC2626']; // Red
-      case 'popular':
-        return ['#F59E0B', '#D97706']; // Amber
-      case 'best value':
-        return ['#10B981', '#059669']; // Green
-      case 'new':
-        return ['#3B82F6', '#2563EB']; // Blue
-      case 'recommended':
-        return ['#8B5CF6', '#7C3AED']; // Purple
-      default:
-        return ['#FF6B6B', '#FF8E53']; // Default Orange-Red
-    }
+    return ['#C8A46A', '#B8956A']; // Subtle gold for all badges
   };
 
   // Render category button
@@ -2454,18 +2554,27 @@ const HomeScreen = ({ navigation }) => {
       <View style={styles.astrologersSection}>
         {/* Section Header */}
         <View style={styles.astrologersHeader}>
-          <Text style={styles.sectionTitle}>All Astrologers ({filteredAstrologers.length})</Text>
-          <TouchableOpacity
-            onPress={() => navigation.navigate('Astrologers')}
-            style={styles.viewAllButton}
-          >
-            <Text style={styles.viewAllText}>View All</Text>
-            <Ionicons name="chevron-forward" size={16} color="#F97316" />
-          </TouchableOpacity>
+          <Text style={styles.sectionTitle}>Recommended for You</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+            <TouchableOpacity
+              onPress={() => setShowCategoryFilters((v) => !v)}
+              style={styles.filterToggleBtn}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="options-outline" size={14} color="#C8A46A" />
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={() => navigation.navigate('Astrologers')}
+              style={styles.viewAllButton}
+            >
+              <Text style={styles.viewAllText}>View All</Text>
+              <Ionicons name="chevron-forward" size={14} color="#8A8A8A" />
+            </TouchableOpacity>
+          </View>
         </View>
         
         {/* Category Filter Buttons */}
-        {availableCategories.length > 0 && (
+        {availableCategories.length > 0 && showCategoryFilters && (
           <ScrollView 
             horizontal 
             showsHorizontalScrollIndicator={false}
@@ -2476,13 +2585,27 @@ const HomeScreen = ({ navigation }) => {
           </ScrollView>
         )}
         
+        {/* Skeleton rows while loading */}
+        {loading && (
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 20, gap: 12 }} pointerEvents="none">
+            {[1,2,3].map(i => (
+              <View key={i} style={styles.skeletonCard}>
+                <View style={styles.skeletonAvatar} />
+                <View style={styles.skeletonLine} />
+                <View style={[styles.skeletonLine, { width: 60 }]} />
+              </View>
+            ))}
+          </ScrollView>
+        )}
+
         {/* Horizontal Scrollable List */}
+        {!loading && (
         <FlatList
-          data={filteredAstrologers}
+          data={filteredAstrologers.slice(0, 8)}
           renderItem={({ item, index }) => (
             <View style={{
               marginLeft: index === 0 ? 20 : 0,
-              marginRight: index === filteredAstrologers.length - 1 ? 20 : 12
+              marginRight: index === filteredAstrologers.slice(0, 8).length - 1 ? 20 : 12
             }}>
               {renderHorizontalAstrologerCard(item)}
             </View>
@@ -2491,141 +2614,69 @@ const HomeScreen = ({ navigation }) => {
           horizontal
           showsHorizontalScrollIndicator={false}
         />
+        )}
       </View>
     );
   };
 
-  // Render horizontal astrologer card (optimized for horizontal scroll)
+  // Render horizontal astrologer card (CRED-inspired editorial layout)
   const renderHorizontalAstrologerCard = (astrologer) => {
-    // Determine status based on onlineStatus field
-    const getStatusText = (astrologer) => {
-      const isOnline = astrologer.onlineStatus?.chat === 1 || astrologer.onlineStatus?.call === 1;
-      
-      if (isOnline) {
-        // Check if astrologer has legacy status field for busy state
-        if (astrologer.status === 'busy') {
-          return 'Busy';
-        }
-        return 'Available';
-      }
-      return 'Offline';
-    };
+    const isOnline = astrologer.onlineStatus?.chat === 1 || astrologer.onlineStatus?.call === 1;
+    const isBusy = astrologer.status === 'busy';
+    const statusColor = isOnline ? '#C8A46A' : '#9E9E9E';
+    const isPremium = astrologer.isPremium || astrologer.rating?.average >= 4.8;
 
-    const getStatusOutlineColor = (astrologer) => {
-      // Check if astrologer is online based on onlineStatus field
-      const isOnline = astrologer.onlineStatus?.chat === 1 || astrologer.onlineStatus?.call === 1;
-      
-      if (isOnline) {
-        // Check if astrologer has legacy status field for busy state
-        if (astrologer.status === 'busy') {
-          return '#FF9800'; // Orange for busy
-        }
-        return '#4CAF50'; // Green for online
-      }
-      return '#9E9E9E'; // Grey for offline
-    };
+    const specialties = astrologer.specialties || astrologer.specializations?.map(s => s.name || s) || [];
+    const specialtyText = specialties.slice(0, 2).join(' \u2022 ') || 'Vedic Astrology';
+    const ratingVal = astrologer.rating?.average ? astrologer.rating.average.toFixed(1) : (typeof astrologer.rating === 'number' ? astrologer.rating.toFixed(1) : '4.8');
 
     return (
       <TouchableOpacity
-        style={[
-          styles.horizontalAstrologerCard,
-          { 
-            shadowColor: getStatusOutlineColor(astrologer),
-            borderColor: getStatusOutlineColor(astrologer) + '20',
-          }
-        ]}
-        onPress={() => navigation.navigate('AstrologerProfile', { astrologer })}
+        style={[styles.horizontalAstrologerCard, { borderColor: statusColor + '25' }]}
+        onPress={() => {
+          saveRecentAstrologer(astrologer);
+          navigation.navigate('AstrologerProfile', { astrologer });
+        }}
         activeOpacity={0.9}
       >
-        {/* Premium Background Gradient */}
-        <View style={styles.cardGradientOverlay} />
-        
-        {/* Top Badge for Premium Astrologers */}
-        {(astrologer.isPremium || astrologer.rating?.average >= 4.8) && (
+        {isPremium && (
           <View style={styles.premiumBadge}>
-          
             <Text style={styles.premiumText}>PREMIUM</Text>
           </View>
         )}
-        
+
         <View style={styles.horizontalImageContainer}>
-          <View style={[
-            styles.horizontalAstrologerImageContainer,
-            {
-              borderColor: getStatusOutlineColor(astrologer),
-              shadowColor: getStatusOutlineColor(astrologer),
-            }
-          ]}>
-            <Image
-              source={{
-                uri: astrologer.imageUrl || astrologer.profileImage || 'https://via.placeholder.com/80x80?text=No+Image'
-              }}
-              style={styles.horizontalAstrologerImage}
-            />
-            {/* Enhanced Status Badge */}
-            <View style={[
-              styles.horizontalStatusBadge,
-              { backgroundColor: getStatusOutlineColor(astrologer) }
-            ]}>
-              <View style={styles.horizontalStatusDot} />
-            </View>
-            {/* Glow Effect for Online Status */}
-            {getStatusText(astrologer) === 'Available' && (
-              <View style={styles.onlineGlowEffect} />
-            )}
+          <Image
+            source={{
+              uri: astrologer.imageUrl || astrologer.profileImage || 'https://via.placeholder.com/120x120?text=A'
+            }}
+            style={styles.horizontalAstrologerImage}
+          />
+          <View style={[styles.statusRing, { borderColor: statusColor }]}>
+            <View style={[styles.statusDot, { backgroundColor: statusColor }]} />
           </View>
         </View>
-        
+
         <View style={styles.horizontalAstrologerInfo}>
           <Text style={styles.horizontalAstrologerName} numberOfLines={1}>
             {astrologer.displayName || astrologer.name}
           </Text>
-          
-          {/* Specializations Tags */}
-          {(Array.isArray(astrologer.specializations) && astrologer.specializations.length > 0) && (
-            <View style={styles.specializationTagsContainer}>
-              {astrologer.specializations.slice(0, 2).map((spec, index) => (
-                <View key={spec._id || index} style={styles.specializationTag}>
-                  <Text style={styles.specializationTagText} numberOfLines={1}>
-                    {spec.name || spec}
-                  </Text>
-                </View>
-              ))}
-            </View>
-          )}
-          
-          {/* Categories */}
-          <View style={styles.categoryContainer}>
-            <Text style={styles.categoryText} numberOfLines={1}>
-              {Array.isArray(astrologer.categoryRefs) && astrologer.categoryRefs.length > 0
-                ? astrologer.categoryRefs.map(cat => cat?.name || cat).join(', ')
-                : astrologer.specialties?.[0] || astrologer.specialization || 'Vedic Astrology'}
-            </Text>
-          </View>
-          
-          <Text style={styles.horizontalExperience}>
-            {astrologer.experience || '8'}+ years exp
+
+          <Text style={styles.specialtyText} numberOfLines={1}>
+            {specialtyText}
           </Text>
-          
-          {/* Rating and Price Row */}
-          <View style={styles.ratingPriceRow}>
-            {/* Rating Section */}
-            <View style={styles.compactRatingContainer}>
-              <View style={styles.starRatingWrapper}>
-                <FontAwesome name="star" size={12} color="#FFD700" />
-                <Text style={styles.horizontalRating}>
-                  {astrologer.rating?.average ? astrologer.rating.average.toFixed(1) : (astrologer.rating && typeof astrologer.rating === 'number' ? astrologer.rating.toFixed(1) : '4.8')}
-                </Text>
-              </View>
-            </View>
-            
-            {/* Price Section */}
-            <View style={styles.compactPriceContainer}>
-              <Text style={styles.compactPriceAmount}>
-                ₹{astrologer.consultationPrices?.chat || astrologer.chatRate || '50'}
-              </Text>
-              <Text style={styles.compactPriceUnit}>/min</Text>
-            </View>
+
+          <View style={styles.ratingExpRow}>
+            <FontAwesome name="star" size={11} color="#C8A46A" />
+            <Text style={styles.ratingExpText}>{ratingVal}</Text>
+            <Text style={styles.ratingExpDivider}>|</Text>
+            <Text style={styles.ratingExpText}>{astrologer.experience || '8'}+ yrs</Text>
+          </View>
+
+          <View style={styles.priceBadge}>
+            <Text style={styles.priceBadgeText}>
+              ₹{astrologer.consultationPrices?.chat || astrologer.chatRate || '50'}/min
+            </Text>
           </View>
         </View>
       </TouchableOpacity>
@@ -2654,11 +2705,11 @@ const HomeScreen = ({ navigation }) => {
       if (isOnline) {
         // Check if astrologer has legacy status field for busy state
         if (astrologer.status === 'busy') {
-          return ['#F59E0B', '#D97706']; // Orange for busy
+          return ['#C8A46A', '#B8956A']; // Gold for busy
         }
-        return ['#10B981', '#059669']; // Green for online
+        return ['#C8A46A', '#B8956A']; // Gold for online
       }
-      return ['#9CA3AF', '#6B7280']; // Grey for offline
+      return ['#8A8A8A', '#6B6B6B']; // Grey for offline
     };
 
     return (
@@ -2760,7 +2811,7 @@ const HomeScreen = ({ navigation }) => {
                   navigation.navigate('AstrologerProfile', { astrologer: item });
                 }}
               >
-                <Ionicons name="chatbubble" size={16} color="#10B981" />
+                <Ionicons name="chatbubble" size={16} color="#C8A46A" />
               </TouchableOpacity>
             )}
             {/* Show Call button only if onlineStatus.call === 1 and consultationPrices.call exists */}
@@ -2772,7 +2823,7 @@ const HomeScreen = ({ navigation }) => {
                   navigation.navigate('AstrologerProfile', { astrologer: item });
                 }}
               >
-                <Ionicons name="call" size={16} color="#3B82F6" />
+                <Ionicons name="call" size={16} color="#C8A46A" />
               </TouchableOpacity>
             )}
           </View>
@@ -2801,9 +2852,9 @@ const HomeScreen = ({ navigation }) => {
 
     const getStatusColor = () => {
       if (isAccepted) {
-        return '#10B981'; // Green for accepted
+        return '#C8A46A'; // Gold for accepted
       }
-      return '#F59E0B'; // Orange for pending
+      return '#8A8A8A'; // Muted for pending
     };
 
     const getConsultationTypeIcon = () => {
@@ -2837,7 +2888,7 @@ const HomeScreen = ({ navigation }) => {
                 <Ionicons 
                   name={getConsultationTypeIcon()} 
                   size={16} 
-                  color="#6B7280" 
+                  color="#8A8A8A" 
                 />
                 <Text style={styles.consultationType}>
                   {booking.type?.charAt(0).toUpperCase() + booking.type?.slice(1)} Consultation
@@ -2850,7 +2901,7 @@ const HomeScreen = ({ navigation }) => {
         {/* Booking Time and Status Section */}
         <View style={styles.bookingTimeStatusSection}>
           <View style={styles.bookingTimeContainer}>
-            <Ionicons name="time-outline" size={16} color="#6B7280" />
+            <Ionicons name="time-outline" size={16} color="#8A8A8A" />
             <Text style={styles.bookingTimeLabel}>Booking Time:</Text>
             <Text style={styles.bookingTimeValue}>
               {booking.createdAt ? 
@@ -2890,7 +2941,7 @@ const HomeScreen = ({ navigation }) => {
               style={styles.cancelButton}
               onPress={() => handleCancelBooking(booking)}
             >
-              <Ionicons name="close-circle-outline" size={18} color="#EF4444" />
+              <Ionicons name="close-circle-outline" size={18} color="#B85450" />
               <Text style={styles.cancelButtonText}>Cancel</Text>
             </TouchableOpacity>
           )}
@@ -2920,7 +2971,7 @@ const HomeScreen = ({ navigation }) => {
           {/* Voice consultation info message */}
           {booking.type === 'voice' && isAccepted && (
             <View style={styles.voiceConsultationInfo}>
-              <Ionicons name="call" size={20} color="#10B981" />
+              <Ionicons name="call" size={20} color="#C8A46A" />
               <Text style={styles.voiceConsultationText}>
                 You will receive a phone call shortly. Please answer to connect with the astrologer.
               </Text>
@@ -2939,46 +2990,33 @@ const HomeScreen = ({ navigation }) => {
   const getFlatListData = () => {
     const data = [
       { type: 'header', id: 'header' },
-      { type: 'followUpMessages', id: 'followUpMessages' },
-      { type: 'bannerCarousel', id: 'bannerCarousel' }
+      { type: 'followUpMessages', id: 'followUpMessages' }
     ];
-    
-    // Add astrologers section right after banner - filter to show only online astrologers
-    const onlineAstrologers = astrologers.filter(astrologer => {
-      // Check if astrologer is online based on onlineStatus field
-      const isOnline = astrologer.onlineStatus?.chat === 1 || astrologer.onlineStatus?.call === 1;
-      return isOnline;
-    });
-    
-    // Add astrologers section as a single horizontal scrollable component
-    if (onlineAstrologers.length > 0) {
-      data.push({ 
-        type: 'astrologersSection', 
-        id: 'astrologersSection',
-        data: onlineAstrologers
-      });
+
+    // ── LAYER 1: ACTION (time-sensitive / active) ──────────────────────────────
+
+    // Active bookings (pending/accepted)
+    const activePendingBookings = pendingBookings.filter(b =>
+      b.status !== 'expired' && b.status !== 'cancelled'
+    );
+    if (activePendingBookings.length > 0) {
+      data.push({ type: 'pendingBookingsHeader', id: 'pendingBookingsHeader' });
+      data.push(...activePendingBookings.map((booking, index) => ({
+        type: 'pendingBooking',
+        id: `pending_booking_${booking.bookingId || booking._id || index}`,
+        data: booking
+      })));
     }
 
-    // Add pending pooja details section (action required)
+    // Pending pooja details (action required)
     if (pendingPoojaDetails.length > 0) {
       data.push({ type: 'pendingPoojaDetails', id: 'pendingPoojaDetails' });
     }
 
-    // Add pooja section
-    data.push({ type: 'poojaSection', id: 'poojaSection' });
+    // ── LAYER 2: OWNED CREDITS (use what you have) ────────────────────────────
 
-    // Add daily horoscope section
-    data.push({ type: 'dailyHoroscope', id: 'dailyHoroscope' });
-    
-    // Only add free chat section if globally enabled
-    if (freeChatEnabled) {
-      data.push({ type: 'freeChat', id: 'freeChat' });
-    }
-
-    // Add prepaid offers section if there are any
-    console.log('🏠 [HOME_SCREEN] Prepaid offers count:', prepaidOffers.length, prepaidOffers);
+    // Personalized prepaid offers
     if (prepaidOffers.length > 0) {
-      console.log('🏠 [HOME_SCREEN] Adding prepaid offers to data array');
       data.push({ type: 'prepaidOffersHeader', id: 'prepaidOffersHeader' });
       data.push(...prepaidOffers.map((offer, index) => ({
         type: 'prepaidOffer',
@@ -2987,10 +3025,8 @@ const HomeScreen = ({ navigation }) => {
       })));
     }
 
-    // Add prepaid recharge card offers section if there are any (user-owned)
-    console.log('💳 [HOME_SCREEN] Prepaid recharge offers count:', prepaidRechargeOffers.length, prepaidRechargeOffers);
+    // Owned chat packs (user-owned)
     if (prepaidRechargeOffers.length > 0) {
-      console.log('💳 [HOME_SCREEN] Adding prepaid recharge offers to data array');
       data.push({ type: 'prepaidRechargeOffersHeader', id: 'prepaidRechargeOffersHeader' });
       data.push(...prepaidRechargeOffers.map((offer, index) => ({
         type: 'prepaidRechargeOffer',
@@ -2999,7 +3035,7 @@ const HomeScreen = ({ navigation }) => {
       })));
     }
 
-    // Add prepaid voice card offers section if there are any (user-owned)
+    // Owned voice packs (user-owned)
     console.log('📞 [HOME_SCREEN] Prepaid voice offers count:', prepaidVoiceOffers.length, prepaidVoiceOffers);
     if (prepaidVoiceOffers.length > 0) {
       console.log('📞 [HOME_SCREEN] Adding prepaid voice offers to data array');
@@ -3011,59 +3047,57 @@ const HomeScreen = ({ navigation }) => {
       })));
     }
 
-    // Add prepaid recharge cards catalog section (buyable cards) if there are any
-    console.log('💳 [HOME_SCREEN] Prepaid recharge cards catalog count:', prepaidRechargeCards.length, prepaidRechargeCards);
+    // ── LAYER 3: DISCOVERY (recommended astrologers) ──────────────────────
+
+    // Online astrologers (recommended)
+    const onlineAstrologers = astrologers.filter(a => {
+      return a.onlineStatus?.chat === 1 || a.onlineStatus?.call === 1;
+    });
+    if (onlineAstrologers.length > 0) {
+      data.push({
+        type: 'astrologersSection',
+        id: 'astrologersSection',
+        data: onlineAstrologers,
+      });
+    }
+
+    // Last consulted quick-chips
+    if (recentAstrologers.length > 0) {
+      data.push({ type: 'lastConsulted', id: 'lastConsulted', data: recentAstrologers });
+    }
+
+    // Daily horoscope
+    data.push({ type: 'dailyHoroscope', id: 'dailyHoroscope' });
+
+    // Astrology Tools section
+    data.push({ type: 'astrologyTools', id: 'astrologyTools' });
+
+    // Free chat (only when globally enabled)
+    if (freeChatEnabled) {
+      data.push({ type: 'freeChat', id: 'freeChat' });
+    }
+
+    // ── LAYER 4: EXPLORE (collapsible discovery: Pooja + Blog) ──────────────
+    data.push({ type: 'exploreHeader', id: 'exploreHeader' });
+    if (showDiscovery) {
+      data.push({ type: 'poojaSection', id: 'poojaSection' });
+      data.push({ type: 'blogSection', id: 'blogSection' });
+    }
+
+    // ── LAYER 5: SHOP (buy more time/packs) ──────────────────────────────
+    // Buyable chat packs catalog
     if (prepaidRechargeCards.length > 0) {
-      console.log('💳 [HOME_SCREEN] Adding prepaid recharge cards catalog to data array');
       data.push({ type: 'prepaidRechargeCardsHeader', id: 'prepaidRechargeCardsHeader' });
-      // Single grid container item with all cards for horizontal scroll + 3 per row layout
-      data.push({
-        type: 'prepaidRechargeCardsGrid',
-        id: 'prepaidRechargeCardsGrid',
-        data: prepaidRechargeCards,
-      });
+      data.push({ type: 'prepaidRechargeCardsGrid', id: 'prepaidRechargeCardsGrid', data: prepaidRechargeCards });
     }
-
-    // Add prepaid voice cards catalog section (buyable voice packs) if there are any
-    console.log('📞 [HOME_SCREEN] Prepaid voice cards catalog count:', prepaidVoiceCards.length, prepaidVoiceCards);
+    // Buyable voice packs catalog
     if (prepaidVoiceCards.length > 0) {
-      console.log('📞 [HOME_SCREEN] Adding prepaid voice cards catalog to data array');
       data.push({ type: 'prepaidVoiceCardsHeader', id: 'prepaidVoiceCardsHeader' });
-      data.push({
-        type: 'prepaidVoiceCardsGrid',
-        id: 'prepaidVoiceCardsGrid',
-        data: prepaidVoiceCards,
-      });
+      data.push({ type: 'prepaidVoiceCardsGrid', id: 'prepaidVoiceCardsGrid', data: prepaidVoiceCards });
     }
-
-    // Add pending bookings section if there are any
-    const activePendingBookings = pendingBookings.filter(booking => 
-      booking.status !== 'expired' && booking.status !== 'cancelled'
-    );
-    
-    if (activePendingBookings.length > 0) {
-      data.push({ type: 'pendingBookingsHeader', id: 'pendingBookingsHeader' });
-      data.push(...activePendingBookings.map((booking, index) => ({
-        type: 'pendingBooking',
-        id: `pending_booking_${booking.bookingId || booking._id || index}`,
-        data: booking
-      })));
-    }
-
-    // Add recharge packages section
     data.push({ type: 'rechargePackagesSection', id: 'rechargePackagesSection' });
-    
-    // Add blog section
-    data.push({ type: 'blogSection', id: 'blogSection' });
-    
-    return data;
-  };
 
-  // Handle banner press events
-  const handleBannerPress = (index) => {
-    console.log(`Banner ${index + 1} pressed`);
-    // Add your banner press logic here
-    // For example: navigation.navigate('BannerDetail', { bannerId: index });
+    return data;
   };
 
   // Render different item types
@@ -3074,20 +3108,32 @@ const HomeScreen = ({ navigation }) => {
         return renderHeader();
       case 'followUpMessages':
         return <FollowUpMessagesSection navigation={navigation} />;
-      case 'bannerCarousel':
-        return (
-          <View style={{ marginVertical: 0 }}>
-            <BannerCarousel onBannerPress={handleBannerPress} />
-          </View>
-        );
+      case 'astrologyTools':
+        return <AstrologyToolsSection navigation={navigation} />;
       case 'freeChat':
         return <FreeChatCard navigation={navigation} />;
       case 'prepaidOffersHeader':
         return (
-          <View style={styles.astrologersSection}>
-            <View style={styles.astrologersHeader}>
-              <Text style={styles.sectionTitle}>Special Offers</Text>
+          <View style={styles.personalizedOffersHeader}>
+            <View style={styles.personalizedOffersHeaderLeft}>
+              <LinearGradient
+                colors={['#C8A46A', '#A08050']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={styles.personalizedOffersIcon}
+              >
+                <MaterialIcons name="local-offer" size={20} color="#0F0F0F" />
+              </LinearGradient>
+              <View>
+                <Text style={styles.personalizedOffersTitle}>Personalized Offers</Text>
+                <Text style={styles.personalizedOffersSubtitle}>Exclusive deals just for you</Text>
+              </View>
             </View>
+            {prepaidOffers.length > 0 && (
+              <View style={styles.offersCountBadge}>
+                <Text style={styles.offersCountText}>{prepaidOffers.length}</Text>
+              </View>
+            )}
           </View>
         );
       case 'prepaidOffer':
@@ -3104,7 +3150,7 @@ const HomeScreen = ({ navigation }) => {
         return (
           <View style={styles.astrologersSection}>
             <View style={styles.astrologersHeader}>
-              <Text style={styles.sectionTitle}>Your Prepaid Chat Packs</Text>
+              <Text style={styles.sectionTitle}>Membership Plans</Text>
             </View>
           </View>
         );
@@ -3120,7 +3166,7 @@ const HomeScreen = ({ navigation }) => {
         return (
           <View style={styles.astrologersSection}>
             <View style={styles.astrologersHeader}>
-              <Text style={styles.sectionTitle}>Your Prepaid Voice Packs</Text>
+              <Text style={styles.sectionTitle}>Voice Memberships</Text>
             </View>
           </View>
         );
@@ -3128,34 +3174,29 @@ const HomeScreen = ({ navigation }) => {
         console.log('📞 [HOME_SCREEN] Rendering PrepaidVoiceOfferCard with data:', item.data);
         return (
           <TouchableOpacity
-            style={[styles.prepaidRechargeOfferCard, { borderLeftColor: '#8B5CF6' }]}
+            style={[styles.prepaidRechargeOfferCard, { borderLeftColor: '#C8A46A' }]}
             onPress={() => handleStartPrepaidVoiceCall(item.data)}
             activeOpacity={0.8}
           >
             <View style={styles.prepaidRechargeOfferContent}>
               <View style={styles.prepaidRechargeOfferHeader}>
-                <View style={[styles.prepaidRechargeOfferIcon, { backgroundColor: 'rgba(139, 92, 246, 0.1)' }]}>
-                  <Ionicons name="call" size={24} color="#8B5CF6" />
+                <View style={[styles.prepaidRechargeOfferIcon, { backgroundColor: 'rgba(200, 164, 106, 0.1)' }]}>
+                  <Ionicons name="call" size={24} color="#C8A46A" />
                 </View>
                 <View style={styles.prepaidRechargeOfferInfo}>
                   <Text style={styles.prepaidRechargeOfferTitle} numberOfLines={1}>
                     {item.data.purchaseDetails?.cardName || 'Voice Pack'}
                   </Text>
-                  <Text style={[styles.prepaidRechargeOfferDuration, { color: '#8B5CF6' }]}>
+                  <Text style={[styles.prepaidRechargeOfferDuration, { color: '#C8A46A' }]}>
                     {item.data.purchaseDetails?.durationMinutes || 0} min voice call
                   </Text>
                 </View>
               </View>
               <View style={styles.prepaidRechargeOfferAction}>
-                <LinearGradient
-                  colors={['#8B5CF6', '#A855F7']}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 0 }}
-                  style={styles.prepaidRechargeOfferButton}
-                >
+                <View style={styles.prepaidRechargeOfferButton}>
                   <Text style={styles.prepaidRechargeOfferButtonText}>Start Call</Text>
-                  <Ionicons name="call" size={16} color="#fff" />
-                </LinearGradient>
+                  <Ionicons name="call" size={16} color="#C8A46A" />
+                </View>
               </View>
             </View>
           </TouchableOpacity>
@@ -3164,14 +3205,14 @@ const HomeScreen = ({ navigation }) => {
         return (
           <View style={styles.astrologersSection}>
             <View style={styles.astrologersHeader}>
-              <Text style={styles.sectionTitle}>Prepaid Chat Packs</Text>
+              <Text style={styles.sectionTitle}>Chat Packages</Text>
               <TouchableOpacity 
                 style={styles.viewAllButton} 
                 activeOpacity={0.8}
                 onPress={() => navigation.navigate('PrepaidRechargeCardsList')}
               >
                 <Text style={styles.viewAllText}>View All</Text>
-                <Ionicons name="chevron-forward" size={16} color="#F97316" />
+                <Ionicons name="chevron-forward" size={16} color="#8A8A8A" />
               </TouchableOpacity>
             </View>
           </View>
@@ -3196,17 +3237,10 @@ const HomeScreen = ({ navigation }) => {
                 >
                   <View style={styles.prepaidRechargeCard}>
                     {card.badge ? (
-                      <View style={styles.ribbonContainer}>
-                        <LinearGradient
-                          colors={getBadgeColors(card.badge)}
-                          start={{ x: 0, y: 0 }}
-                          end={{ x: 1, y: 1 }}
-                          style={styles.ribbonBadge}
-                        >
-                          <Text style={styles.ribbonBadgeText}>
-                            {card.badge.toUpperCase()}
-                          </Text>
-                        </LinearGradient>
+                      <View style={styles.prepaidRechargeBadge}>
+                        <Text style={styles.prepaidRechargeBadgeText}>
+                          {card.badge.toUpperCase()}
+                        </Text>
                       </View>
                     ) : null}
 
@@ -3215,16 +3249,16 @@ const HomeScreen = ({ navigation }) => {
                         {card.displayName}
                       </Text>
 
-                      <View style={styles.prepaidRechargeDurationRow}>
-                        <Ionicons name="time-outline" size={16} color="#4CAF50" />
-                        <Text style={styles.prepaidRechargeDuration} numberOfLines={1}>
+                      <View style={styles.prepaidRechargeMetaRow}>
+                        <Ionicons name="time-outline" size={14} color="#8A8A8A" />
+                        <Text style={styles.prepaidRechargeMetaText} numberOfLines={1}>
                           {card.durationMinutes} min chat
                         </Text>
                       </View>
 
-                      <View style={styles.prepaidRechargeApplicabilityRow}>
-                        <Ionicons name="people-outline" size={14} color="#FF6B35" />
-                        <Text style={styles.prepaidRechargeApplicability} numberOfLines={1}>
+                      <View style={styles.prepaidRechargeMetaRow}>
+                        <Ionicons name="people-outline" size={14} color="#8A8A8A" />
+                        <Text style={styles.prepaidRechargeMetaText} numberOfLines={1}>
                           {card.astrologerAssignment === 'specific'
                             ? 'Selected astrologers'
                             : 'Any Astrologer'}
@@ -3232,17 +3266,14 @@ const HomeScreen = ({ navigation }) => {
                       </View>
 
                       {card.usageType === 'single_use' && (
-                        <View style={styles.prepaidRechargeSingleUseBadge}>
-                          <Ionicons name="alert-circle-outline" size={12} color="#8B5CF6" />
-                          <Text style={styles.prepaidRechargeSingleUseText}>Single Use Only</Text>
-                        </View>
+                        <Text style={styles.prepaidRechargeSingleUseText}>Single use</Text>
                       )}
 
                       {Array.isArray(card.features) && card.features.length > 0 && (
                         <View style={styles.prepaidRechargeFeatures}>
                           {card.features.slice(0, 2).map((feature, fIndex) => (
                             <View key={fIndex} style={styles.prepaidRechargeFeatureRow}>
-                              <Ionicons name="checkmark-circle" size={14} color="#4CAF50" />
+                              <Text style={styles.prepaidRechargeFeatureBullet}>·</Text>
                               <Text
                                 style={styles.prepaidRechargeFeatureText}
                                 numberOfLines={1}
@@ -3257,7 +3288,7 @@ const HomeScreen = ({ navigation }) => {
 
                     <View style={styles.prepaidRechargeFooter}>
                       <View style={styles.prepaidRechargePriceContainer}>
-                        <Text style={styles.prepaidRechargePriceLabel}>Price</Text>
+                        <Text style={styles.prepaidRechargePriceLabel}>PRICE</Text>
                         <Text style={styles.prepaidRechargePriceValue}>
                           ₹{card.basePrice ?? card.totalAmount ?? '--'}
                         </Text>
@@ -3269,18 +3300,11 @@ const HomeScreen = ({ navigation }) => {
                       </View>
 
                       <TouchableOpacity
-                        style={styles.prepaidRechargeButton}
+                        style={styles.prepaidRechargePurchaseButton}
                         onPress={() => handleBuyPrepaidRechargeCard(card)}
                         activeOpacity={0.85}
                       >
-                        <LinearGradient
-                          colors={['#4CAF50', '#45B649']}
-                          start={{ x: 0, y: 0 }}
-                          end={{ x: 1, y: 0 }}
-                          style={styles.prepaidRechargeButtonGradient}
-                        >
-                          <Text style={styles.prepaidRechargeButtonText}>Buy</Text>
-                        </LinearGradient>
+                        <Text style={styles.prepaidRechargePurchaseText}>Purchase</Text>
                       </TouchableOpacity>
                     </View>
                   </View>
@@ -3294,14 +3318,14 @@ const HomeScreen = ({ navigation }) => {
         return (
           <View style={styles.astrologersSection}>
             <View style={styles.astrologersHeader}>
-              <Text style={styles.sectionTitle}>Prepaid Voice Packs</Text>
+              <Text style={styles.sectionTitle}>Voice Memberships</Text>
               <TouchableOpacity 
                 style={styles.viewAllButton} 
                 activeOpacity={0.8}
                 onPress={() => navigation.navigate('PrepaidVoiceCardsList')}
               >
                 <Text style={styles.viewAllText}>View All</Text>
-                <Ionicons name="chevron-forward" size={16} color="#F97316" />
+                <Ionicons name="chevron-forward" size={16} color="#8A8A8A" />
               </TouchableOpacity>
             </View>
           </View>
@@ -3324,19 +3348,12 @@ const HomeScreen = ({ navigation }) => {
                   key={card.id || card._id || index}
                   style={styles.prepaidRechargeGridItem}
                 >
-                  <View style={[styles.prepaidRechargeCard, { borderColor: '#8B5CF6' }]}>
+                  <View style={styles.prepaidRechargeCard}>
                     {card.badge ? (
-                      <View style={styles.ribbonContainer}>
-                        <LinearGradient
-                          colors={['#8B5CF6', '#A855F7']}
-                          start={{ x: 0, y: 0 }}
-                          end={{ x: 1, y: 1 }}
-                          style={styles.ribbonBadge}
-                        >
-                          <Text style={styles.ribbonBadgeText}>
-                            {card.badge.toUpperCase()}
-                          </Text>
-                        </LinearGradient>
+                      <View style={styles.prepaidRechargeBadge}>
+                        <Text style={styles.prepaidRechargeBadgeText}>
+                          {card.badge.toUpperCase()}
+                        </Text>
                       </View>
                     ) : null}
 
@@ -3345,16 +3362,16 @@ const HomeScreen = ({ navigation }) => {
                         {card.displayName}
                       </Text>
 
-                      <View style={styles.prepaidRechargeDurationRow}>
-                        <Ionicons name="call-outline" size={16} color="#8B5CF6" />
-                        <Text style={[styles.prepaidRechargeDuration, { color: '#8B5CF6' }]} numberOfLines={1}>
+                      <View style={styles.prepaidRechargeMetaRow}>
+                        <Ionicons name="call-outline" size={14} color="#8A8A8A" />
+                        <Text style={styles.prepaidRechargeMetaText} numberOfLines={1}>
                           {card.durationMinutes} min call
                         </Text>
                       </View>
 
-                      <View style={styles.prepaidRechargeApplicabilityRow}>
-                        <Ionicons name="people-outline" size={14} color="#FF6B35" />
-                        <Text style={styles.prepaidRechargeApplicability} numberOfLines={1}>
+                      <View style={styles.prepaidRechargeMetaRow}>
+                        <Ionicons name="people-outline" size={14} color="#8A8A8A" />
+                        <Text style={styles.prepaidRechargeMetaText} numberOfLines={1}>
                           {card.astrologerAssignment === 'specific'
                             ? 'Selected astrologers'
                             : 'Any Astrologer'}
@@ -3362,17 +3379,14 @@ const HomeScreen = ({ navigation }) => {
                       </View>
 
                       {card.usageType === 'single_use' && (
-                        <View style={styles.prepaidRechargeSingleUseBadge}>
-                          <Ionicons name="alert-circle-outline" size={12} color="#8B5CF6" />
-                          <Text style={styles.prepaidRechargeSingleUseText}>Single Use Only</Text>
-                        </View>
+                        <Text style={styles.prepaidRechargeSingleUseText}>Single use</Text>
                       )}
 
                       {Array.isArray(card.features) && card.features.length > 0 && (
                         <View style={styles.prepaidRechargeFeatures}>
                           {card.features.slice(0, 2).map((feature, fIndex) => (
                             <View key={fIndex} style={styles.prepaidRechargeFeatureRow}>
-                              <Ionicons name="checkmark-circle" size={14} color="#8B5CF6" />
+                              <Text style={styles.prepaidRechargeFeatureBullet}>·</Text>
                               <Text
                                 style={styles.prepaidRechargeFeatureText}
                                 numberOfLines={1}
@@ -3387,7 +3401,7 @@ const HomeScreen = ({ navigation }) => {
 
                     <View style={styles.prepaidRechargeFooter}>
                       <View style={styles.prepaidRechargePriceContainer}>
-                        <Text style={styles.prepaidRechargePriceLabel}>Price</Text>
+                        <Text style={styles.prepaidRechargePriceLabel}>PRICE</Text>
                         <Text style={styles.prepaidRechargePriceValue}>
                           ₹{card.basePrice ?? card.totalAmount ?? '--'}
                         </Text>
@@ -3399,18 +3413,11 @@ const HomeScreen = ({ navigation }) => {
                       </View>
 
                       <TouchableOpacity
-                        style={styles.prepaidRechargeButton}
+                        style={styles.prepaidRechargePurchaseButton}
                         onPress={() => handleBuyPrepaidVoiceCard(card)}
                         activeOpacity={0.85}
                       >
-                        <LinearGradient
-                          colors={['#8B5CF6', '#A855F7']}
-                          start={{ x: 0, y: 0 }}
-                          end={{ x: 1, y: 0 }}
-                          style={styles.prepaidRechargeButtonGradient}
-                        >
-                          <Text style={styles.prepaidRechargeButtonText}>Buy</Text>
-                        </LinearGradient>
+                        <Text style={styles.prepaidRechargePurchaseText}>Purchase</Text>
                       </TouchableOpacity>
                     </View>
                   </View>
@@ -3432,29 +3439,22 @@ const HomeScreen = ({ navigation }) => {
                 <View style={styles.horoscopeCardContent}>
                   <View style={styles.horoscopeLeftContent}>
                     <View style={styles.enhancedIconContainer}>
-                      <Ionicons name="star" size={24} color="#FFD700" />
-                      <View style={styles.iconGlow} />
+                      <Ionicons name="star" size={24} color="#C8A46A" />
                     </View>
                     <View style={styles.horoscopeTextContent}>
-                      <Text style={styles.enhancedHoroscopeTitle}>Daily Horoscope</Text>
-                      <Text style={styles.enhancedHoroscopeSubtitle}>Discover what the stars reveal for you today</Text>
+                      <Text style={styles.enhancedHoroscopeTitle}>Daily Insight</Text>
+                      <Text style={styles.enhancedHoroscopeSubtitle}>What the stars reveal for you today</Text>
                       <View style={styles.horoscopeBadge}>
-                        <Text style={styles.badgeText}>FREE</Text>
+                        <Text style={styles.badgeText}>Free Daily Insight</Text>
                       </View>
                     </View>
                   </View>
                   <View style={styles.horoscopeRightContent}>
-                    <View style={styles.zodiacSymbols}>
-                      <Text style={styles.zodiacSymbol}>♈</Text>
-                      <Text style={styles.zodiacSymbol}>♉</Text>
-                      <Text style={styles.zodiacSymbol}>♊</Text>
-                    </View>
                     <View style={styles.arrowContainer}>
-                      <Ionicons name="chevron-forward" size={18} color="#F97316" />
+                      <Ionicons name="chevron-forward" size={18} color="#C8A46A" />
                     </View>
                   </View>
                 </View>
-                <View style={styles.cardShimmer} />
               </View>
             </TouchableOpacity>
           </View>
@@ -3477,7 +3477,7 @@ const HomeScreen = ({ navigation }) => {
         return (
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}>Pending Booking Requests ({pendingBookings.filter(b => b.status !== 'expired' && b.status !== 'cancelled').length})</Text>
+              <Text style={styles.sectionTitle}>In Progress</Text>
               <View style={styles.pendingBookingsIndicator}>
                 <View style={styles.pulsingDot} />
                 <Text style={styles.liveText}>LIVE</Text>
@@ -3489,6 +3489,74 @@ const HomeScreen = ({ navigation }) => {
         return renderPendingBookingCard({ item });
       case 'astrologersSection':
         return renderAstrologersSection(item.data);
+      case 'lastConsulted':
+        return (
+          <View style={styles.lastConsultedSection}>
+            <View style={styles.lastConsultedHeader}>
+              <Text style={styles.lastConsultedTitle}>Continue with</Text>
+            </View>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.lastConsultedScroll}
+            >
+              {(item.data || []).map((ast) => {
+                const isOnline = ast.onlineStatus?.chat === 1 || ast.onlineStatus?.call === 1;
+                const statusColor = isOnline ? '#4ADE80' : '#9E9E9E';
+                return (
+                  <TouchableOpacity
+                    key={ast._id || ast.id}
+                    style={styles.lastConsultedChip}
+                    onPress={() => {
+                      saveRecentAstrologer(ast);
+                      navigation.navigate('AstrologerProfile', { astrologer: ast });
+                    }}
+                    activeOpacity={0.8}
+                  >
+                    <View style={styles.lastConsultedAvatarWrap}>
+                      <Image
+                        source={{ uri: ast.imageUrl || ast.profileImage || 'https://via.placeholder.com/48x48?text=A' }}
+                        style={styles.lastConsultedAvatar}
+                      />
+                      <View style={[styles.lastConsultedStatus, { backgroundColor: statusColor }]} />
+                    </View>
+                    <Text style={styles.lastConsultedName} numberOfLines={1}>
+                      {(ast.displayName || ast.name || '').split(' ')[0]}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+              <TouchableOpacity
+                style={styles.lastConsultedChip}
+                onPress={() => navigation.navigate('Astrologers')}
+                activeOpacity={0.8}
+              >
+                <View style={[styles.lastConsultedAvatarWrap, styles.lastConsultedMore]}>
+                  <Ionicons name="grid-outline" size={20} color="#C8A46A" />
+                </View>
+                <Text style={styles.lastConsultedName}>All</Text>
+              </TouchableOpacity>
+            </ScrollView>
+          </View>
+        );
+      case 'exploreHeader':
+        return (
+          <TouchableOpacity
+            style={styles.exploreHeader}
+            onPress={() => setShowDiscovery(v => !v)}
+            activeOpacity={0.8}
+          >
+            <View style={styles.exploreHeaderLeft}>
+              <Ionicons name="compass-outline" size={18} color="#C8A46A" />
+              <Text style={styles.exploreHeaderText}>Explore Services</Text>
+            </View>
+            <Ionicons
+              name={showDiscovery ? 'chevron-up' : 'chevron-down'}
+              size={16}
+              color="#8A8A8A"
+            />
+          </TouchableOpacity>
+        );
       default:
         return null;
     }
@@ -3496,7 +3564,7 @@ const HomeScreen = ({ navigation }) => {
 
   return (
     <SafeAreaView style={styles.safeAreaContainer} edges={['top', 'left', 'right']}>
-      <StatusBar barStyle="dark-content" backgroundColor="#fff" translucent={false} />
+      <StatusBar barStyle="light-content" backgroundColor="#111111" translucent={false} />
       
       <View style={styles.contentWrapper}>
         <View style={styles.container}>
@@ -3505,7 +3573,7 @@ const HomeScreen = ({ navigation }) => {
             keyExtractor={(item) => item.id}
             renderItem={renderFlatListItem}
             refreshControl={
-              <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+              <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#C8A46A" colors={['#C8A46A']} />
             }
             showsVerticalScrollIndicator={false}
             contentContainerStyle={styles.flatListContent}
@@ -3515,7 +3583,7 @@ const HomeScreen = ({ navigation }) => {
 
       {loading && (
         <View style={styles.loadingOverlay}>
-          <ActivityIndicator size="large" color="#F97316" />
+          <ActivityIndicator size="large" color="#C8A46A" />
         </View>
       )}
       
@@ -3541,7 +3609,7 @@ const HomeScreen = ({ navigation }) => {
         <View style={styles.modalOverlay}>
           <View style={styles.cancelConfirmModal}>
             <View style={styles.modalHeader}>
-              <Ionicons name="warning" size={32} color="#EF4444" />
+              <Ionicons name="warning" size={32} color="#B85450" />
               <Text style={styles.modalTitle}>Cancel Booking Request?</Text>
             </View>
             
@@ -3601,132 +3669,204 @@ const HomeScreen = ({ navigation }) => {
 const styles = StyleSheet.create({
   safeAreaContainer: {
     flex: 1,
-    backgroundColor: '#fff', // Match header background
+    backgroundColor: '#111111',
   },
   contentWrapper: {
     flex: 1,
-    maxWidth: 500, // Responsive max width for tablets
+    maxWidth: 500,
     alignSelf: 'center',
     width: '100%',
   },
   container: {
     flex: 1,
-    backgroundColor: '#f8f9fa',
+    backgroundColor: '#111111',
   },
   flatListContent: {
-    paddingBottom: 20,
+    paddingBottom: 124,
   },
   header: {
-    backgroundColor: '#fff',
-    paddingTop: 10, // SafeAreaView now handles safe area properly
-    paddingBottom: 15,
-    paddingHorizontal: 20,
-    borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
-    minHeight: 80,
+    paddingTop: 20,
+    paddingBottom: 28,
+    paddingHorizontal: 24,
+    backgroundColor: '#111111',
   },
   headerContent: {
+    flex: 1,
+  },
+  headerTopRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    minHeight: 60,
-  },
-  userInfo: {
-    flex: 1,
-    justifyContent: 'center',
-  },
-  greeting: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#333',
-    marginBottom: 4,
-  },
-  subGreeting: {
-    fontSize: 16,
-    color: '#666',
-  },
-  headerActions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  walletContainer: {
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    marginRight: 12,
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.1,
-    shadowRadius: 3.84,
-    elevation: 5,
-    borderWidth: 1,
-    borderColor: '#f0f0f0',
-  },
-  walletContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  walletInfo: {
-    marginLeft: 8,
-  },
-  walletLabel: {
-    fontSize: 10,
-    color: '#666',
-    fontWeight: '500',
-  },
-  walletBalance: {
-    fontSize: 14,
-    color: '#F97316',
-    fontWeight: 'bold',
+    marginBottom: 36,
   },
   profileButton: {
-    padding: 8,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#1A1A1A',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#2A2A2A',
+  },
+  profileIconContainer: {
+    width: '100%',
+    height: '100%',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  walletGlassCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 24,
+    backgroundColor: 'rgba(26, 26, 26, 0.9)',
+    borderWidth: 1,
+    borderColor: 'rgba(200, 164, 106, 0.35)',
+    gap: 8,
+  },
+  walletAmount: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#F5F5F5',
+    letterSpacing: 0.5,
+  },
+  greetingSection: {
+    marginBottom: 4,
+  },
+  greetingText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#8A8A8A',
+    marginBottom: 8,
+    letterSpacing: 2,
+    textTransform: 'uppercase',
+  },
+  userName: {
+    fontSize: 42,
+    fontWeight: '800',
+    color: '#F5F5F5',
+    marginBottom: 10,
+    letterSpacing: -0.8,
+  },
+  tagline: {
+    fontSize: 14,
+    fontWeight: '400',
+    color: '#8A8A8A',
+    letterSpacing: 0.3,
+  },
+  heroActionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginTop: 16,
+    paddingRight: 24,
+  },
+  rejoinPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 18,
+    backgroundColor: '#C8A46A',
+  },
+  rejoinPillText: {
+    color: '#111111',
+    fontSize: 13,
+    fontWeight: '700',
+    marginLeft: 6,
+  },
+  primaryCtaButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#C8A46A',
+    paddingVertical: 12,
+    borderRadius: 12,
+    gap: 8,
+  },
+  ctaTextPrimary: {
+    color: '#111111',
+    fontSize: 15,
+    fontWeight: '800',
+  },
+  secondaryCtaButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(200, 164, 106, 0.35)',
+    backgroundColor: 'rgba(26, 26, 26, 0.9)',
+    gap: 6,
+  },
+  ctaTextSecondary: {
+    color: '#C8A46A',
+    fontSize: 13,
+    fontWeight: '700',
   },
   section: {
-    marginTop: 20,
-    paddingHorizontal: 20,
+    marginTop: 24,
+    paddingHorizontal: 24,
   },
   astrologersSection: {
-    marginTop: 20,
-    paddingTop: 8,
+    marginTop: 24,
+    paddingTop: 0,
   },
   astrologersHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 20,
-    marginBottom: 12,
+    paddingHorizontal: 24,
+    marginBottom: 20,
+  },
+  filterToggleBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(200, 164, 106, 0.35)',
+    backgroundColor: 'rgba(26, 26, 26, 0.9)',
+    marginRight: 6,
+  },
+  filterToggleText: {
+    color: '#C8A46A',
+    fontSize: 12,
+    fontWeight: '600',
+    marginLeft: 4,
   },
   homeCategoryFilterScroll: {
-    marginBottom: 16,
+    marginBottom: 24,
   },
   homeCategoryFilterContainer: {
-    paddingHorizontal: 20,
+    paddingHorizontal: 24,
   },
   homeCategoryButton: {
-    paddingHorizontal: 14,
-    paddingVertical: 7,
-    borderRadius: 16,
-    backgroundColor: '#FFFFFF',
-    marginRight: 8,
-    borderWidth: 1.5,
-    borderColor: '#E5E7EB',
+    paddingHorizontal: 18,
+    paddingVertical: 10,
+    borderRadius: 20,
+    backgroundColor: 'transparent',
+    marginRight: 10,
+    borderWidth: 1,
+    borderColor: '#2A2A2A',
   },
   homeActiveCategoryButton: {
-    backgroundColor: '#F97316',
-    borderColor: '#F97316',
+    backgroundColor: 'rgba(200, 164, 106, 0.12)',
+    borderColor: '#C8A46A',
   },
   homeCategoryButtonText: {
-    fontSize: 13,
+    fontSize: 14,
     fontWeight: '500',
-    color: '#6B7280',
+    color: '#8A8A8A',
+    letterSpacing: 0.3,
   },
   homeActiveCategoryButtonText: {
-    color: '#FFFFFF',
+    color: '#C8A46A',
     fontWeight: '600',
   },
   sectionHeader: {
@@ -3736,12 +3876,12 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   sectionTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#333',
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#F5F5F5',
   },
   consultationsList: {
-    paddingRight: 20,
+    paddingRight: 24,
   },
   quickActions: {
     flexDirection: 'row',
@@ -3749,39 +3889,34 @@ const styles = StyleSheet.create({
   },
   actionCard: {
     flex: 1,
-    backgroundColor: '#fff',
-    borderRadius: 12,
+    backgroundColor: '#1A1A1A',
+    borderRadius: 16,
     padding: 16,
     marginHorizontal: 4,
     alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.1,
-    shadowRadius: 3.84,
-    elevation: 5,
+    borderWidth: 1,
+    borderColor: '#2A2A2A',
   },
   actionIcon: {
     width: 48,
     height: 48,
     borderRadius: 24,
-    backgroundColor: '#fef3e2',
+    backgroundColor: 'rgba(200, 164, 106, 0.12)',
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 12,
   },
   actionTitle: {
     fontSize: 14,
-    fontWeight: '600',
-    color: '#333',
+    fontWeight: '700',
+    color: '#F5F5F5',
     marginBottom: 4,
     textAlign: 'center',
+    letterSpacing: 0.2,
   },
   actionSubtitle: {
     fontSize: 12,
-    color: '#666',
+    color: '#8A8A8A',
     textAlign: 'center',
   },
   loadingOverlay: {
@@ -3790,45 +3925,34 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: 'rgba(255, 255, 255, 0.8)',
+    backgroundColor: 'rgba(17, 17, 17, 0.85)',
     justifyContent: 'center',
     alignItems: 'center',
   },
   loadingIndicator: {
     marginVertical: 20,
   },
-  sectionHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
   viewAllButton: {
     flexDirection: 'row',
     alignItems: 'center',
+    paddingHorizontal: 4,
+    paddingVertical: 4,
   },
   viewAllText: {
-    fontSize: 14,
-    color: '#F97316',
-    fontWeight: '600',
-    marginRight: 4,
+    fontSize: 13,
+    color: '#8A8A8A',
+    fontWeight: '500',
+    marginRight: 2,
+    letterSpacing: 0.3,
   },
   astrologerCard: {
-    backgroundColor: '#fff',
-    borderRadius: 16,
+    backgroundColor: '#1A1A1A',
+    borderRadius: 20,
     padding: 20,
     marginBottom: 16,
     marginHorizontal: 4,
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 4,
-    },
-    shadowOpacity: 0.12,
-    shadowRadius: 8,
-    elevation: 8,
     borderWidth: 1,
-    borderColor: '#f0f0f0',
+    borderColor: '#2A2A2A',
   },
   cardHeader: {
     flexDirection: 'row',
@@ -3861,7 +3985,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 2,
-    borderColor: '#fff',
+    borderColor: '#111111',
   },
   statusDot: {
     width: 8,
@@ -3874,10 +3998,11 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   astrologerName: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#1F2937',
+    fontSize: 20,
+    fontWeight: '800',
+    color: '#F5F5F5',
     marginBottom: 6,
+    letterSpacing: -0.3,
   },
   badgesRow: {
     flexDirection: 'row',
@@ -3898,8 +4023,8 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
   },
   astrologerSpecialty: {
-    fontSize: 14,
-    color: '#6B7280',
+    fontSize: 13,
+    color: '#8A8A8A',
     marginBottom: 8,
     lineHeight: 20,
   },
@@ -3915,7 +4040,7 @@ const styles = StyleSheet.create({
   starContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#FEF3C7',
+    backgroundColor: 'rgba(200, 164, 106, 0.12)',
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 8,
@@ -3923,20 +4048,20 @@ const styles = StyleSheet.create({
   },
   rating: {
     fontSize: 14,
-    color: '#92400E',
+    color: '#C8A46A',
     marginLeft: 4,
     fontWeight: '700',
   },
   reviewCount: {
     fontSize: 12,
-    color: '#9CA3AF',
+    color: '#8A8A8A',
     fontWeight: '500',
   },
   experience: {
     fontSize: 12,
-    color: '#6B7280',
+    color: '#F5F5F5',
     fontWeight: '600',
-    backgroundColor: '#F3F4F6',
+    backgroundColor: '#2A2A2A',
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 8,
@@ -3947,37 +4072,39 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingTop: 16,
     borderTopWidth: 1,
-    borderTopColor: '#F3F4F6',
+    borderTopColor: '#2A2A2A',
   },
   priceSection: {
     flex: 1,
   },
   priceLabel: {
-    fontSize: 12,
-    color: '#9CA3AF',
+    fontSize: 11,
+    color: '#8A8A8A',
     fontWeight: '500',
-    marginBottom: 2,
+    marginBottom: 4,
+    letterSpacing: 0.3,
   },
   price: {
-    fontSize: 18,
+    fontSize: 20,
     fontWeight: '800',
-    color: '#F97316',
+    color: '#C8A46A',
+    letterSpacing: -0.3,
   },
   quickActions: {
     flexDirection: 'row',
     gap: 8,
   },
   quickActionBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     justifyContent: 'center',
     alignItems: 'center',
-    borderWidth: 1.5,
+    borderWidth: 1,
   },
   chatBtn: {
-    backgroundColor: '#ECFDF5',
-    borderColor: '#10B981',
+    backgroundColor: 'rgba(200, 164, 106, 0.12)',
+    borderColor: 'rgba(200, 164, 106, 0.3)',
   },
   callBtn: {
     paddingHorizontal: 10,
@@ -3994,132 +4121,78 @@ const styles = StyleSheet.create({
     paddingRight: 8,
   },
   prepaidRechargeGridItem: {
-    width: 220, // fixed width for 1.5 cards visible at once
+    width: 220,
     marginRight: 12,
   },
   prepaidRechargeCard: {
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    padding: 8,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 4,
-    elevation: 3,
+    backgroundColor: '#1A1A1A',
+    borderRadius: 16,
+    padding: 12,
     borderWidth: 1,
-    borderColor: '#E5E7EB',
+    borderColor: '#2A2A2A',
     overflow: 'hidden',
   },
-  ribbonContainer: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    width: 80,
-    height: 80,
-    overflow: 'hidden',
-    zIndex: 10,
-  },
-  ribbonBadge: {
-    position: 'absolute',
-    top: 12,
-    left: -25,
-    width: 100,
-    paddingVertical: 4,
-    transform: [{ rotate: '-45deg' }],
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 3,
-    elevation: 5,
-  },
-  ribbonBadgeText: {
-    color: '#fff',
-    fontSize: 9,
-    fontWeight: '800',
-    letterSpacing: 0.8,
-    textTransform: 'uppercase',
-    textShadowColor: 'rgba(0, 0, 0, 0.3)',
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 2,
-  },
-  prepaidRechargeSingleUseBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#F3E8FF',
-    paddingVertical: 5,
+  prepaidRechargeBadge: {
+    alignSelf: 'flex-start',
     paddingHorizontal: 8,
+    paddingVertical: 3,
     borderRadius: 6,
-    marginTop: 6,
-    borderLeftWidth: 2,
-    borderLeftColor: '#8B5CF6',
+    borderWidth: 1,
+    borderColor: 'rgba(200, 164, 106, 0.35)',
+    backgroundColor: 'rgba(200, 164, 106, 0.08)',
+    marginBottom: 8,
+  },
+  prepaidRechargeBadgeText: {
+    color: '#C8A46A',
+    fontSize: 9,
+    fontWeight: '700',
+    letterSpacing: 1,
+    textTransform: 'uppercase',
   },
   prepaidRechargeSingleUseText: {
-    color: '#7C3AED',
+    color: '#8A8A8A',
     fontSize: 11,
-    fontWeight: '600',
-    marginLeft: 4,
+    fontWeight: '500',
+    marginTop: 6,
   },
   prepaidRechargeContent: {
     marginBottom: 12,
-    marginTop: 8,
   },
   prepaidRechargeTitle: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '700',
-    color: '#1F2937',
+    color: '#F5F5F5',
     marginBottom: 10,
-    paddingHorizontal: 8,
-    textAlign: 'center',
-    marginTop: 20,
+    lineHeight: 20,
   },
-  prepaidRechargeDurationRow: {
+  prepaidRechargeMetaRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#E8F5E9',
-    paddingVertical: 8,
-    paddingHorizontal: 10,
-    borderRadius: 8,
-    marginBottom: 10,
+    marginBottom: 6,
+    gap: 6,
   },
-  prepaidRechargeDuration: {
-    marginLeft: 8,
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#2E7D32',
-    flex: 1,
-  },
-  prepaidRechargeApplicabilityRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FFF3E0',
-    paddingVertical: 6,
-    paddingHorizontal: 10,
-    borderRadius: 8,
-    marginBottom: 10,
-    borderLeftWidth: 3,
-    borderLeftColor: '#FF6B35',
-  },
-  prepaidRechargeApplicability: {
-    marginLeft: 8,
-    fontSize: 13,
+  prepaidRechargeMetaText: {
+    fontSize: 12,
     fontWeight: '500',
-    color: '#E65100',
-    flex: 1,
+    color: '#8A8A8A',
   },
   prepaidRechargeFeatures: {
-    marginTop: 4,
+    marginTop: 6,
   },
   prepaidRechargeFeatureRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 4,
+    marginBottom: 3,
+    gap: 6,
+  },
+  prepaidRechargeFeatureBullet: {
+    fontSize: 14,
+    color: '#C8A46A',
+    lineHeight: 16,
   },
   prepaidRechargeFeatureText: {
-    marginLeft: 6,
-    fontSize: 13,
-    color: '#6B7280',
+    fontSize: 12,
+    color: '#8A8A8A',
     flex: 1,
   },
   prepaidRechargeFooter: {
@@ -4127,45 +4200,46 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     marginTop: 4,
+    paddingTop: 10,
+    borderTopWidth: 1,
+    borderTopColor: '#2A2A2A',
   },
   prepaidRechargePriceContainer: {
     flexDirection: 'column',
   },
   prepaidRechargePriceLabel: {
-    fontSize: 12,
-    color: '#9CA3AF',
+    fontSize: 10,
+    color: '#8A8A8A',
     fontWeight: '500',
+    letterSpacing: 0.5,
     marginBottom: 2,
+    textTransform: 'uppercase',
   },
   prepaidRechargePriceValue: {
-    fontSize: 18,
+    fontSize: 20,
     fontWeight: '800',
-    color: '#F97316',
+    color: '#C8A46A',
+    letterSpacing: -0.3,
   },
   prepaidRechargePerMinute: {
     fontSize: 11,
-    fontWeight: '600',
-    color: '#666',
+    fontWeight: '500',
+    color: '#8A8A8A',
     marginTop: 2,
   },
-  prepaidRechargeButton: {
+  prepaidRechargePurchaseButton: {
     borderRadius: 12,
-    overflow: 'hidden',
-    marginLeft: 12,
-    flex: 1,
+    borderWidth: 1,
+    borderColor: '#C8A46A',
+    backgroundColor: '#1A1A1A',
+    paddingVertical: 8,
+    paddingHorizontal: 14,
   },
-  prepaidRechargeButtonGradient: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 12,
-    paddingHorizontal: 12,
-    gap: 8,
-  },
-  prepaidRechargeButtonText: {
-    color: '#fff',
-    fontSize: 15,
+  prepaidRechargePurchaseText: {
+    color: '#C8A46A',
+    fontSize: 12,
     fontWeight: '700',
+    letterSpacing: 0.3,
   },
   // Pending Booking Styles
   pendingBookingsIndicator: {
@@ -4176,32 +4250,26 @@ const styles = StyleSheet.create({
     width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: '#10B981',
+    backgroundColor: '#C8A46A',
     marginRight: 6,
     opacity: 0.8,
   },
   liveText: {
     fontSize: 12,
     fontWeight: '600',
-    color: '#10B981',
+    color: '#C8A46A',
     letterSpacing: 0.5,
   },
   pendingBookingCard: {
-    backgroundColor: '#fff',
+    backgroundColor: '#1A1A1A',
     marginHorizontal: 16,
     marginVertical: 8,
-    borderRadius: 12,
+    borderRadius: 16,
     padding: 16,
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.1,
-    shadowRadius: 3.84,
-    elevation: 5,
+    borderWidth: 1,
+    borderColor: '#2A2A2A',
     borderLeftWidth: 4,
-    borderLeftColor: '#F97316',
+    borderLeftColor: '#C8A46A',
   },
   pendingBookingHeader: {
     marginBottom: 12,
@@ -4222,7 +4290,7 @@ const styles = StyleSheet.create({
   pendingAstrologerName: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#1F2937',
+    color: '#F5F5F5',
     marginBottom: 4,
   },
   consultationTypeContainer: {
@@ -4231,17 +4299,17 @@ const styles = StyleSheet.create({
   },
   consultationType: {
     fontSize: 14,
-    color: '#6B7280',
+    color: '#8A8A8A',
     marginLeft: 6,
   },
   // Booking Time and Status Styles
   bookingTimeStatusSection: {
-    backgroundColor: '#F9FAFB',
+    backgroundColor: '#1A1A1A',
     borderRadius: 8,
     padding: 12,
     marginBottom: 12,
     borderWidth: 1,
-    borderColor: '#E5E7EB',
+    borderColor: '#2A2A2A',
   },
   bookingTimeContainer: {
     flexDirection: 'row',
@@ -4250,24 +4318,25 @@ const styles = StyleSheet.create({
   },
   bookingTimeLabel: {
     fontSize: 13,
-    color: '#6B7280',
+    color: '#8A8A8A',
     fontWeight: '500',
     marginLeft: 6,
     marginRight: 8,
   },
   bookingTimeValue: {
     fontSize: 13,
-    color: '#374151',
+    color: '#F5F5F5',
     fontWeight: '600',
     flex: 1,
   },
   bookingStatusContainer: {
     flexDirection: 'row',
     alignItems: 'center',
+    marginTop: 8,
   },
   bookingStatusLabel: {
     fontSize: 13,
-    color: '#6B7280',
+    color: '#8A8A8A',
     fontWeight: '500',
     marginLeft: 6,
     marginRight: 8,
@@ -4293,19 +4362,19 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   joinSessionButton: {
-    backgroundColor: '#10B981',
+    backgroundColor: '#C8A46A',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: 12,
     paddingHorizontal: 20,
-    borderRadius: 8,
+    borderRadius: 10,
     marginTop: 8,
   },
   joinSessionText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
+    color: '#111111',
+    fontSize: 15,
+    fontWeight: '700',
     marginLeft: 8,
   },
   // Cancel Booking Styles
@@ -4322,73 +4391,72 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingVertical: 10,
     paddingHorizontal: 16,
-    borderRadius: 8,
+    borderRadius: 10,
     borderWidth: 1,
-    borderColor: '#EF4444',
-    backgroundColor: '#FEF2F2',
+    borderColor: '#2A2A2A',
+    backgroundColor: '#2A2A2A',
     flex: 1,
   },
   cancelButtonText: {
-    color: '#EF4444',
+    color: '#8A8A8A',
     fontSize: 14,
     fontWeight: '600',
     marginLeft: 6,
   },
   rejoinSessionButton: {
-    backgroundColor: '#059669',
+    backgroundColor: '#C8A46A',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: 12,
     paddingHorizontal: 20,
-    borderRadius: 8,
+    borderRadius: 10,
     marginTop: 8,
   },
   rejoinSessionText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
+    color: '#111111',
+    fontSize: 15,
+    fontWeight: '700',
     marginLeft: 8,
   },
   voiceConsultationInfo: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    backgroundColor: '#F0FDF4',
-    borderRadius: 8,
+    backgroundColor: 'rgba(200, 164, 106, 0.08)',
+    borderRadius: 10,
     padding: 12,
     marginTop: 8,
     borderLeftWidth: 3,
-    borderLeftColor: '#10B981',
+    borderLeftColor: '#C8A46A',
   },
   voiceConsultationText: {
     flex: 1,
     fontSize: 14,
-    color: '#065F46',
+    color: '#C8A46A',
     marginLeft: 8,
     lineHeight: 20,
   },
   // Modal Styles
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
     justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: 20,
   },
   cancelConfirmModal: {
-    backgroundColor: '#fff',
-    borderRadius: 16,
+    backgroundColor: '#1A1A1A',
+    borderRadius: 20,
     padding: 24,
     width: '100%',
     maxWidth: 400,
     shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 4,
-    },
-    shadowOpacity: 0.25,
-    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.4,
+    shadowRadius: 8,
     elevation: 8,
+    borderWidth: 1,
+    borderColor: '#2A2A2A',
   },
   modalHeader: {
     alignItems: 'center',
@@ -4397,26 +4465,28 @@ const styles = StyleSheet.create({
   modalTitle: {
     fontSize: 20,
     fontWeight: 'bold',
-    color: '#1F2937',
+    color: '#F5F5F5',
     marginTop: 8,
     textAlign: 'center',
   },
   modalMessage: {
     fontSize: 16,
-    color: '#6B7280',
+    color: '#8A8A8A',
     textAlign: 'center',
     lineHeight: 24,
     marginBottom: 16,
   },
   bookingDetailsInModal: {
-    backgroundColor: '#F9FAFB',
+    backgroundColor: '#1A1A1A',
     borderRadius: 8,
     padding: 12,
     marginBottom: 20,
+    borderWidth: 1,
+    borderColor: '#2A2A2A',
   },
   bookingDetailText: {
     fontSize: 14,
-    color: '#374151',
+    color: '#F5F5F5',
     marginBottom: 4,
   },
   modalActions: {
@@ -4430,21 +4500,21 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#D1D5DB',
-    backgroundColor: '#F9FAFB',
+    borderColor: '#2A2A2A',
+    backgroundColor: '#1A1A1A',
     alignItems: 'center',
   },
   modalCancelText: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#6B7280',
+    color: '#8A8A8A',
   },
   modalConfirmButton: {
     flex: 1,
     paddingVertical: 12,
     paddingHorizontal: 20,
     borderRadius: 8,
-    backgroundColor: '#EF4444',
+    backgroundColor: '#B85450',
     alignItems: 'center',
   },
   modalConfirmText: {
@@ -4452,72 +4522,93 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#fff',
   },
-  // Horizontal Astrologers List Styles
+  // Horizontal Astrologers List Styles (CRED-inspired)
   horizontalAstrologersList: {
     paddingVertical: 8,
   },
   horizontalAstrologerCard: {
-    width: 216,
-    backgroundColor: '#fff',
-    borderRadius: 16,
-    padding: 12,
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 4,
+    width: 170,
+    backgroundColor: '#1A1A1A',
+    borderRadius: 20,
+    padding: 14,
     borderWidth: 1,
-    borderColor: '#F3F4F6',
+    borderColor: '#2A2A2A',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 6,
+    elevation: 4,
   },
   horizontalImageContainer: {
     alignItems: 'center',
-    marginBottom: 8,
-  },
-  horizontalAstrologerImageContainer: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    borderWidth: 2,
-    justifyContent: 'center',
-    alignItems: 'center',
+    marginBottom: 12,
     position: 'relative',
   },
   horizontalAstrologerImage: {
-    width: 76,
-    height: 76,
-    borderRadius: 38,
-    backgroundColor: '#F3F4F6',
+    width: 96,
+    height: 96,
+    borderRadius: 48,
+    backgroundColor: '#2A2A2A',
   },
-  horizontalStatusBadge: {
+  statusRing: {
     position: 'absolute',
     bottom: 0,
-    right: 0,
-    width: 16,
-    height: 16,
-    borderRadius: 8,
+    right: 10,
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    borderWidth: 2,
     justifyContent: 'center',
     alignItems: 'center',
-    borderWidth: 2,
-    borderColor: '#fff',
-  },
-  horizontalStatusDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: '#fff',
+    backgroundColor: '#111111',
   },
   horizontalAstrologerInfo: {
     alignItems: 'center',
   },
   horizontalAstrologerName: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#1F2937',
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#F5F5F5',
     textAlign: 'center',
-    marginBottom: 4,
+    marginBottom: 6,
+    letterSpacing: -0.2,
+  },
+  specialtyText: {
+    fontSize: 12,
+    color: '#8A8A8A',
+    textAlign: 'center',
+    marginBottom: 8,
+    letterSpacing: 0.2,
+  },
+  ratingExpRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 10,
+    gap: 6,
+  },
+  ratingExpText: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: '#8A8A8A',
+  },
+  ratingExpDivider: {
+    fontSize: 12,
+    color: '#3A3A3A',
+    fontWeight: '300',
+  },
+  priceBadge: {
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(200, 164, 106, 0.4)',
+    backgroundColor: 'rgba(200, 164, 106, 0.08)',
+  },
+  priceBadgeText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#C8A46A',
+    letterSpacing: 0.3,
   },
   horizontalRatingContainer: {
     flexDirection: 'row',
@@ -4527,19 +4618,19 @@ const styles = StyleSheet.create({
   horizontalRating: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#1F2937',
+    color: '#F5F5F5',
     marginLeft: 2,
   },
   horizontalExperience: {
     fontSize: 12,
-    color: '#6B7280',
+    color: '#8A8A8A',
     marginBottom: 4,
     textAlign: 'center',
   },
   horizontalPrice: {
     fontSize: 12,
     fontWeight: '700',
-    color: '#F97316',
+    color: '#C8A46A',
     marginBottom: 6,
     textAlign: 'center',
   },
@@ -4562,7 +4653,7 @@ const styles = StyleSheet.create({
     right: 0,
     bottom: 0,
     borderRadius: 16,
-    backgroundColor: 'rgba(255, 255, 255, 0.02)',
+    backgroundColor: 'rgba(255, 255, 255, 0.01)',
     zIndex: -1,
   },
   premiumBadge: {
@@ -4571,29 +4662,29 @@ const styles = StyleSheet.create({
     left: 8,
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(255, 215, 0, 0.15)',
+    backgroundColor: 'rgba(200, 164, 106, 0.15)',
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: 'rgba(255, 215, 0, 0.3)',
+    borderColor: 'rgba(200, 164, 106, 0.35)',
     zIndex: 10,
   },
   premiumBadgeInline: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(255, 215, 0, 0.15)',
+    backgroundColor: 'rgba(200, 164, 106, 0.15)',
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: 'rgba(255, 215, 0, 0.3)',
+    borderColor: 'rgba(200, 164, 106, 0.35)',
     marginRight: 8,
   },
   premiumText: {
     fontSize: 8,
     fontWeight: '700',
-    color: '#FFD700',
+    color: '#C8A46A',
     letterSpacing: 0.5,
   },
   onlineGlowEffect: {
@@ -4603,25 +4694,20 @@ const styles = StyleSheet.create({
     right: -2,
     bottom: -2,
     borderRadius: 42,
-    backgroundColor: 'rgba(76, 175, 80, 0.1)',
+    backgroundColor: 'rgba(200, 164, 106, 0.1)',
     zIndex: -1,
   },
   starRatingWrapper: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(255, 215, 0, 0.1)',
+    backgroundColor: 'rgba(200, 164, 106, 0.1)',
     paddingHorizontal: 4,
     paddingVertical: 1,
     borderRadius: 6,
     marginRight: 4,
   },
-  reviewCount: {
-    fontSize: 11,
-    color: '#9CA3AF',
-    fontWeight: '500',
-  },
   specializationContainer: {
-    backgroundColor: 'rgba(59, 130, 246, 0.1)',
+    backgroundColor: 'rgba(200, 164, 106, 0.1)',
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: 6,
@@ -4630,7 +4716,7 @@ const styles = StyleSheet.create({
   },
   specializationText: {
     fontSize: 11,
-    color: '#3B82F6',
+    color: '#C8A46A',
     fontWeight: '600',
     textTransform: 'capitalize',
     textAlign: 'center',
@@ -4643,21 +4729,21 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   specializationTag: {
-    backgroundColor: 'rgba(139, 92, 246, 0.15)',
+    backgroundColor: 'rgba(139, 92, 246, 0.12)',
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: 'rgba(139, 92, 246, 0.3)',
+    borderColor: 'rgba(139, 92, 246, 0.25)',
   },
   specializationTagText: {
     fontSize: 9,
-    color: '#8B5CF6',
+    color: '#A78BFA',
     fontWeight: '600',
     textTransform: 'capitalize',
   },
   categoryContainer: {
-    backgroundColor: 'rgba(59, 130, 246, 0.1)',
+    backgroundColor: 'rgba(200, 164, 106, 0.1)',
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: 6,
@@ -4666,17 +4752,17 @@ const styles = StyleSheet.create({
   },
   categoryText: {
     fontSize: 10,
-    color: '#3B82F6',
+    color: '#C8A46A',
     fontWeight: '500',
     textAlign: 'center',
   },
   enhancedPriceContainer: {
-    backgroundColor: 'rgba(249, 115, 22, 0.1)',
+    backgroundColor: 'rgba(200, 164, 106, 0.1)',
     borderRadius: 8,
     padding: 8,
     marginBottom: 6,
     borderWidth: 1,
-    borderColor: 'rgba(249, 115, 22, 0.2)',
+    borderColor: 'rgba(200, 164, 106, 0.2)',
     alignItems: 'center',
   },
   priceMainSection: {
@@ -4687,18 +4773,18 @@ const styles = StyleSheet.create({
   enhancedPriceAmount: {
     fontSize: 16,
     fontWeight: '800',
-    color: '#F97316',
+    color: '#C8A46A',
     letterSpacing: 0.5,
   },
   enhancedPriceUnit: {
     fontSize: 11,
     fontWeight: '600',
-    color: '#F97316',
+    color: '#C8A46A',
     marginLeft: 2,
   },
   enhancedPriceLabel: {
     fontSize: 9,
-    color: '#9CA3AF',
+    color: '#8A8A8A',
     fontWeight: '500',
     textTransform: 'uppercase',
     letterSpacing: 0.5,
@@ -4724,29 +4810,30 @@ const styles = StyleSheet.create({
   compactPriceContainer: {
     flexDirection: 'row',
     alignItems: 'baseline',
-    backgroundColor: 'rgba(249, 115, 22, 0.1)',
+    backgroundColor: 'rgba(200, 164, 106, 0.1)',
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 6,
     borderWidth: 1,
-    borderColor: 'rgba(249, 115, 22, 0.2)',
+    borderColor: 'rgba(200, 164, 106, 0.2)',
   },
   compactPriceAmount: {
     fontSize: 14,
     fontWeight: '800',
-    color: '#F97316',
+    color: '#C8A46A',
     letterSpacing: 0.5,
   },
   compactPriceUnit: {
     fontSize: 10,
     fontWeight: '600',
-    color: '#F97316',
+    color: '#C8A46A',
     marginLeft: 1,
   },
   // Enhanced Daily Horoscope Card Styles
   horoscopeSection: {
-    paddingHorizontal: 20,
-    paddingVertical: 15,
+    marginTop: 24,
+    paddingHorizontal: 24,
+    paddingVertical: 0,
   },
   enhancedHoroscopeCard: {
     borderRadius: 16,
@@ -4754,13 +4841,16 @@ const styles = StyleSheet.create({
     elevation: 6,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.15,
+    shadowOpacity: 0.2,
     shadowRadius: 6,
   },
   horoscopeCardBackground: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#1A1A1A',
     position: 'relative',
     overflow: 'hidden',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#2A2A2A',
   },
   horoscopeCardContent: {
     flexDirection: 'row',
@@ -4777,7 +4867,7 @@ const styles = StyleSheet.create({
     width: 50,
     height: 50,
     borderRadius: 25,
-    backgroundColor: 'rgba(255, 215, 0, 0.15)',
+    backgroundColor: 'rgba(200, 164, 106, 0.15)',
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 16,
@@ -4788,7 +4878,7 @@ const styles = StyleSheet.create({
     width: 50,
     height: 50,
     borderRadius: 25,
-    backgroundColor: 'rgba(255, 215, 0, 0.1)',
+    backgroundColor: 'rgba(200, 164, 106, 0.1)',
     opacity: 0.6,
   },
   horoscopeTextContent: {
@@ -4797,34 +4887,35 @@ const styles = StyleSheet.create({
   enhancedHoroscopeTitle: {
     fontSize: 18,
     fontWeight: '700',
-    color: '#1F2937',
+    color: '#F5F5F5',
     marginBottom: 4,
     letterSpacing: 0.3,
   },
   enhancedHoroscopeSubtitle: {
     fontSize: 13,
-    color: '#6B7280',
+    color: '#8A8A8A',
     fontWeight: '400',
     lineHeight: 18,
     marginBottom: 8,
   },
   horoscopeBadge: {
-    backgroundColor: '#10B981',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
     borderRadius: 12,
     alignSelf: 'flex-start',
+    borderWidth: 1,
+    borderColor: 'rgba(200, 164, 106, 0.4)',
+    backgroundColor: 'rgba(200, 164, 106, 0.08)',
   },
   badgeText: {
     fontSize: 10,
     fontWeight: '700',
-    color: '#FFFFFF',
+    color: '#C8A46A',
     letterSpacing: 0.5,
   },
   horoscopeRightContent: {
     alignItems: 'center',
-    justifyContent: 'space-between',
-    height: 60,
+    justifyContent: 'center',
   },
   zodiacSymbols: {
     flexDirection: 'row',
@@ -4832,7 +4923,7 @@ const styles = StyleSheet.create({
   },
   zodiacSymbol: {
     fontSize: 16,
-    color: '#F97316',
+    color: '#C8A46A',
     marginHorizontal: 2,
     opacity: 0.7,
   },
@@ -4840,7 +4931,7 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: 'rgba(249, 115, 22, 0.1)',
+    backgroundColor: 'rgba(200, 164, 106, 0.12)',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -4850,29 +4941,79 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.4), transparent)',
+    backgroundColor: 'rgba(255,255,255,0.03)',
     opacity: 0.3,
+  },
+  // Personalized offers header styles
+  personalizedOffersHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingTop: 20,
+    paddingBottom: 12,
+    backgroundColor: '#0F0F0F',
+  },
+  personalizedOffersHeaderLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  personalizedOffersIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+    shadowColor: '#C8A46A',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  personalizedOffersTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#F5F5F5',
+    marginBottom: 2,
+  },
+  personalizedOffersSubtitle: {
+    fontSize: 12,
+    color: '#8A8A8A',
+    fontWeight: '400',
+  },
+  offersCountBadge: {
+    backgroundColor: '#C8A46A',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+    minWidth: 28,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  offersCountText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#0F0F0F',
   },
   // Prepaid offers section styles
   sectionHeaderSubtitle: {
     fontSize: 14,
-    color: '#666',
+    color: '#8A8A8A',
     marginLeft: 32,
   },
   // Prepaid voice offer card styles
   prepaidRechargeOfferCard: {
-    backgroundColor: '#fff',
+    backgroundColor: '#1A1A1A',
     marginHorizontal: 16,
     marginVertical: 8,
-    borderRadius: 12,
+    borderRadius: 16,
     padding: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    borderWidth: 1,
+    borderColor: '#2A2A2A',
     borderLeftWidth: 4,
-    borderLeftColor: '#4CAF50',
+    borderLeftColor: '#C8A46A',
   },
   prepaidRechargeOfferContent: {
     flexDirection: 'row',
@@ -4888,7 +5029,7 @@ const styles = StyleSheet.create({
     width: 48,
     height: 48,
     borderRadius: 24,
-    backgroundColor: 'rgba(76, 175, 80, 0.1)',
+    backgroundColor: 'rgba(200, 164, 106, 0.1)',
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 12,
@@ -4899,12 +5040,12 @@ const styles = StyleSheet.create({
   prepaidRechargeOfferTitle: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#1F2937',
+    color: '#F5F5F5',
     marginBottom: 4,
   },
   prepaidRechargeOfferDuration: {
     fontSize: 14,
-    color: '#4CAF50',
+    color: '#C8A46A',
     fontWeight: '500',
   },
   prepaidRechargeOfferAction: {
@@ -4913,15 +5054,131 @@ const styles = StyleSheet.create({
   prepaidRechargeOfferButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 20,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#C8A46A',
+    backgroundColor: '#1A1A1A',
   },
   prepaidRechargeOfferButtonText: {
-    color: '#fff',
+    color: '#C8A46A',
+    fontSize: 13,
+    fontWeight: '700',
+    marginRight: 6,
+  },
+  // Skeleton loading styles
+  skeletonCard: {
+    width: 130,
+    backgroundColor: '#1C1C1C',
+    borderRadius: 16,
+    padding: 12,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#2A2A2A',
+  },
+  skeletonAvatar: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    backgroundColor: '#2A2A2A',
+    marginBottom: 10,
+  },
+  skeletonLine: {
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: '#2A2A2A',
+    width: 90,
+    marginBottom: 7,
+  },
+  // Last Consulted chips
+  lastConsultedSection: {
+    paddingTop: 6,
+    paddingBottom: 10,
+  },
+  lastConsultedHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    marginBottom: 10,
+  },
+  lastConsultedTitle: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#8A8A8A',
+    textTransform: 'uppercase',
+    letterSpacing: 0.8,
+  },
+  lastConsultedScroll: {
+    paddingHorizontal: 16,
+    gap: 12,
+  },
+  lastConsultedChip: {
+    alignItems: 'center',
+    width: 62,
+  },
+  lastConsultedAvatarWrap: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    borderWidth: 1.5,
+    borderColor: 'rgba(200, 164, 106, 0.4)',
+    overflow: 'visible',
+    position: 'relative',
+  },
+  lastConsultedAvatar: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+  },
+  lastConsultedStatus: {
+    position: 'absolute',
+    bottom: 1,
+    right: 1,
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    borderWidth: 2,
+    borderColor: '#111111',
+  },
+  lastConsultedMore: {
+    backgroundColor: 'rgba(200, 164, 106, 0.08)',
+    borderColor: 'rgba(200, 164, 106, 0.3)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  lastConsultedName: {
+    marginTop: 5,
+    fontSize: 11,
+    color: '#BBBBBB',
+    fontWeight: '500',
+    textAlign: 'center',
+  },
+  // Explore Services collapsible header
+  exploreHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginHorizontal: 16,
+    marginTop: 8,
+    marginBottom: 4,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    borderRadius: 14,
+    backgroundColor: 'rgba(26, 26, 26, 0.9)',
+    borderWidth: 1,
+    borderColor: 'rgba(200, 164, 106, 0.18)',
+  },
+  exploreHeaderLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  exploreHeaderText: {
     fontSize: 14,
     fontWeight: '600',
-    marginRight: 6,
+    color: '#E0E0E0',
+    marginLeft: 6,
   },
 });
 

@@ -1,5 +1,6 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { colors } from '../theme';
 
 class ContextErrorBoundary extends React.Component {
   constructor(props) {
@@ -66,43 +67,43 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     padding: 20,
-    backgroundColor: '#FEF2F2',
+    backgroundColor: colors.errorMuted,
   },
   errorTitle: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: '#DC2626',
+    color: colors.error,
     marginBottom: 8,
   },
   errorMessage: {
     fontSize: 14,
-    color: '#7F1D1D',
+    color: colors.error,
     textAlign: 'center',
     marginBottom: 8,
   },
   errorBox: {
-    backgroundColor: '#FEE2E2',
+    backgroundColor: colors.errorMuted,
     padding: 12,
     borderRadius: 8,
     marginVertical: 8,
     borderLeftWidth: 3,
-    borderLeftColor: '#DC2626',
+    borderLeftColor: colors.error,
     maxWidth: '100%',
   },
   errorActual: {
     fontSize: 11,
-    color: '#7F1D1D',
+    color: colors.error,
     fontFamily: 'monospace',
   },
   errorDetails: {
     fontSize: 12,
-    color: '#991B1B',
+    color: colors.error,
     textAlign: 'center',
     marginBottom: 16,
     fontStyle: 'italic',
   },
   retryButton: {
-    backgroundColor: '#DC2626',
+    backgroundColor: colors.error,
     paddingHorizontal: 16,
     paddingVertical: 8,
     borderRadius: 8,

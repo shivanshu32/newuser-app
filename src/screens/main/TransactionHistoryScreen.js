@@ -13,6 +13,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 import { ledgerAPI } from '../../services/api';
+import { colors, spacing, radius, shadows } from '../../theme';
 
 const TransactionHistoryScreen = ({ navigation }) => {
   const [transactions, setTransactions] = useState([]);
@@ -229,14 +230,14 @@ const TransactionHistoryScreen = ({ navigation }) => {
     if (!loading || page === 1) return null;
     return (
       <View style={styles.footer}>
-        <ActivityIndicator size="small" color="#007AFF" />
+        <ActivityIndicator size="small" color={colors.primary} />
       </View>
     );
   };
 
   const renderEmpty = () => (
     <View style={styles.emptyContainer}>
-      <Ionicons name="receipt-outline" size={64} color="#CCCCCC" />
+      <Ionicons name="receipt-outline" size={64} color={colors.surfaceTertiary} />
       <Text style={styles.emptyTitle}>No Transactions</Text>
       <Text style={styles.emptyMessage}>Your transaction history will appear here</Text>
     </View>
@@ -246,7 +247,7 @@ const TransactionHistoryScreen = ({ navigation }) => {
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#007AFF" />
+          <ActivityIndicator size="large" color={colors.primary} />
           <Text style={styles.loadingText}>Loading transactions...</Text>
         </View>
       </SafeAreaView>
@@ -276,7 +277,7 @@ const TransactionHistoryScreen = ({ navigation }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F5F5F5',
+    backgroundColor: colors.background,
   },
   loadingContainer: {
     flex: 1,
@@ -286,17 +287,17 @@ const styles = StyleSheet.create({
   loadingText: {
     marginTop: 10,
     fontSize: 16,
-    color: '#666',
+    color: colors.textSecondary,
   },
   header: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
     padding: 20,
     marginBottom: 10,
   },
   headerTitle: {
     fontSize: 24,
     fontWeight: 'bold',
-    color: '#333',
+    color: colors.textPrimary,
     marginBottom: 15,
   },
   summaryContainer: {
@@ -308,38 +309,34 @@ const styles = StyleSheet.create({
   },
   summaryLabel: {
     fontSize: 12,
-    color: '#666',
+    color: colors.textSecondary,
     marginBottom: 5,
   },
   summaryValue: {
     fontSize: 16,
     fontWeight: 'bold',
-    color: '#333',
+    color: colors.textPrimary,
   },
   summaryValueGreen: {
     fontSize: 16,
     fontWeight: 'bold',
-    color: '#4CAF50',
+    color: colors.success,
   },
   summaryValueRed: {
     fontSize: 16,
     fontWeight: 'bold',
-    color: '#F44336',
+    color: colors.error,
   },
   transactionItem: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
     marginHorizontal: 15,
     marginVertical: 5,
     padding: 15,
-    borderRadius: 10,
+    borderRadius: radius.md,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
+    ...shadows.card,
   },
   transactionLeft: {
     flexDirection: 'row',
@@ -360,17 +357,17 @@ const styles = StyleSheet.create({
   transactionTitle: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#333',
+    color: colors.textPrimary,
     marginBottom: 4,
   },
   transactionDescription: {
     fontSize: 14,
-    color: '#666',
+    color: colors.textSecondary,
     marginBottom: 4,
   },
   transactionDate: {
     fontSize: 12,
-    color: '#999',
+    color: colors.textMuted,
   },
   transactionRight: {
     alignItems: 'flex-end',
@@ -382,22 +379,22 @@ const styles = StyleSheet.create({
   },
   balanceAfter: {
     fontSize: 12,
-    color: '#666',
+    color: colors.textSecondary,
     marginBottom: 4,
   },
   pendingBadge: {
-    backgroundColor: '#FFF3CD',
+    backgroundColor: colors.warningMuted,
     paddingHorizontal: 8,
     paddingVertical: 2,
     borderRadius: 10,
   },
   pendingText: {
     fontSize: 10,
-    color: '#856404',
+    color: colors.warning,
     fontWeight: '500',
   },
   expiredBadge: {
-    backgroundColor: '#F8D7DA',
+    backgroundColor: colors.errorMuted,
     paddingHorizontal: 8,
     paddingVertical: 2,
     borderRadius: 10,
@@ -405,11 +402,11 @@ const styles = StyleSheet.create({
   },
   expiredText: {
     fontSize: 10,
-    color: '#721C24',
+    color: colors.error,
     fontWeight: '500',
   },
   cancelledBadge: {
-    backgroundColor: '#D1ECF1',
+    backgroundColor: colors.infoMuted,
     paddingHorizontal: 8,
     paddingVertical: 2,
     borderRadius: 10,
@@ -417,7 +414,7 @@ const styles = StyleSheet.create({
   },
   cancelledText: {
     fontSize: 10,
-    color: '#0C5460',
+    color: colors.info,
     fontWeight: '500',
   },
   footer: {
@@ -433,13 +430,13 @@ const styles = StyleSheet.create({
   emptyTitle: {
     fontSize: 20,
     fontWeight: 'bold',
-    color: '#333',
+    color: colors.textPrimary,
     marginTop: 20,
     marginBottom: 10,
   },
   emptyMessage: {
     fontSize: 16,
-    color: '#666',
+    color: colors.textSecondary,
     textAlign: 'center',
   },
 });

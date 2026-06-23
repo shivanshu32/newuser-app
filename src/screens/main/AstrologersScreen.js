@@ -15,6 +15,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons, MaterialIcons, FontAwesome } from '@expo/vector-icons';
+import { colors, spacing, radius, shadows } from '../../theme';
 import { useAuth } from '../../context/AuthContext';
 import { astrologersAPI, categoriesAPI } from '../../services/api';
 
@@ -167,7 +168,20 @@ const AstrologersScreen = ({ navigation, route }) => {
       );
     }
 
-    console.log('🔍 [FILTER] Final filtered results:', filtered.length, 'out of', astrologers.length);
+    // Sort: Online astrologers first, then offline
+    filtered.sort((a, b) => {
+      const isAOnline = a.onlineStatus?.chat === 1 || a.onlineStatus?.call === 1;
+      const isBOnline = b.onlineStatus?.chat === 1 || b.onlineStatus?.call === 1;
+      
+      // Online astrologers come first
+      if (isAOnline && !isBOnline) return -1;
+      if (!isAOnline && isBOnline) return 1;
+      
+      // If both have same online status, maintain original order
+      return 0;
+    });
+
+    console.log('🔍 [FILTER] Final filtered and sorted results:', filtered.length, 'out of', astrologers.length);
     return filtered;
   }, [astrologers, searchQuery, selectedCategory, isPrepaidRechargeCard, assignedAstrologers, astrologerAssignment]);
 
@@ -285,13 +299,27 @@ const AstrologersScreen = ({ navigation, route }) => {
     return 'Offline';
   }, []);
 
-  const renderAstrologerCard = ({ item: astrologer }) => {
+  const renderAstrologerCard = ({ item: astrologer, index }) => {
+    // Check if this is the first offline astrologer (for section header)
+    const isOnline = astrologer.onlineStatus?.chat === 1 || astrologer.onlineStatus?.call === 1;
+    const prevAstrologer = index > 0 ? filteredAstrologers[index - 1] : null;
+    const prevIsOnline = prevAstrologer ? (prevAstrologer.onlineStatus?.chat === 1 || prevAstrologer.onlineStatus?.call === 1) : true;
+    const showOfflineHeader = !isOnline && prevIsOnline;
+
     return (
-      <TouchableOpacity
-        style={styles.astrologerCard}
-        onPress={() => handleAstrologerPress(astrologer)}
-        activeOpacity={0.8}
-      >
+      <>
+        {showOfflineHeader && (
+          <View style={styles.sectionHeader}>
+            <View style={styles.sectionHeaderLine} />
+            <Text style={styles.sectionHeaderText}>Offline Astrologers</Text>
+            <View style={styles.sectionHeaderLine} />
+          </View>
+        )}
+        <TouchableOpacity
+          style={styles.astrologerCard}
+          onPress={() => handleAstrologerPress(astrologer)}
+          activeOpacity={0.8}
+        >
         {/* Header Section with Image and Status */}
         <View style={styles.cardHeader}>
           <View style={styles.imageSection}>
@@ -431,6 +459,7 @@ const AstrologersScreen = ({ navigation, route }) => {
           </View>
         </View>
       </TouchableOpacity>
+      </>
     );
   };
 
@@ -467,17 +496,17 @@ const AstrologersScreen = ({ navigation, route }) => {
   if (loading) {
     return (
       <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
-        <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
+        <StatusBar barStyle="light-content" backgroundColor={colors.background} />
         <View style={styles.contentWrapper}>
         <View style={styles.header}>
           <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-            <Ionicons name="arrow-back" size={24} color="#1F2937" />
+            <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>All Astrologers</Text>
           <View style={styles.placeholder} />
         </View>
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#F97316" />
+          <ActivityIndicator size="large" color={colors.primary} />
           <Text style={styles.loadingText}>Loading astrologers...</Text>
         </View>
         </View>
@@ -487,14 +516,14 @@ const AstrologersScreen = ({ navigation, route }) => {
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
-      <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
+      <StatusBar barStyle="light-content" backgroundColor={colors.background} />
       
       <View style={styles.contentWrapper}>
       
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-          <Ionicons name="arrow-back" size={24} color="#1F2937" />
+          <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>All Astrologers</Text>
         <View style={styles.placeholder} />
@@ -514,17 +543,17 @@ const AstrologersScreen = ({ navigation, route }) => {
 
       {/* Search Bar - Outside FlatList */}
       <View style={styles.searchContainer}>
-        <Ionicons name="search" size={20} color="#9CA3AF" style={styles.searchIcon} />
+        <Ionicons name="search" size={20} color={colors.textMuted} style={styles.searchIcon} />
         <TextInput
           style={styles.searchInput}
           placeholder="Search astrologers..."
           value={searchQuery}
           onChangeText={setSearchQuery}
-          placeholderTextColor="#9CA3AF"
+          placeholderTextColor={colors.textMuted}
         />
         {searchQuery.length > 0 && (
           <TouchableOpacity onPress={() => setSearchQuery('')}>
-            <Ionicons name="close-circle" size={20} color="#9CA3AF" />
+            <Ionicons name="close-circle" size={20} color={colors.textMuted} />
           </TouchableOpacity>
         )}
       </View>
@@ -554,13 +583,13 @@ const AstrologersScreen = ({ navigation, route }) => {
           <RefreshControl
             refreshing={refreshing}
             onRefresh={onRefresh}
-            colors={['#F97316']}
-            tintColor="#F97316"
+            colors={[colors.primary]}
+            tintColor={colors.primary}
           />
         }
         ListEmptyComponent={() => (
           <View style={styles.emptyContainer}>
-            <MaterialIcons name="search-off" size={64} color="#9CA3AF" />
+            <MaterialIcons name="search-off" size={64} color={colors.textMuted} />
             <Text style={styles.emptyTitle}>No astrologers found</Text>
             <Text style={styles.emptySubtitle}>
               {searchQuery ? 'Try adjusting your search terms' : 'No astrologers available at the moment'}
@@ -576,7 +605,7 @@ const AstrologersScreen = ({ navigation, route }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F9FAFB',
+    backgroundColor: colors.background,
   },
   contentWrapper: {
     flex: 1,
@@ -585,19 +614,19 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    backgroundColor: '#FFFFFF',
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+    backgroundColor: colors.surface,
     borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
+    borderBottomColor: colors.border,
   },
   backButton: {
-    padding: 8,
+    padding: spacing.sm,
   },
   headerTitle: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#1F2937',
+    color: colors.textPrimary,
   },
   placeholder: {
     width: 40,
@@ -610,99 +639,95 @@ const styles = StyleSheet.create({
   loadingText: {
     marginTop: 12,
     fontSize: 16,
-    color: '#6B7280',
+    color: colors.textMuted,
   },
   listContainer: {
     paddingBottom: 20,
   },
   headerContainer: {
-    paddingHorizontal: 16,
-    paddingTop: 16,
-    paddingBottom: 8,
-    backgroundColor: '#FFFFFF',
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.lg,
+    paddingBottom: spacing.sm,
+    backgroundColor: colors.surface,
   },
   searchContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#F3F4F6',
-    borderRadius: 12,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    marginBottom: 12,
+    backgroundColor: colors.surfaceSecondary,
+    borderRadius: radius.md,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.md,
+    marginBottom: spacing.sm,
   },
   searchIcon: {
-    marginRight: 8,
+    marginRight: spacing.sm,
   },
   searchInput: {
     flex: 1,
     fontSize: 16,
-    color: '#1F2937',
+    color: colors.textPrimary,
   },
   categoryFilterSection: {
-    marginHorizontal: 16,
-    marginTop: 12,
-    marginBottom: 16,
+    marginHorizontal: spacing.lg,
+    marginTop: spacing.md,
+    marginBottom: spacing.lg,
   },
   categoryFilterContainer: {
-    paddingRight: 16,
+    paddingRight: spacing.lg,
   },
   categoryButton: {
     paddingHorizontal: 14,
     paddingVertical: 7,
-    borderRadius: 16,
-    backgroundColor: '#FFFFFF',
-    marginRight: 8,
+    borderRadius: radius.full,
+    backgroundColor: colors.surface,
+    marginRight: spacing.sm,
     borderWidth: 1.5,
-    borderColor: '#E5E7EB',
+    borderColor: colors.border,
   },
   activeCategoryButton: {
-    backgroundColor: '#F97316',
-    borderColor: '#F97316',
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
   },
   categoryButtonText: {
     fontSize: 13,
     fontWeight: '500',
-    color: '#6B7280',
+    color: colors.textMuted,
   },
   activeCategoryButtonText: {
-    color: '#FFFFFF',
+    color: colors.textInverse,
     fontWeight: '600',
   },
   resultsCount: {
     fontSize: 14,
-    color: '#6B7280',
-    marginHorizontal: 16,
-    marginTop: 8,
-    marginBottom: 8,
+    color: colors.textMuted,
+    marginHorizontal: spacing.lg,
+    marginTop: spacing.sm,
+    marginBottom: spacing.sm,
   },
   astrologerCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    marginHorizontal: 16,
-    marginVertical: 8,
-    padding: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    backgroundColor: colors.surface,
+    borderRadius: radius.md,
+    marginHorizontal: spacing.lg,
+    marginVertical: spacing.sm,
+    padding: spacing.lg,
+    ...shadows.card,
     position: 'relative',
   },
   premiumBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(255, 215, 0, 0.15)',
-    paddingHorizontal: 8,
+    backgroundColor: 'rgba(232, 93, 4, 0.15)',
+    paddingHorizontal: spacing.sm,
     paddingVertical: 3,
-    borderRadius: 12,
+    borderRadius: radius.full,
     borderWidth: 1,
-    borderColor: 'rgba(255, 215, 0, 0.3)',
-    marginRight: 8,
+    borderColor: 'rgba(232, 93, 4, 0.3)',
+    marginRight: spacing.sm,
   },
   premiumText: {
     fontSize: 8,
     fontWeight: '700',
-    color: '#FFD700',
+    color: colors.primary,
     letterSpacing: 0.5,
   },
   cardHeader: {
@@ -732,7 +757,7 @@ const styles = StyleSheet.create({
     height: 20,
     borderRadius: 10,
     borderWidth: 2,
-    borderColor: '#FFFFFF',
+    borderColor: colors.surface,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -740,7 +765,7 @@ const styles = StyleSheet.create({
     width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
   },
   astrologerMainInfo: {
     flex: 1,
@@ -748,7 +773,7 @@ const styles = StyleSheet.create({
   astrologerName: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#1F2937',
+    color: colors.textPrimary,
     marginBottom: 6,
   },
   badgesRow: {
@@ -768,7 +793,7 @@ const styles = StyleSheet.create({
   },
   astrologerSpecialty: {
     fontSize: 13,
-    color: '#6B7280',
+    color: colors.textMuted,
     marginBottom: 8,
   },
   specializationTagsContainer: {
@@ -778,16 +803,16 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   specializationTag: {
-    backgroundColor: 'rgba(139, 92, 246, 0.15)',
+    backgroundColor: colors.secondaryMuted,
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: 'rgba(139, 92, 246, 0.3)',
+    borderColor: 'rgba(124, 58, 237, 0.3)',
   },
   specializationTagText: {
     fontSize: 10,
-    color: '#8B5CF6',
+    color: colors.secondary,
     fontWeight: '600',
     textTransform: 'capitalize',
   },
@@ -808,16 +833,16 @@ const styles = StyleSheet.create({
   rating: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#1F2937',
+    color: colors.textPrimary,
     marginLeft: 4,
   },
   reviewCount: {
     fontSize: 12,
-    color: '#6B7280',
+    color: colors.textMuted,
   },
   experience: {
     fontSize: 12,
-    color: '#6B7280',
+    color: colors.textMuted,
     fontWeight: '500',
   },
   cardFooter: {
@@ -827,20 +852,20 @@ const styles = StyleSheet.create({
     marginTop: 12,
     paddingTop: 12,
     borderTopWidth: 1,
-    borderTopColor: '#F3F4F6',
+    borderTopColor: colors.surfaceSecondary,
   },
   priceSection: {
     flex: 1,
   },
   priceLabel: {
     fontSize: 12,
-    color: '#6B7280',
+    color: colors.textMuted,
     marginBottom: 2,
   },
   price: {
     fontSize: 16,
     fontWeight: '700',
-    color: '#F97316',
+    color: colors.primary,
   },
   quickActions: {
     flexDirection: 'row',
@@ -853,42 +878,38 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     marginLeft: 8,
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
+    ...shadows.pressed,
   },
   chatBtn: {
-    backgroundColor: '#ECFDF5',
+    backgroundColor: colors.successMuted,
     borderWidth: 1,
-    borderColor: '#10B981',
+    borderColor: colors.success,
   },
   callBtn: {
-    backgroundColor: '#EFF6FF',
+    backgroundColor: colors.infoMuted,
     borderWidth: 1,
-    borderColor: '#3B82F6',
+    borderColor: colors.info,
   },
   prepaidBadgeContainer: {
-    marginHorizontal: 16,
-    marginTop: 8,
-    marginBottom: 4,
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    borderRadius: 8,
-    backgroundColor: '#EFF6FF',
+    marginHorizontal: spacing.lg,
+    marginTop: spacing.sm,
+    marginBottom: spacing.xs,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+    borderRadius: radius.sm,
+    backgroundColor: colors.infoMuted,
     borderWidth: 1,
-    borderColor: '#BFDBFE',
+    borderColor: colors.info,
   },
   prepaidBadgeTitle: {
     fontSize: 13,
     fontWeight: '700',
-    color: '#1D4ED8',
+    color: colors.info,
     marginBottom: 2,
   },
   prepaidBadgeText: {
     fontSize: 12,
-    color: '#6B7280',
+    color: colors.textMuted,
   },
   emptyContainer: {
     flex: 1,
@@ -899,15 +920,35 @@ const styles = StyleSheet.create({
   emptyTitle: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#1F2937',
+    color: colors.textPrimary,
     marginTop: 16,
     marginBottom: 8,
   },
   emptySubtitle: {
     fontSize: 14,
-    color: '#6B7280',
+    color: colors.textMuted,
     textAlign: 'center',
     paddingHorizontal: 32,
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginHorizontal: spacing.lg,
+    marginTop: spacing.lg,
+    marginBottom: spacing.sm,
+  },
+  sectionHeaderLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: colors.border,
+  },
+  sectionHeaderText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: colors.textMuted,
+    marginHorizontal: spacing.md,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
 });
 

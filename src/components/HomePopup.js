@@ -10,6 +10,7 @@ import {
   Linking,
   Alert,
 } from 'react-native';
+import { colors } from '../theme';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { homePopupAPI } from '../services/api';
@@ -178,7 +179,7 @@ const HomePopup = ({ navigation, visible, onClose }) => {
             hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
           >
             <View style={styles.closeButtonInner}>
-              <Ionicons name="close" size={24} color="#fff" />
+              <Ionicons name="close" size={24} color={colors.textInverse} />
             </View>
           </TouchableOpacity>
 
@@ -231,14 +232,14 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: '#F97316',
+    backgroundColor: colors.primary,
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 3,
     borderColor: '#fff',
   },
   card: {
-    backgroundColor: '#fff',
+    backgroundColor: colors.surface,
     borderRadius: 20,
     overflow: 'hidden',
     shadowColor: '#000',
@@ -250,7 +251,7 @@ const styles = StyleSheet.create({
   imageContainer: {
     width: '100%',
     aspectRatio: 3 / 1, // Match the 3:1 aspect ratio of the image
-    backgroundColor: '#f5f5f5',
+    backgroundColor: colors.surfaceSecondary,
   },
   image: {
     width: '100%',
@@ -267,7 +268,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
   },
   title: {
-    color: '#fff',
+    color: colors.textInverse,
     fontSize: 16,
     fontWeight: '600',
     textAlign: 'center',

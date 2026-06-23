@@ -1,42 +1,76 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   StyleSheet,
   View,
   Text,
   TextInput,
   TouchableOpacity,
-  Image,
   KeyboardAvoidingView,
   Platform,
   ActivityIndicator,
   Alert,
-  ScrollView,
   StatusBar,
-  SafeAreaView,
-  Keyboard,
+  Dimensions,
+  Animated,
+  Image,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useAuth } from '../../context/AuthContext';
+
+const { width, height } = Dimensions.get('window');
+
+// CRED dark luxury theme with gold accent
+const COLORS = {
+  background: '#111111',
+  surface: '#1A1A1A',
+  surfaceElevated: '#222222',
+  primary: '#C8A46A',
+  primaryLight: '#D4B896',
+  primaryDark: '#A68B5B',
+  primaryMuted: 'rgba(200, 164, 106, 0.12)',
+  text: '#F5F5F5',
+  textSecondary: '#8A8A8A',
+  textMuted: '#666666',
+  border: '#2A2A2A',
+  borderFocused: '#C8A46A',
+  white: '#111111',
+};
 
 const LoginScreen = () => {
   const navigation = useNavigation();
   const [phoneNumber, setPhoneNumber] = useState('');
+  const [isFocused, setIsFocused] = useState(false);
   const { requestOtp, loading } = useAuth();
-  const scrollViewRef = useRef(null);
-  const buttonRef = useRef(null);
+  
+  // Animations
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const slideAnim = useRef(new Animated.Value(20)).current;
+
+  useEffect(() => {
+    Animated.parallel([
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 500,
+        useNativeDriver: true,
+      }),
+      Animated.timing(slideAnim, {
+        toValue: 0,
+        duration: 400,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, []);
 
   const handleRequestOtp = () => {
-    // Validate phone number
     if (!phoneNumber || phoneNumber.length < 10) {
-      Alert.alert('Invalid Phone Number', 'Please enter a valid phone number');
+      Alert.alert('Invalid Number', 'Please enter a valid 10-digit mobile number');
       return;
     }
     
-    // Use promise chain instead of async/await
     requestOtp(phoneNumber)
       .then(result => {
         if (result && result.success) {
-          // Navigate to OTP verification screen
           navigation.navigate('OtpVerification', { phoneNumber });
         } else {
           Alert.alert('Error', result?.message || 'Failed to send OTP');
@@ -47,197 +81,279 @@ const LoginScreen = () => {
       });
   };
 
+  const isValidNumber = phoneNumber.length === 10;
+
   return (
-    <SafeAreaView style={styles.safeArea}>
-      <StatusBar backgroundColor="#ffffff" barStyle="dark-content" />
+    <View style={styles.container}>
+      <StatusBar barStyle="light-content" backgroundColor={COLORS.background} />
       <KeyboardAvoidingView
-        style={styles.container}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
+        style={styles.keyboardView}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       >
-        <ScrollView
-          ref={scrollViewRef}
-          contentContainerStyle={styles.scrollContent}
-          keyboardShouldPersistTaps="handled"
-          showsVerticalScrollIndicator={false}
+        {/* Logo Section */}
+        <Animated.View 
+          style={[
+            styles.logoSection,
+            {
+              opacity: fadeAnim,
+              transform: [{ translateY: slideAnim }],
+            }
+          ]}
         >
-          <View style={styles.logoContainer}>
-            <Image
-              source={require('../../../assets/logo-placeholder.png')}
-              style={styles.logo}
-              resizeMode="contain"
+          <Image
+            source={require('../../../assets/logo-placeholder.png')}
+            style={styles.logo}
+            resizeMode="contain"
+          />
+          <Text style={styles.brandName}>Jyotish Call</Text>
+          <Text style={styles.tagline}>Connect with Expert Astrologers</Text>
+        </Animated.View>
+
+        {/* Form Section */}
+        <Animated.View 
+          style={[
+            styles.formSection,
+            {
+              opacity: fadeAnim,
+              transform: [{ translateY: slideAnim }],
+            }
+          ]}
+        >
+          <Text style={styles.title}>Login</Text>
+          <Text style={styles.subtitle}>Enter your mobile number</Text>
+
+          {/* Phone Input */}
+          <View style={[
+            styles.inputContainer,
+            isFocused && styles.inputContainerFocused
+          ]}>
+            <View style={styles.countryCode}>
+              <Text style={styles.countryCodeText}>+91</Text>
+            </View>
+            <View style={styles.divider} />
+            <TextInput
+              style={styles.phoneInput}
+              placeholder="10-digit number"
+              placeholderTextColor={COLORS.textMuted}
+              keyboardType="phone-pad"
+              value={phoneNumber}
+              onChangeText={setPhoneNumber}
+              maxLength={10}
+              onFocus={() => setIsFocused(true)}
+              onBlur={() => setIsFocused(false)}
+              selectionColor={COLORS.primary}
             />
-            <Text style={styles.appName}>Jyotish Call</Text>
-            <Text style={styles.tagline}>Connect with expert astrologers</Text>
+            {phoneNumber.length > 0 && (
+              <TouchableOpacity 
+                style={styles.clearButton}
+                onPress={() => setPhoneNumber('')}
+              >
+                <Text style={styles.clearButtonText}>✕</Text>
+              </TouchableOpacity>
+            )}
           </View>
 
-          <View style={styles.formContainer}>
-            <Text style={styles.title}>Login to Jyotish Call</Text>
-            <Text style={styles.subtitle}>Enter your mobile number</Text>
-
-            <View style={styles.inputWrapper}>
-              <View style={styles.prefixContainer}>
-                <Text style={styles.prefix}>+91</Text>
-              </View>
-              <TextInput
-                style={styles.input}
-                placeholder="10-digit mobile number"
-                placeholderTextColor="#9CA3AF"
-                keyboardType="phone-pad"
-                value={phoneNumber}
-                onChangeText={setPhoneNumber}
-                maxLength={10}
-                onFocus={() => {
-                  // Scroll to button when keyboard appears
-                  setTimeout(() => {
-                    buttonRef.current?.measureLayout(
-                      scrollViewRef.current,
-                      (x, y) => {
-                        scrollViewRef.current?.scrollTo({
-                          y: y - 100,
-                          animated: true,
-                        });
-                      },
-                      () => {}
-                    );
-                  }, 300);
-                }}
-              />
-            </View>
-
-            <View ref={buttonRef} collapsable={false}>
-              <TouchableOpacity
-                style={styles.button}
-                onPress={handleRequestOtp}
-                disabled={loading}
-                activeOpacity={0.8}
+          {/* CTA Button */}
+          <TouchableOpacity
+            style={[
+              styles.ctaButton,
+              !isValidNumber && styles.ctaButtonDisabled,
+            ]}
+            onPress={handleRequestOtp}
+            disabled={loading || !isValidNumber}
+            activeOpacity={0.8}
+          >
+            {isValidNumber ? (
+              <LinearGradient
+                colors={[COLORS.primary, COLORS.primaryLight]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+                style={styles.ctaGradient}
               >
                 {loading ? (
-                  <ActivityIndicator color="#fff" size="small" />
+                  <ActivityIndicator color={COLORS.white} size="small" />
                 ) : (
-                  <Text style={styles.buttonText}>Get OTP</Text>
+                  <Text style={styles.ctaText}>Get OTP</Text>
                 )}
-              </TouchableOpacity>
-            </View>
-          </View>
+              </LinearGradient>
+            ) : (
+              <View style={styles.ctaDisabledInner}>
+                {loading ? (
+                  <ActivityIndicator color={COLORS.textMuted} size="small" />
+                ) : (
+                  <Text style={styles.ctaTextDisabled}>Get OTP</Text>
+                )}
+              </View>
+            )}
+          </TouchableOpacity>
+        </Animated.View>
 
-          <View style={styles.footer}>
-            <Text style={styles.footerText}>
-              By continuing, you agree to our Terms of Service and Privacy Policy
-            </Text>
-          </View>
-        </ScrollView>
+        {/* Footer */}
+        <View style={styles.footer}>
+          <Text style={styles.footerText}>
+            By continuing, you agree to our{' '}
+            <Text style={styles.footerLink}>Terms</Text>
+            {' '}&{' '}
+            <Text style={styles.footerLink}>Privacy Policy</Text>
+          </Text>
+        </View>
       </KeyboardAvoidingView>
-    </SafeAreaView>
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-    backgroundColor: '#ffffff',
-  },
   container: {
     flex: 1,
-    backgroundColor: '#ffffff',
-    paddingHorizontal: 16,
-    padding: 20,
+    backgroundColor: COLORS.background,
   },
-  scrollContent: {
-    flexGrow: 1,
-    paddingBottom: 100,
+  keyboardView: {
+    flex: 1,
+    paddingHorizontal: 24,
+    paddingTop: Platform.OS === 'ios' ? 60 : 40,
+    paddingBottom: Platform.OS === 'ios' ? 30 : 20,
   },
-  logoContainer: {
+  
+  // Logo Section
+  logoSection: {
     alignItems: 'center',
-    marginTop: 40,
-    marginBottom: 40,
-  },
-  logo: {
-    width: 120,
-    height: 120,
-    marginBottom: 16,
-  },
-  appName: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    color: '#1F2937',
-    marginBottom: 8,
-  },
-  tagline: {
-    fontSize: 16,
-    color: '#4B5563',
-    letterSpacing: 0.3,
-  },
-  formContainer: {
-    marginBottom: 40,
+    paddingTop: 20,
     paddingBottom: 30,
   },
-  title: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#1F2937',
-    marginBottom: 16,
-    textAlign: 'center',
+  logo: {
+    width: 90,
+    height: 90,
+    marginBottom: 12,
   },
-  subtitle: {
-    fontSize: 16,
-    color: '#4B5563',
-    marginBottom: 24,
-  },
-  inputWrapper: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderRadius: 12,
-    overflow: 'hidden',
-    backgroundColor: '#F3F4F6',
-    marginBottom: 24,
-  },
-  prefixContainer: {
-    backgroundColor: '#FFEDD5',
-    paddingVertical: 16,
-    paddingHorizontal: 12,
-    justifyContent: 'center',
-  },
-  prefix: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#EA580C',
-  },
-  input: {
-    flex: 1,
-    height: 56,
-    fontSize: 16,
-    paddingHorizontal: 16,
-    color: '#1F2937',
-  },
-  button: {
-    backgroundColor: '#F97316',
-    borderRadius: 12,
-    height: 56,
-    justifyContent: 'center',
-    alignItems: 'center',
-    shadowColor: '#F97316',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-    elevation: 3,
-  },
-  buttonText: {
-    color: '#ffffff',
-    fontSize: 18,
-    fontWeight: '600',
+  brandName: {
+    fontSize: 26,
+    fontWeight: '700',
+    color: COLORS.text,
     letterSpacing: 0.5,
   },
+  tagline: {
+    fontSize: 14,
+    color: COLORS.textSecondary,
+    marginTop: 4,
+  },
+
+  // Form Section
+  formSection: {
+    flex: 1,
+    justifyContent: 'center',
+    paddingBottom: 40,
+  },
+  title: {
+    fontSize: 28,
+    fontWeight: '700',
+    color: COLORS.text,
+    marginBottom: 6,
+  },
+  subtitle: {
+    fontSize: 15,
+    color: COLORS.textSecondary,
+    marginBottom: 24,
+  },
+  inputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLORS.surface,
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: COLORS.border,
+    paddingHorizontal: 16,
+    height: 56,
+    marginBottom: 20,
+  },
+  inputContainerFocused: {
+    borderColor: COLORS.primary,
+    backgroundColor: COLORS.surfaceElevated,
+  },
+  countryCode: {
+    paddingRight: 12,
+  },
+  countryCodeText: {
+    fontSize: 16,
+    color: COLORS.text,
+    fontWeight: '600',
+  },
+  divider: {
+    width: 1,
+    height: 24,
+    backgroundColor: COLORS.border,
+    marginRight: 12,
+  },
+  phoneInput: {
+    flex: 1,
+    fontSize: 16,
+    color: COLORS.text,
+    fontWeight: '500',
+    letterSpacing: 1,
+  },
+  clearButton: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: COLORS.border,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  clearButtonText: {
+    color: COLORS.textSecondary,
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  
+  // CTA Button
+  ctaButton: {
+    height: 54,
+    borderRadius: 12,
+    overflow: 'hidden',
+  },
+  ctaButtonDisabled: {
+    opacity: 1,
+  },
+  ctaGradient: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  ctaDisabledInner: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: COLORS.surface,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  ctaText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: COLORS.white,
+    letterSpacing: 0.5,
+  },
+  ctaTextDisabled: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: COLORS.textMuted,
+    letterSpacing: 0.5,
+  },
+
+  // Footer
   footer: {
-    paddingHorizontal: 20,
-    paddingBottom: 24,
-    marginTop: 40,
+    alignItems: 'center',
+    paddingVertical: 16,
   },
   footerText: {
     fontSize: 12,
-    color: '#6B7280',
+    color: COLORS.textMuted,
     textAlign: 'center',
     lineHeight: 18,
+  },
+  footerLink: {
+    color: COLORS.primary,
+    fontWeight: '500',
   },
 });
 

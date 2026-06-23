@@ -9,6 +9,7 @@ import {
   Dimensions,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { colors, spacing, radius, shadows } from '../theme';
 
 const { width } = Dimensions.get('window');
 
@@ -57,7 +58,7 @@ const BookingAcceptedModal = ({
         <View style={styles.modalContainer}>
           {/* Success Icon */}
           <View style={styles.successIconContainer}>
-            <Ionicons name="checkmark-circle" size={60} color="#10B981" />
+            <Ionicons name="checkmark-circle" size={60} color={colors.success} />
           </View>
           
           {/* Title */}
@@ -80,7 +81,7 @@ const BookingAcceptedModal = ({
                 <Ionicons 
                   name={getBookingTypeIcon()} 
                   size={16} 
-                  color="#6B7280" 
+                  color={colors.textSecondary} 
                 />
                 <Text style={styles.consultationType}>
                   {getBookingTypeText()}
@@ -103,7 +104,7 @@ const BookingAcceptedModal = ({
               style={styles.joinButton}
               onPress={onJoinNow}
             >
-              <Ionicons name="play-circle" size={20} color="#FFFFFF" />
+              <Ionicons name="play-circle" size={20} color={colors.textInverse} />
               <Text style={styles.joinButtonText}>Join Now</Text>
             </TouchableOpacity>
           )}
@@ -113,7 +114,7 @@ const BookingAcceptedModal = ({
             style={styles.closeButton}
             onPress={onClose}
           >
-            <Ionicons name="close" size={24} color="#6B7280" />
+            <Ionicons name="close" size={24} color={colors.textSecondary} />
           </TouchableOpacity>
         </View>
       </View>
@@ -130,13 +131,13 @@ const styles = StyleSheet.create({
     padding: 20,
   },
   modalContainer: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
     borderRadius: 20,
     padding: 24,
     width: width * 0.9,
     maxWidth: 400,
     alignItems: 'center',
-    shadowColor: '#000',
+    shadowColor: colors.shadow,
     shadowOffset: {
       width: 0,
       height: 10,
@@ -151,14 +152,14 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 24,
     fontWeight: 'bold',
-    color: '#1F2937',
+    color: colors.textPrimary,
     textAlign: 'center',
     marginBottom: 20,
   },
   astrologerContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#F9FAFB',
+    backgroundColor: colors.background,
     borderRadius: 12,
     padding: 16,
     width: '100%',
@@ -169,7 +170,7 @@ const styles = StyleSheet.create({
     height: 50,
     borderRadius: 25,
     marginRight: 12,
-    backgroundColor: '#E5E7EB',
+    backgroundColor: colors.surfaceTertiary,
   },
   astrologerInfo: {
     flex: 1,
@@ -177,7 +178,7 @@ const styles = StyleSheet.create({
   astrologerName: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#1F2937',
+    color: colors.textPrimary,
     marginBottom: 4,
   },
   consultationTypeContainer: {
@@ -186,18 +187,18 @@ const styles = StyleSheet.create({
   },
   consultationType: {
     fontSize: 14,
-    color: '#6B7280',
+    color: colors.textSecondary,
     marginLeft: 4,
   },
   message: {
     fontSize: 16,
-    color: '#6B7280',
+    color: colors.textSecondary,
     textAlign: 'center',
     lineHeight: 24,
     marginBottom: 24,
   },
   joinButton: {
-    backgroundColor: '#10B981',
+    backgroundColor: colors.success,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
@@ -208,7 +209,7 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   joinButtonText: {
-    color: '#FFFFFF',
+    color: colors.textInverse,
     fontSize: 16,
     fontWeight: '600',
     marginLeft: 8,

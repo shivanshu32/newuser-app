@@ -14,6 +14,7 @@ import { useNavigation, useRoute } from '@react-navigation/native';
 import { useAuth } from '../../context/AuthContext';
 import prepaidRechargeCardsAPI from '../../services/prepaidRechargeCardsAPI';
 import facebookTrackingService from '../../services/facebookTrackingService';
+import { colors, spacing, radius, shadows } from '../../theme';
 
 const PrepaidRechargeCardPaymentScreen = () => {
   const navigation = useNavigation();
@@ -161,7 +162,7 @@ const PrepaidRechargeCardPaymentScreen = () => {
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()}>
-          <MaterialIcons name="arrow-back" size={24} color="#333" />
+          <MaterialIcons name="arrow-back" size={24} color="colors.textPrimary" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Payment Summary</Text>
         <View style={{ width: 24 }} />
@@ -176,12 +177,12 @@ const PrepaidRechargeCardPaymentScreen = () => {
           ) : null}
 
           <View style={styles.infoRow}>
-            <Ionicons name="time-outline" size={20} color="#666" />
+            <Ionicons name="time-outline" size={20} color={colors.textSecondary} />
             <Text style={styles.infoText}>{card.durationMinutes} minutes chat</Text>
           </View>
 
           <View style={styles.infoRow}>
-            <Ionicons name="people-outline" size={20} color="#666" />
+            <Ionicons name="people-outline" size={20} color={colors.textSecondary} />
             <Text style={styles.infoText}>{getApplicabilityText()}</Text>
           </View>
         </View>
@@ -218,7 +219,7 @@ const PrepaidRechargeCardPaymentScreen = () => {
         {/* Payment Method */}
         <View style={styles.paymentMethodCard}>
           <View style={styles.paymentMethodHeader}>
-            <MaterialIcons name="payment" size={24} color="#4CAF50" />
+            <MaterialIcons name="payment" size={24} color={colors.success} />
             <Text style={styles.paymentMethodTitle}>Payment Method</Text>
           </View>
           <View style={styles.paymentMethodContent}>
@@ -249,7 +250,7 @@ const PrepaidRechargeCardPaymentScreen = () => {
           disabled={paying}
         >
           {paying ? (
-            <ActivityIndicator color="#FFFFFF" />
+            <ActivityIndicator color={colors.textInverse} />
           ) : (
             <Text style={styles.payButtonText}>Pay ₹{totalAmount} Now</Text>
           )}
@@ -262,7 +263,7 @@ const PrepaidRechargeCardPaymentScreen = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F8F9FA',
+    backgroundColor: colors.background,
   },
   header: {
     flexDirection: 'row',
@@ -270,14 +271,14 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: 20,
     paddingVertical: 15,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
     borderBottomWidth: 1,
-    borderBottomColor: '#E0E0E0',
+    borderBottomColor: colors.divider,
   },
   headerTitle: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#333',
+    color: colors.textPrimary,
   },
   content: {
     flex: 1,
@@ -290,14 +291,14 @@ const styles = StyleSheet.create({
   },
   errorText: {
     fontSize: 16,
-    color: '#F44336',
+    color: colors.error,
   },
   cardInfoCard: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
     borderRadius: 12,
     padding: 20,
     marginBottom: 15,
-    shadowColor: '#000',
+    shadowColor: colors.shadow,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 4,
@@ -306,12 +307,12 @@ const styles = StyleSheet.create({
   cardTitle: {
     fontSize: 18,
     fontWeight: '700',
-    color: '#333',
+    color: colors.textPrimary,
     marginBottom: 8,
   },
   cardDescription: {
     fontSize: 14,
-    color: '#666',
+    color: colors.textSecondary,
     marginBottom: 12,
   },
   infoRow: {
@@ -321,15 +322,15 @@ const styles = StyleSheet.create({
   },
   infoText: {
     fontSize: 14,
-    color: '#333',
+    color: colors.textPrimary,
     marginLeft: 10,
   },
   paymentCard: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
     borderRadius: 12,
     padding: 20,
     marginBottom: 15,
-    shadowColor: '#000',
+    shadowColor: colors.shadow,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 4,
@@ -338,7 +339,7 @@ const styles = StyleSheet.create({
   paymentTitle: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#333',
+    color: colors.textPrimary,
     marginBottom: 15,
   },
   breakdownRow: {
@@ -349,16 +350,16 @@ const styles = StyleSheet.create({
   },
   breakdownLabel: {
     fontSize: 14,
-    color: '#666',
+    color: colors.textSecondary,
   },
   breakdownValue: {
     fontSize: 14,
-    color: '#333',
+    color: colors.textPrimary,
     fontWeight: '500',
   },
   divider: {
     height: 1,
-    backgroundColor: '#E0E0E0',
+    backgroundColor: colors.divider,
     marginVertical: 10,
   },
   totalRow: {
@@ -370,19 +371,19 @@ const styles = StyleSheet.create({
   totalLabel: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#333',
+    color: colors.textPrimary,
   },
   totalValue: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: '#FF6B35',
+    color: colors.primary,
   },
   paymentMethodCard: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
     borderRadius: 12,
     padding: 20,
     marginBottom: 15,
-    shadowColor: '#000',
+    shadowColor: colors.shadow,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 4,
@@ -396,11 +397,11 @@ const styles = StyleSheet.create({
   paymentMethodTitle: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#333',
+    color: colors.textPrimary,
     marginLeft: 8,
   },
   paymentMethodContent: {
-    backgroundColor: '#F8F9FA',
+    backgroundColor: colors.background,
     borderRadius: 8,
     padding: 15,
   },
@@ -410,42 +411,42 @@ const styles = StyleSheet.create({
   razorpayText: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#4CAF50',
+    color: colors.success,
     marginBottom: 10,
   },
   paymentOptions: {
     fontSize: 12,
-    color: '#666',
+    color: colors.textSecondary,
     textAlign: 'center',
     lineHeight: 18,
   },
   termsCard: {
-    backgroundColor: '#F0F8FF',
+    backgroundColor: colors.infoMuted,
     borderRadius: 12,
     padding: 15,
     marginBottom: 20,
     borderWidth: 1,
-    borderColor: '#E3F2FD',
+    borderColor: colors.infoMuted,
   },
   termsTitle: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#1976D2',
+    color: colors.info,
     marginBottom: 8,
   },
   termsText: {
     fontSize: 12,
-    color: '#666',
+    color: colors.textSecondary,
     lineHeight: 18,
   },
   footer: {
     padding: 20,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
     borderTopWidth: 1,
-    borderTopColor: '#E0E0E0',
+    borderTopColor: colors.divider,
   },
   payButton: {
-    backgroundColor: '#FF6B35',
+    backgroundColor: colors.primary,
     borderRadius: 12,
     paddingVertical: 15,
     alignItems: 'center',
@@ -454,10 +455,10 @@ const styles = StyleSheet.create({
   payButtonText: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#FFFFFF',
+    color: colors.textInverse,
   },
   disabledButton: {
-    backgroundColor: '#CCC',
+    backgroundColor: colors.surfaceTertiary,
   },
 });
 

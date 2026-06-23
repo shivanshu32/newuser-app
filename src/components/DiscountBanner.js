@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, Animated, TouchableOpacity } from 'react-native';
+import { colors } from '../theme';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 
@@ -157,7 +158,7 @@ const DiscountBanner = ({
               
               {/* Countdown Timer */}
               <View style={styles.timerContainer}>
-                <Ionicons name="time-outline" size={16} color="#fff" />
+                <Ionicons name="time-outline" size={16} color={colors.textInverse} />
                 <Text style={styles.timerText}>
                   {remainingTime.minutes}:{remainingTime.seconds.toString().padStart(2, '0')} remaining
                 </Text>
@@ -167,20 +168,20 @@ const DiscountBanner = ({
               <View style={styles.codeContainer}>
                 <Text style={styles.codeLabel}>Code:</Text>
                 <Text style={styles.codeText}>{code}</Text>
-                <Ionicons name="copy-outline" size={16} color="#fff" style={styles.copyIcon} />
+                <Ionicons name="copy-outline" size={16} color={colors.textInverse} style={styles.copyIcon} />
               </View>
             </View>
 
             {/* CTA Arrow */}
             <View style={styles.ctaContainer}>
-              <Ionicons name="chevron-forward" size={28} color="#fff" />
+              <Ionicons name="chevron-forward" size={28} color={colors.textInverse} />
             </View>
           </View>
 
           {/* Urgency Indicator */}
           {urgency === 'high' && (
             <View style={styles.urgencyBadge}>
-              <Ionicons name="flash" size={12} color="#fff" />
+              <Ionicons name="flash" size={12} color={colors.textInverse} />
               <Text style={styles.urgencyText}>HURRY!</Text>
             </View>
           )}
@@ -231,13 +232,13 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(255, 255, 255, 0.4)'
   },
   badgeText: {
-    color: '#fff',
+    color: colors.textInverse,
     fontSize: 24,
     fontWeight: 'bold',
     lineHeight: 28
   },
   badgeSubtext: {
-    color: '#fff',
+    color: colors.textInverse,
     fontSize: 10,
     fontWeight: '600',
     letterSpacing: 1
@@ -251,7 +252,7 @@ const styles = StyleSheet.create({
     flex: 1
   },
   title: {
-    color: '#fff',
+    color: colors.textInverse,
     fontSize: 16,
     fontWeight: 'bold',
     marginBottom: 8
@@ -262,7 +263,7 @@ const styles = StyleSheet.create({
     marginBottom: 8
   },
   timerText: {
-    color: '#fff',
+    color: colors.textInverse,
     fontSize: 14,
     fontWeight: '600',
     marginLeft: 6
@@ -277,13 +278,13 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-start'
   },
   codeLabel: {
-    color: '#fff',
+    color: colors.textInverse,
     fontSize: 12,
     fontWeight: '600',
     marginRight: 6
   },
   codeText: {
-    color: '#fff',
+    color: colors.textInverse,
     fontSize: 12,
     fontWeight: 'bold',
     letterSpacing: 1
@@ -306,7 +307,7 @@ const styles = StyleSheet.create({
     paddingVertical: 4
   },
   urgencyText: {
-    color: '#fff',
+    color: colors.textInverse,
     fontSize: 10,
     fontWeight: 'bold',
     marginLeft: 4,

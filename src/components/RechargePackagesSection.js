@@ -9,11 +9,12 @@ import {
   Dimensions
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { colors, spacing, radius, shadows } from '../theme';
 import { useNavigation } from '@react-navigation/native';
 import { offersAPI } from '../services/api';
 
 const { width } = Dimensions.get('window');
-const CARD_WIDTH = width * 0.55;
+const CARD_WIDTH = width * 0.38;
 const CARD_MARGIN = 10;
 
 const RechargePackagesSection = () => {
@@ -65,73 +66,34 @@ const RechargePackagesSection = () => {
   };
 
   const renderPackageCard = (pkg) => {
-    const bonusAmount = pkg.percentageBonus 
+    const bonusAmount = pkg.percentageBonus
       ? Math.round(pkg.minRechargeAmount * pkg.percentageBonus / 100)
       : (pkg.flatBonus || 0);
-    
+
     const totalCredit = pkg.minRechargeAmount + bonusAmount;
-    const savingsPercent = pkg.percentageBonus || 
-      (pkg.flatBonus ? Math.round((pkg.flatBonus / pkg.minRechargeAmount) * 100) : 0);
 
     return (
       <TouchableOpacity
         key={pkg._id}
         style={styles.packageCard}
         onPress={() => handlePackagePress(pkg)}
-        activeOpacity={0.8}
+        activeOpacity={0.85}
       >
-        {/* Badge for first recharge or popular */}
-        {pkg.firstRecharge && (
-          <View style={styles.badge}>
-            <Ionicons name="gift" size={12} color="#fff" />
-            <Text style={styles.badgeText}>First Recharge</Text>
-          </View>
-        )}
-        
-        {!pkg.firstRecharge && pkg.popular && (
-          <View style={[styles.badge, styles.popularBadge]}>
-            <Ionicons name="star" size={12} color="#fff" />
-            <Text style={styles.badgeText}>Popular</Text>
-          </View>
-        )}
+        <Text style={styles.packageName}>{pkg.name.toUpperCase()}</Text>
 
-        {/* Package Name */}
-        <Text style={styles.packageName}>{pkg.name}</Text>
-
-        {/* Amount */}
-        <View style={styles.amountContainer}>
-          <Text style={styles.currencySymbol}>₹</Text>
-          <Text style={styles.amount}>{pkg.minRechargeAmount}</Text>
+        <View style={styles.amountRow}>
+          <View style={styles.amountContainer}>
+            <Text style={styles.currencySymbol}>₹</Text>
+            <Text style={styles.amount}>{pkg.minRechargeAmount}</Text>
+          </View>
+          {bonusAmount > 0 && (
+            <View style={styles.bonusPill}>
+              <Text style={styles.bonusPillText}>+₹{bonusAmount}</Text>
+            </View>
+          )}
         </View>
 
-        {/* Bonus Info */}
-        {bonusAmount > 0 && (
-          <View style={styles.bonusContainer}>
-            <Ionicons name="add-circle" size={16} color="#4CAF50" />
-            <Text style={styles.bonusText}>
-              ₹{bonusAmount} Bonus
-            </Text>
-          </View>
-        )}
-
-        {/* Total Credit */}
-        <View style={styles.totalContainer}>
-          <Text style={styles.totalLabel}>Total Credit</Text>
-          <Text style={styles.totalValue}>₹{totalCredit}</Text>
-        </View>
-
-        {/* Savings Badge */}
-        {savingsPercent > 0 && (
-          <View style={styles.savingsBadge}>
-            <Text style={styles.savingsText}>Save {savingsPercent}%</Text>
-          </View>
-        )}
-
-        {/* CTA */}
-        <View style={styles.ctaContainer}>
-          <Text style={styles.ctaText}>Recharge Now</Text>
-          <Ionicons name="arrow-forward" size={16} color="#FF6B35" />
-        </View>
+        <Text style={styles.totalCredit}>Total ₹{totalCredit}</Text>
       </TouchableOpacity>
     );
   };
@@ -140,30 +102,29 @@ const RechargePackagesSection = () => {
     return (
       <View style={styles.container}>
         <View style={styles.header}>
-          <Text style={styles.sectionTitle}>Recharge Packages</Text>
+          <Text style={styles.sectionTitle}>Wallet Recharge</Text>
         </View>
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#FF6B35" />
+          <ActivityIndicator size="large" color={colors.primary} />
         </View>
       </View>
     );
   }
 
   if (error || packages.length === 0) {
-    return null; // Don't show section if there's an error or no packages
+    return null;
   }
 
   return (
     <View style={styles.container}>
-      {/* Header */}
       <View style={styles.header}>
         <View>
-          <Text style={styles.sectionTitle}>Recharge Packages</Text>
-          <Text style={styles.sectionSubtitle}>Get bonus credits on recharge</Text>
+          <Text style={styles.sectionTitle}>Wallet Recharge</Text>
+          <Text style={styles.sectionSubtitle}>Add funds to your balance</Text>
         </View>
         <TouchableOpacity onPress={handleViewAll} style={styles.viewAllButton}>
           <Text style={styles.viewAllText}>View All</Text>
-          <Ionicons name="chevron-forward" size={16} color="#FF6B35" />
+          <Ionicons name="chevron-forward" size={14} color={colors.textMuted} />
         </TouchableOpacity>
       </View>
 
@@ -184,24 +145,27 @@ const RechargePackagesSection = () => {
 
 const styles = StyleSheet.create({
   container: {
-    marginVertical: 12,
+    marginTop: 24,
+    marginBottom: 16,
   },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 16,
-    marginBottom: 8,
+    paddingHorizontal: 24,
+    marginBottom: 12,
   },
   sectionTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#1a1a1a',
+    fontSize: 24,
+    fontWeight: '800',
+    color: colors.textPrimary,
+    letterSpacing: -0.3,
   },
   sectionSubtitle: {
     fontSize: 12,
-    color: '#666',
-    marginTop: 1,
+    color: colors.textMuted,
+    marginTop: 4,
+    letterSpacing: 0.3,
   },
   viewAllButton: {
     flexDirection: 'row',
@@ -209,135 +173,80 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   viewAllText: {
-    fontSize: 14,
-    color: '#FF6B35',
-    fontWeight: '600',
+    fontSize: 13,
+    color: colors.textMuted,
+    fontWeight: '500',
   },
   loadingContainer: {
-    height: 200,
+    height: 140,
     justifyContent: 'center',
     alignItems: 'center',
   },
   scrollContent: {
-    paddingHorizontal: 16,
-    paddingVertical: 2,
+    paddingHorizontal: 24,
+    paddingVertical: 4,
   },
   packageCard: {
     width: CARD_WIDTH,
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    padding: 12,
+    backgroundColor: '#1A1A1A',
+    borderRadius: 14,
+    paddingVertical: 14,
+    paddingHorizontal: 14,
     marginRight: CARD_MARGIN,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.08,
-    shadowRadius: 4,
-    elevation: 2,
     borderWidth: 1,
-    borderColor: '#f0f0f0',
-  },
-  badge: {
-    position: 'absolute',
-    top: 8,
-    right: 8,
-    backgroundColor: '#FF6B35',
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 3,
-    paddingHorizontal: 6,
-    paddingVertical: 3,
-    borderRadius: 8,
-  },
-  popularBadge: {
-    backgroundColor: '#FFB800',
-  },
-  badgeText: {
-    color: '#fff',
-    fontSize: 9,
-    fontWeight: 'bold',
+    borderColor: 'rgba(200, 164, 106, 0.12)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.2,
+    shadowRadius: 6,
+    elevation: 3,
   },
   packageName: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#1a1a1a',
+    fontSize: 9,
+    fontWeight: '700',
+    color: colors.textMuted,
     marginBottom: 8,
+    letterSpacing: 0.8,
+  },
+  amountRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 4,
   },
   amountContainer: {
     flexDirection: 'row',
     alignItems: 'baseline',
-    marginBottom: 8,
   },
   currencySymbol: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#FF6B35',
-    marginRight: 2,
+    fontSize: 16,
+    fontWeight: '700',
+    color: colors.textPrimary,
+    marginRight: 1,
   },
   amount: {
     fontSize: 28,
-    fontWeight: 'bold',
-    color: '#FF6B35',
+    fontWeight: '800',
+    color: colors.textPrimary,
+    letterSpacing: -0.5,
   },
-  bonusContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    backgroundColor: '#E8F5E9',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
+  bonusPill: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
     borderRadius: 6,
-    alignSelf: 'flex-start',
-    marginBottom: 8,
+    backgroundColor: 'rgba(200, 164, 106, 0.1)',
+    borderWidth: 1,
+    borderColor: 'rgba(200, 164, 106, 0.25)',
   },
-  bonusText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#4CAF50',
+  bonusPillText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: colors.primary,
   },
-  totalContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: 8,
-    borderTopWidth: 1,
-    borderTopColor: '#f0f0f0',
-    marginBottom: 8,
-  },
-  totalLabel: {
-    fontSize: 12,
-    color: '#666',
-  },
-  totalValue: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#1a1a1a',
-  },
-  savingsBadge: {
-    backgroundColor: '#FFF3E0',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 5,
-    alignSelf: 'flex-start',
-    marginBottom: 8,
-  },
-  savingsText: {
+  totalCredit: {
     fontSize: 11,
-    fontWeight: '600',
-    color: '#F57C00',
-  },
-  ctaContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 4,
-    paddingVertical: 8,
-    backgroundColor: '#FFF5F2',
-    borderRadius: 6,
-  },
-  ctaText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#FF6B35',
+    color: colors.textMuted,
+    fontWeight: '500',
   },
 });
 

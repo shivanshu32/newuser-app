@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import bannerAPI from '../services/bannerAPI';
+import { colors, spacing, radius } from '../theme';
 
 const { width: screenWidth } = Dimensions.get('window');
 
@@ -153,7 +154,7 @@ const BannerCarousel = ({ onBannerPress }) => {
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="small" color="#F97316" />
+        <ActivityIndicator size="small" color={colors.primary} />
       </View>
     );
   }
@@ -219,7 +220,7 @@ const styles = StyleSheet.create({
     height: 180,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#f0f0f0',
+    backgroundColor: colors.surfaceSecondary,
     marginTop: -15,
     marginBottom: 20,
   },
@@ -228,7 +229,7 @@ const styles = StyleSheet.create({
   },
   bannerContainer: {
     width: screenWidth,
-    backgroundColor: '#f0f0f0', // Fallback background color
+    backgroundColor: colors.surfaceSecondary,
   },
   bannerImage: {
     width: screenWidth,
@@ -248,11 +249,11 @@ const styles = StyleSheet.create({
     width: 6,
     height: 6,
     borderRadius: 3,
-    backgroundColor: '#D1D5DB',
+    backgroundColor: colors.surfaceTertiary,
     marginHorizontal: 3,
   },
   paginationDotActive: {
-    backgroundColor: '#F97316',
+    backgroundColor: colors.primary,
     width: 16,
     borderRadius: 3,
   },

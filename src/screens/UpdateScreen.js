@@ -13,6 +13,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useEffect } from 'react';
+import { colors } from '../theme';
 import APP_CONFIG from '../config/appConfig';
 import versionService from '../services/versionService';
 
@@ -66,11 +67,11 @@ const UpdateScreen = ({ navigation, route }) => {
 
   return (
     <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor="#1a1a2e" />
+      <StatusBar barStyle="light-content" backgroundColor={colors.background} />
       
       <View style={styles.content}>
         <View style={styles.iconContainer}>
-          <Ionicons name="refresh-circle" size={100} color="#4CAF50" />
+          <Ionicons name="refresh-circle" size={100} color={colors.success} />
         </View>
         
         <Text style={styles.title}>Update Required</Text>
@@ -97,7 +98,7 @@ const UpdateScreen = ({ navigation, route }) => {
         </View>
         
         <TouchableOpacity style={styles.updateButton} onPress={handleUpdatePress}>
-          <Ionicons name="download" size={24} color="#fff" style={styles.buttonIcon} />
+          <Ionicons name="download" size={24} color={colors.textInverse} style={styles.buttonIcon} />
           <Text style={styles.updateButtonText}>Update Now</Text>
         </TouchableOpacity>
         
@@ -112,7 +113,7 @@ const UpdateScreen = ({ navigation, route }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#1a1a2e',
+    backgroundColor: colors.background,
   },
   content: {
     flex: 1,
@@ -126,19 +127,19 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 28,
     fontWeight: 'bold',
-    color: '#fff',
+    color: colors.textPrimary,
     textAlign: 'center',
     marginBottom: 15,
   },
   subtitle: {
     fontSize: 16,
-    color: '#ccc',
+    color: colors.textSecondary,
     textAlign: 'center',
     marginBottom: 30,
     lineHeight: 22,
   },
   versionContainer: {
-    backgroundColor: '#2a2a3e',
+    backgroundColor: colors.surfaceSecondary,
     padding: 20,
     borderRadius: 10,
     marginBottom: 30,
@@ -146,15 +147,15 @@ const styles = StyleSheet.create({
   },
   versionText: {
     fontSize: 16,
-    color: '#ccc',
+    color: colors.textSecondary,
     marginBottom: 5,
   },
   versionNumber: {
-    color: '#4CAF50',
+    color: colors.success,
     fontWeight: 'bold',
   },
   featuresContainer: {
-    backgroundColor: '#2a2a3e',
+    backgroundColor: colors.surfaceSecondary,
     padding: 20,
     borderRadius: 10,
     marginBottom: 40,
@@ -163,17 +164,17 @@ const styles = StyleSheet.create({
   featuresTitle: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: '#fff',
+    color: colors.textPrimary,
     marginBottom: 15,
   },
   featureItem: {
     fontSize: 14,
-    color: '#ccc',
+    color: colors.textSecondary,
     marginBottom: 8,
     lineHeight: 20,
   },
   updateButton: {
-    backgroundColor: '#4CAF50',
+    backgroundColor: colors.success,
     paddingVertical: 15,
     paddingHorizontal: 40,
     borderRadius: 25,
@@ -190,13 +191,13 @@ const styles = StyleSheet.create({
     marginRight: 10,
   },
   updateButtonText: {
-    color: '#fff',
+    color: colors.textPrimary,
     fontSize: 18,
     fontWeight: 'bold',
   },
   footerText: {
     fontSize: 14,
-    color: '#999',
+    color: colors.textMuted,
     textAlign: 'center',
     fontStyle: 'italic',
   },

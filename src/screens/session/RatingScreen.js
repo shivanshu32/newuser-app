@@ -14,6 +14,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../context/AuthContext';
 import { bookingsAPI, astrologersAPI, ratingsAPI } from '../../services/api';
+import { colors, spacing, radius, shadows } from '../../theme';
 
 const RatingScreen = ({ route, navigation }) => {
   const { bookingId, consultation } = route.params || {};
@@ -216,7 +217,7 @@ const RatingScreen = ({ route, navigation }) => {
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#F97316" />
+        <ActivityIndicator size="large" color={colors.primary} />
         <Text style={styles.loadingText}>Loading consultation details...</Text>
       </View>
     );
@@ -225,7 +226,7 @@ const RatingScreen = ({ route, navigation }) => {
   if (!bookingData || !astrologer) {
     return (
       <View style={styles.errorContainer}>
-        <Ionicons name="alert-circle-outline" size={64} color="#F44336" />
+        <Ionicons name="alert-circle-outline" size={64} color={colors.error} />
         <Text style={styles.errorTitle}>Unable to Load Details</Text>
         <Text style={styles.errorMessage}>
           We couldn't load the consultation details. Please try again.
@@ -248,7 +249,7 @@ const RatingScreen = ({ route, navigation }) => {
           style={styles.backButton} 
           onPress={() => navigation.goBack()}
         >
-          <Ionicons name="arrow-back" size={24} color="#333" />
+          <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Rate Your Consultation</Text>
         <View style={styles.placeholder} />
@@ -279,20 +280,20 @@ const RatingScreen = ({ route, navigation }) => {
         
         <View style={styles.sessionDetails}>
           <View style={styles.detailItem}>
-            <Ionicons name="time-outline" size={16} color="#666" />
+            <Ionicons name="time-outline" size={16} color={colors.textSecondary} />
             <Text style={styles.detailText}>
               Duration: {formatDuration(bookingData.actualDuration || bookingData.duration)}
             </Text>
           </View>
           <View style={styles.detailItem}>
-            <Ionicons name="cash-outline" size={16} color="#666" />
+            <Ionicons name="cash-outline" size={16} color={colors.textSecondary} />
             <Text style={styles.detailText}>
               Amount: ₹{bookingData.totalAmount || bookingData.amount || 0}
             </Text>
           </View>
           {bookingData.scheduledAt && (
             <View style={styles.detailItem}>
-              <Ionicons name="calendar-outline" size={16} color="#666" />
+              <Ionicons name="calendar-outline" size={16} color={colors.textSecondary} />
               <Text style={styles.detailText}>
                 Date: {new Date(bookingData.scheduledAt).toLocaleDateString('en-IN', {
                   day: 'numeric',
@@ -318,7 +319,7 @@ const RatingScreen = ({ route, navigation }) => {
               <Ionicons
                 name={rating >= star ? 'star' : 'star-outline'}
                 size={40}
-                color={rating >= star ? '#FFD700' : '#ccc'}
+                color={rating >= star ? colors.warning : colors.surfaceTertiary}
               />
             </TouchableOpacity>
           ))}
@@ -359,7 +360,7 @@ const RatingScreen = ({ route, navigation }) => {
         disabled={submitting}
       >
         {submitting ? (
-          <ActivityIndicator color="#fff" />
+          <ActivityIndicator color={colors.textInverse} />
         ) : (
           <Text style={styles.submitButtonText}>Submit Rating</Text>
         )}
@@ -380,65 +381,65 @@ const RatingScreen = ({ route, navigation }) => {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: '#f8f8f8',
+    backgroundColor: colors.background,
   },
   container: {
     flex: 1,
-    backgroundColor: '#f8f8f8',
+    backgroundColor: colors.background,
   },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#f8f8f8',
+    backgroundColor: colors.background,
   },
   loadingText: {
-    marginTop: 16,
+    marginTop: spacing.lg,
     fontSize: 16,
-    color: '#666',
+    color: colors.textSecondary,
   },
   errorContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#f8f8f8',
+    backgroundColor: colors.background,
     padding: 20,
   },
   errorTitle: {
     fontSize: 20,
     fontWeight: 'bold',
-    color: '#333',
-    marginTop: 16,
+    color: colors.textPrimary,
+    marginTop: spacing.lg,
     marginBottom: 8,
   },
   errorMessage: {
     fontSize: 16,
-    color: '#666',
+    color: colors.textSecondary,
     textAlign: 'center',
     marginBottom: 24,
   },
   retryButton: {
-    backgroundColor: '#F97316',
+    backgroundColor: colors.primary,
     paddingHorizontal: 24,
     paddingVertical: 12,
-    borderRadius: 8,
+    borderRadius: radius.sm,
     marginBottom: 12,
   },
   retryButtonText: {
-    color: '#fff',
+    color: colors.textInverse,
     fontSize: 16,
     fontWeight: 'bold',
   },
   goBackButton: {
-    backgroundColor: '#fff',
+    backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: '#ddd',
+    borderColor: colors.border,
     paddingHorizontal: 24,
     paddingVertical: 12,
-    borderRadius: 8,
+    borderRadius: radius.sm,
   },
   goBackButtonText: {
-    color: '#333',
+    color: colors.textPrimary,
     fontSize: 16,
     fontWeight: '500',
   },
@@ -446,11 +447,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-    backgroundColor: '#fff',
+    paddingHorizontal: spacing.xl,
+    paddingVertical: spacing.lg,
+    backgroundColor: colors.surface,
     borderBottomWidth: 1,
-    borderBottomColor: '#eee',
+    borderBottomColor: colors.divider,
   },
   backButton: {
     padding: 8,
@@ -458,21 +459,17 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: '#333',
+    color: colors.textPrimary,
   },
   placeholder: {
     width: 40,
   },
   sessionSummary: {
-    backgroundColor: '#fff',
-    margin: 16,
-    padding: 20,
-    borderRadius: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    backgroundColor: colors.surface,
+    margin: spacing.lg,
+    padding: spacing.xl,
+    borderRadius: radius.md,
+    ...shadows.card,
   },
   astrologerInfo: {
     flexDirection: 'row',
@@ -491,18 +488,18 @@ const styles = StyleSheet.create({
   astrologerName: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: '#333',
+    color: colors.textPrimary,
     marginBottom: 4,
   },
   sessionType: {
     fontSize: 14,
-    color: '#F97316',
+    color: colors.primary,
     fontWeight: '500',
     marginBottom: 2,
   },
   specialties: {
     fontSize: 12,
-    color: '#666',
+    color: colors.textSecondary,
   },
   sessionDetails: {
     gap: 8,
@@ -513,25 +510,21 @@ const styles = StyleSheet.create({
   },
   detailText: {
     fontSize: 14,
-    color: '#666',
+    color: colors.textSecondary,
     marginLeft: 8,
   },
   ratingContainer: {
-    backgroundColor: '#fff',
-    margin: 16,
-    padding: 20,
-    borderRadius: 12,
+    backgroundColor: colors.surface,
+    margin: spacing.lg,
+    padding: spacing.xl,
+    borderRadius: radius.md,
     alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    ...shadows.card,
   },
   ratingTitle: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: '#333',
+    color: colors.textPrimary,
     marginBottom: 20,
   },
   starsContainer: {
@@ -544,65 +537,61 @@ const styles = StyleSheet.create({
   },
   ratingText: {
     fontSize: 16,
-    color: '#666',
+    color: colors.textSecondary,
     fontWeight: '500',
   },
   reviewContainer: {
-    backgroundColor: '#fff',
-    margin: 16,
-    padding: 20,
-    borderRadius: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    backgroundColor: colors.surface,
+    margin: spacing.lg,
+    padding: spacing.xl,
+    borderRadius: radius.md,
+    ...shadows.card,
   },
   reviewTitle: {
     fontSize: 16,
     fontWeight: 'bold',
-    color: '#333',
+    color: colors.textPrimary,
     marginBottom: 12,
   },
   reviewInput: {
     borderWidth: 1,
-    borderColor: '#ddd',
-    borderRadius: 8,
-    padding: 12,
+    borderColor: colors.border,
+    borderRadius: radius.sm,
+    padding: spacing.md,
     fontSize: 14,
     textAlignVertical: 'top',
     minHeight: 100,
   },
   charCount: {
     fontSize: 12,
-    color: '#999',
+    color: colors.textMuted,
     textAlign: 'right',
     marginTop: 4,
   },
   submitButton: {
-    backgroundColor: '#F97316',
-    marginHorizontal: 16,
+    backgroundColor: colors.primary,
+    marginHorizontal: spacing.lg,
     marginVertical: 8,
     paddingVertical: 16,
-    borderRadius: 8,
+    borderRadius: radius.sm,
     alignItems: 'center',
   },
   disabledButton: {
     opacity: 0.6,
   },
   submitButtonText: {
-    color: '#fff',
+    color: colors.textInverse,
     fontSize: 16,
     fontWeight: 'bold',
   },
   skipButton: {
-    marginHorizontal: 16,
+    marginHorizontal: spacing.lg,
     marginBottom: 20,
     paddingVertical: 12,
     alignItems: 'center',
   },
   skipButtonText: {
-    color: '#666',
+    color: colors.textSecondary,
     fontSize: 14,
   },
 });

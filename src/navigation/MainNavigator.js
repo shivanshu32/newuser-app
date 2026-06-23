@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { Alert } from 'react-native';
+import { Alert, View, Text, TouchableOpacity, StyleSheet, Dimensions } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { useNavigation, CommonActions } from '@react-navigation/native';
 import { Ionicons, MaterialIcons, FontAwesome } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 // Import screens
 import HomeScreen from '../screens/main/HomeScreen';
@@ -39,6 +41,7 @@ import ChatHistoryScreen from '../screens/ChatHistoryScreen';
 import BlogDetailScreen from '../screens/main/BlogDetailScreen';
 import BlogListScreen from '../screens/main/BlogListScreen';
 import DailyHoroscopeScreen from '../screens/main/DailyHoroscopeScreen';
+import AstrologyToolScreen from '../screens/main/AstrologyToolScreen';
 import PoojaDetailScreen from '../screens/pooja/PoojaDetailScreen';
 import PoojaListScreen from '../screens/pooja/PoojaListScreen';
 import PoojaDetailsForm from '../screens/pooja/PoojaDetailsForm';
@@ -69,16 +72,64 @@ if (!global.eventEmitter) {
   global.eventEmitter = eventEmitter;
 }
 
-// Main tab navigator
+// CRED-inspired dark theme with gold accent
+const TAB_COLORS = {
+  background: '#000000',
+  active: '#C8A46A',
+  inactive: '#5A5A5A',
+  border: 'transparent',
+  centerBg: '#111111',
+  centerRing: '#C8A46A',
+  centerIcon: '#F5F5F5',
+  centerGlow: 'rgba(200, 164, 106, 0.2)',
+};
+
+// Custom center tab button (premium dark floating button with gold ring)
+const CenterTabButton = ({ children, onPress, accessibilityState }) => {
+  const focused = accessibilityState?.selected;
+  return (
+    <TouchableOpacity
+      activeOpacity={0.85}
+      onPress={onPress}
+      style={styles.centerButtonContainer}
+    >
+      <View style={styles.centerButtonWrapper}>
+        {focused && (
+          <View style={styles.centerButtonGlowOuter} />
+        )}
+        <View
+          style={[
+            styles.centerButtonInner,
+            focused && styles.centerButtonFocused,
+          ]}
+        >
+          <Ionicons
+            name="home"
+            size={18}
+            color={focused ? TAB_COLORS.active : TAB_COLORS.inactive}
+          />
+        </View>
+        {focused && <View style={styles.centerButtonGlow} />}
+      </View>
+    </TouchableOpacity>
+  );
+};
+
+// Main tab navigator - CRED style
 const TabNavigator = () => {
+  const insets = useSafeAreaInsets();
+  const bottomPadding = Math.max(insets.bottom, 8);
+
   return (
     <Tab.Navigator
+      initialRouteName="Home"
       screenOptions={({ route }) => ({
-        tabBarIcon: ({ focused, color, size }) => {
+        tabBarIcon: ({ focused, color }) => {
           let iconName;
+          const iconSize = 24;
 
           if (route.name === 'Home') {
-            iconName = focused ? 'home' : 'home-outline';
+            return null;
           } else if (route.name === 'Bookings') {
             iconName = focused ? 'calendar' : 'calendar-outline';
           } else if (route.name === 'Shop') {
@@ -89,44 +140,134 @@ const TabNavigator = () => {
             iconName = focused ? 'person' : 'person-outline';
           }
 
-          return <Ionicons name={iconName} size={size} color={color} />;
+          return <Ionicons name={iconName} size={iconSize} color={color} />;
         },
-        tabBarActiveTintColor: '#F97316',
-        tabBarInactiveTintColor: 'gray',
-        headerShown: true,
+        tabBarActiveTintColor: TAB_COLORS.active,
+        tabBarInactiveTintColor: TAB_COLORS.inactive,
+        tabBarStyle: [styles.tabBar, { paddingBottom: bottomPadding, height: 64 + bottomPadding }],
+        tabBarLabelStyle: styles.tabBarLabel,
+        tabBarItemStyle: styles.tabBarItem,
+        headerShown: false,
       })}
     >
       <Tab.Screen 
-        name="Home" 
-        component={HomeScreen} 
-        options={{ headerShown: false }}
-      />
-      <Tab.Screen 
         name="Bookings" 
         component={BookingScreen} 
-        options={{ headerShown: false }}
+        options={{ tabBarLabel: 'BOOKINGS' }}
       />
       <Tab.Screen
         name="Shop"
         component={ShopNavigator}
+        options={{ tabBarLabel: 'SHOP' }}
+      />
+      <Tab.Screen 
+        name="Home" 
+        component={HomeScreen} 
         options={{
-          headerShown: false,
-          tabBarLabel: 'Shop',
+          tabBarLabel: () => null,
+          tabBarButton: (props) => <CenterTabButton {...props} />,
         }}
       />
       <Tab.Screen 
         name="Wallet" 
         component={WalletScreen} 
-        options={{ headerShown: false }}
+        options={{ tabBarLabel: 'WALLET' }}
       />
       <Tab.Screen 
         name="Profile" 
         component={ProfileScreen} 
-        options={{ headerShown: false }}
+        options={{ tabBarLabel: 'PROFILE' }}
       />
     </Tab.Navigator>
   );
 };
+
+const styles = StyleSheet.create({
+  tabBar: {
+    position: 'absolute',
+    bottom: 12,
+    left: 0,
+    right: 0,
+    backgroundColor: 'rgba(26, 26, 26, 0.88)',
+    borderRadius: 0,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    borderTopWidth: 0,
+    borderWidth: 1,
+    borderColor: 'rgba(200, 164, 106, 0.08)',
+    elevation: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.25,
+    shadowRadius: 10,
+    paddingTop: 4,
+    paddingHorizontal: 8,
+  },
+  tabBarLabel: {
+    fontSize: 9,
+    fontWeight: '600',
+    letterSpacing: 0.8,
+    marginTop: -4,
+    textTransform: 'uppercase',
+  },
+  tabBarItem: {
+    paddingVertical: 0,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  centerButtonContainer: {
+    justifyContent: 'center',
+    alignItems: 'center',
+    width: 56,
+    height: 56,
+  },
+  centerButtonWrapper: {
+    justifyContent: 'center',
+    alignItems: 'center',
+    width: 52,
+    height: 52,
+  },
+  centerButtonInner: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: TAB_COLORS.centerBg,
+    borderWidth: 1.5,
+    borderColor: 'rgba(200, 164, 106, 0.25)',
+    shadowColor: TAB_COLORS.centerRing,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 6,
+    elevation: 4,
+    zIndex: 2,
+  },
+  centerButtonFocused: {
+    borderColor: '#C8A46A',
+    borderWidth: 2,
+    shadowOpacity: 0.35,
+    shadowRadius: 10,
+  },
+  centerButtonGlow: {
+    position: 'absolute',
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: TAB_COLORS.centerGlow,
+    zIndex: 1,
+    opacity: 0.4,
+  },
+  centerButtonGlowOuter: {
+    position: 'absolute',
+    width: 54,
+    height: 54,
+    borderRadius: 27,
+    backgroundColor: 'rgba(200, 164, 106, 0.08)',
+    zIndex: 0,
+    opacity: 0.3,
+  },
+});
 
 // Wrapper component that uses the BookingPopup context
 const BookingPopupWrapper = () => {
@@ -421,6 +562,11 @@ const MainNavigator = () => {
         <Stack.Screen 
           name="DailyHoroscope" 
           component={DailyHoroscopeScreen} 
+          options={{ headerShown: false }}
+        />
+        <Stack.Screen 
+          name="AstrologyTool" 
+          component={AstrologyToolScreen} 
           options={{ headerShown: false }}
         />
         <Stack.Screen 

@@ -13,6 +13,7 @@ import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 import { useAuth } from '../context/AuthContext';
 import { useSocket } from '../context/SocketContext';
 import { freeChatAPI } from '../services/api';
+import { colors, spacing, radius, shadows } from '../theme';
 
 const FreeChatCard = ({ navigation }) => {
   const { user } = useAuth();
@@ -197,86 +198,38 @@ const FreeChatCard = ({ navigation }) => {
   return (
     <>
       <View style={styles.container}>
-        {/* Gradient Background Overlay */}
-        <View style={styles.gradientOverlay} />
-        
-        {/* Main Content */}
         <View style={styles.content}>
-          <View style={styles.header}>
-            <View style={styles.iconContainer}>
-              <View style={styles.iconBackground}>
-                <MaterialIcons name="chat" size={28} color="#fff" />
-              </View>
-              <View style={styles.freeBadge}>
-                <Text style={styles.freeText}>FREE</Text>
-              </View>
-            </View>
-            <View style={styles.titleContainer}>
-              <Text style={styles.title}>🎁 Claim Your Free Chat</Text>
-              <Text style={styles.subtitle}>3 minutes with expert astrologers</Text>
-            </View>
-          </View>
+          <Text style={styles.badgeLabel}>COMPLIMENTARY</Text>
+          <Text style={styles.title}>Your Complimentary Consultation</Text>
+          <Text style={styles.subtitle}>A brief introduction to our advisors</Text>
 
-          <Text style={styles.description}>
-            Get personalized insights about your life, career, and relationships. 
-            Perfect introduction to our premium services!
-          </Text>
-
-          <View style={styles.twoRowFeatures}>
-            <View style={styles.iconsRow}>
-              <View style={styles.featureColumn}>
-                <View style={styles.featureIconWrapper}>
-                  <Ionicons name="time-outline" size={18} color="#F97316" />
-                </View>
-                <Text style={styles.featureTextItem}>3 minutes session</Text>
-              </View>
-              <View style={styles.featureColumn}>
-                <View style={styles.featureIconWrapper}>
-                  <Ionicons name="star-outline" size={18} color="#F97316" />
-                </View>
-                <Text style={styles.featureTextItem}>Expert astrologers</Text>
-              </View>
-              <View style={styles.featureColumn}>
-                <View style={styles.featureIconWrapper}>
-                  <Ionicons name="gift-outline" size={18} color="#F97316" />
-                </View>
-                <Text style={styles.featureTextItem}>Completely free</Text>
-              </View>
+          <View style={styles.featuresRow}>
+            <View style={styles.featureItem}>
+              <Ionicons name="time-outline" size={16} color={colors.primary} />
+              <Text style={styles.featureText} numberOfLines={1}>3 Minutes</Text>
+            </View>
+            <View style={styles.featureItem}>
+              <Ionicons name="star-outline" size={16} color={colors.primary} />
+              <Text style={styles.featureText} numberOfLines={1}>Expert Advisors</Text>
+            </View>
+            <View style={styles.featureItem}>
+              <Ionicons name="lock-closed-outline" size={16} color={colors.primary} />
+              <Text style={styles.featureText} numberOfLines={1}>Private Session</Text>
             </View>
           </View>
 
-          <TouchableOpacity 
-            style={[styles.button, requesting && styles.buttonDisabled]} 
+          <TouchableOpacity
+            style={[styles.button, requesting && styles.buttonDisabled]}
             onPress={handleStartFreeChat}
             disabled={requesting}
+            activeOpacity={0.85}
           >
             {requesting ? (
-              <>
-                <ActivityIndicator color="#fff" size="small" style={styles.buttonLoader} />
-                <Text style={styles.buttonText}>Connecting...</Text>
-              </>
+              <ActivityIndicator color="#111111" size="small" />
             ) : (
-              <>
-                <View style={styles.buttonIconContainer}>
-                  <MaterialIcons name="chat-bubble" size={22} color="#fff" />
-                </View>
-                <Text style={styles.buttonText}>Start Free Chat Now</Text>
-                <Ionicons name="arrow-forward" size={20} color="#fff" />
-              </>
+              <Text style={styles.buttonText}>Begin Session</Text>
             )}
           </TouchableOpacity>
-          
-          {/* Trust indicators */}
-          <View style={styles.trustIndicators}>
-            <View style={styles.trustItem}>
-              <Ionicons name="shield-checkmark" size={16} color="#10B981" />
-              <Text style={styles.trustText}>100% Secure</Text>
-            </View>
-            <View style={styles.trustItem}>
-              <Ionicons name="people" size={16} color="#10B981" />
-              <Text style={styles.trustText}>50,000+ Happy Users</Text>
-            </View>
-          </View>
         </View>
       </View>
 
@@ -290,18 +243,18 @@ const FreeChatCard = ({ navigation }) => {
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
-              <MaterialIcons name="hourglass-empty" size={48} color="#F97316" />
+              <MaterialIcons name="hourglass-empty" size={40} color={colors.primary} />
               <Text style={styles.modalTitle}>Finding Astrologer</Text>
             </View>
-            
+
             <Text style={styles.modalMessage}>{waitingMessage}</Text>
-            
+
             <View style={styles.loadingContainer}>
-              <ActivityIndicator size="large" color="#F97316" />
+              <ActivityIndicator size="large" color={colors.primary} />
             </View>
-            
-            <TouchableOpacity 
-              style={styles.cancelButton} 
+
+            <TouchableOpacity
+              style={styles.cancelButton}
               onPress={handleCancelWaiting}
             >
               <Text style={styles.cancelButtonText}>Cancel</Text>
@@ -315,238 +268,131 @@ const FreeChatCard = ({ navigation }) => {
 
 const styles = StyleSheet.create({
   container: {
-    position: 'relative',
-    backgroundColor: '#fff',
-    borderRadius: 16,
-    marginHorizontal: 16,
-    marginVertical: 12,
+    backgroundColor: '#1A1A1A',
+    borderRadius: 20,
+    marginHorizontal: 24,
+    marginTop: 24,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#2A2A2A',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 8,
-    elevation: 8,
-    overflow: 'hidden',
-  },
-  gradientOverlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    height: 6,
-    backgroundColor: '#F97316',
-  },
-  content: {
-    padding: 20,
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  iconContainer: {
-    position: 'relative',
-    marginRight: 16,
-  },
-  iconBackground: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: '#F97316',
-    justifyContent: 'center',
-    alignItems: 'center',
-    shadowColor: '#F97316',
-    shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.3,
-    shadowRadius: 4,
+    shadowRadius: 8,
     elevation: 4,
   },
-  freeBadge: {
-    position: 'absolute',
-    top: -6,
-    right: -6,
-    backgroundColor: '#10B981',
-    borderRadius: 12,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderWidth: 2,
-    borderColor: '#fff',
+  content: {
+    padding: 24,
   },
-  freeText: {
-    color: '#fff',
-    fontSize: 11,
-    fontWeight: 'bold',
-    letterSpacing: 0.5,
-  },
-  titleContainer: {
-    flex: 1,
+  badgeLabel: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: colors.primary,
+    letterSpacing: 1.5,
+    marginBottom: 12,
+    textTransform: 'uppercase',
   },
   title: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#1F2937',
-    marginBottom: 4,
+    fontSize: 18,
+    fontWeight: '700',
+    color: colors.textPrimary,
+    marginBottom: 6,
     lineHeight: 24,
   },
   subtitle: {
-    fontSize: 15,
-    color: '#6B7280',
-    fontWeight: '500',
-  },
-  description: {
-    fontSize: 15,
-    color: '#4B5563',
-    lineHeight: 22,
-    marginBottom: 20,
+    fontSize: 13,
+    color: colors.textMuted,
     fontWeight: '400',
+    marginBottom: 20,
   },
-  features: {
+  featuresRow: {
+    flexDirection: 'row',
+    justifyContent: 'flex-start',
+    gap: 12,
     marginBottom: 24,
+    flexWrap: 'wrap',
   },
-  feature: {
+  featureItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 12,
-  },
-  featureIcon: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: '#FEF3E2',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 12,
+    gap: 6,
   },
   featureText: {
-    fontSize: 14,
-    color: '#374151',
-    fontWeight: '500',
-    flex: 1,
-  },
-  twoRowFeatures: {
-    marginBottom: 20,
-    paddingHorizontal: 0,
-  },
-  iconsRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    paddingHorizontal: 0,
-  },
-  featureColumn: {
-    alignItems: 'center',
-    flex: 1,
-  },
-  featureIconWrapper: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: 'rgba(249, 115, 22, 0.1)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 8,
-  },
-  featureTextItem: {
     fontSize: 12,
-    color: '#374151',
+    color: colors.textMuted,
     fontWeight: '500',
-    textAlign: 'center',
-    maxWidth: 80,
   },
   button: {
-    backgroundColor: '#F97316',
-    borderRadius: 12,
-    paddingVertical: 16,
-    paddingHorizontal: 20,
-    flexDirection: 'row',
+    backgroundColor: colors.primary,
+    borderRadius: 14,
+    paddingVertical: 14,
+    paddingHorizontal: 24,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#F97316',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.3,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
     shadowRadius: 6,
-    elevation: 6,
-    marginBottom: 16,
+    elevation: 3,
   },
   buttonDisabled: {
-    backgroundColor: '#D1D5DB',
+    backgroundColor: colors.surface,
     shadowOpacity: 0,
     elevation: 0,
   },
-  buttonIconContainer: {
-    marginRight: 8,
-  },
-  buttonLoader: {
-    marginRight: 8,
-  },
   buttonText: {
-    color: '#fff',
-    fontSize: 17,
-    fontWeight: 'bold',
-    flex: 1,
-    textAlign: 'center',
-  },
-  trustIndicators: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    paddingTop: 12,
-    borderTopWidth: 1,
-    borderTopColor: '#F3F4F6',
-  },
-  trustItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  trustText: {
-    fontSize: 12,
-    color: '#6B7280',
-    fontWeight: '500',
-    marginLeft: 6,
+    color: '#111111',
+    fontSize: 14,
+    fontWeight: '700',
+    letterSpacing: 0.3,
   },
   // Modal styles
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
     justifyContent: 'center',
     alignItems: 'center',
   },
   modalContent: {
-    backgroundColor: '#fff',
-    borderRadius: 16,
-    padding: 24,
+    backgroundColor: '#1A1A1A',
+    borderRadius: 20,
+    padding: 28,
     width: '85%',
     maxWidth: 320,
     alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#2A2A2A',
   },
   modalHeader: {
     alignItems: 'center',
     marginBottom: 16,
   },
   modalTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#333',
+    fontSize: 18,
+    fontWeight: '700',
+    color: colors.textPrimary,
     marginTop: 12,
   },
   modalMessage: {
-    fontSize: 16,
-    color: '#666',
+    fontSize: 14,
+    color: colors.textMuted,
     textAlign: 'center',
     marginBottom: 24,
-    lineHeight: 22,
+    lineHeight: 20,
   },
   loadingContainer: {
     marginBottom: 24,
   },
   cancelButton: {
-    backgroundColor: '#f5f5f5',
-    borderRadius: 8,
-    paddingHorizontal: 24,
+    backgroundColor: colors.surface,
+    borderRadius: 10,
+    paddingHorizontal: 28,
     paddingVertical: 12,
   },
   cancelButtonText: {
-    fontSize: 16,
-    color: '#666',
-    fontWeight: '500',
+    fontSize: 14,
+    color: colors.textMuted,
+    fontWeight: '600',
   },
 });
 

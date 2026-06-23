@@ -1,5 +1,6 @@
 import React from 'react';
 import { TouchableOpacity, Text, StyleSheet, Alert } from 'react-native';
+import { colors } from '../theme';
 import facebookTrackingService from '../services/facebookTrackingService';
 
 /**
@@ -71,7 +72,7 @@ const FacebookTrackingTestButton = () => {
 
 const styles = StyleSheet.create({
   testButton: {
-    backgroundColor: '#1877F2',
+    backgroundColor: colors.info,
     paddingHorizontal: 16,
     paddingVertical: 8,
     borderRadius: 6,
@@ -79,7 +80,7 @@ const styles = StyleSheet.create({
     alignSelf: 'center',
   },
   testButtonText: {
-    color: '#FFFFFF',
+    color: colors.textInverse,
     fontSize: 14,
     fontWeight: '600',
     textAlign: 'center',

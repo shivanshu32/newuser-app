@@ -13,6 +13,7 @@ import {
   TextInput,
   ScrollView,
 } from 'react-native';
+import { colors } from '../../theme';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 import { useAuth } from '../../context/AuthContext';
@@ -225,10 +226,10 @@ const PrepaidChatPackAstrologersScreen = ({ navigation, route }) => {
     const isOnline = astrologer.onlineStatus?.chat === 1 || astrologer.onlineStatus?.call === 1;
     
     if (isOnline) {
-      if (astrologer.status === 'busy') return '#FF9800'; // Orange for busy
-      return '#4CAF50'; // Green for online
+      if (astrologer.status === 'busy') return colors.warning; // Orange for busy
+      return colors.success; // Green for online
     }
-    return '#9E9E9E'; // Grey for offline
+    return colors.textSecondary; // Grey for offline
   }, []);
 
   // Get status text
@@ -302,7 +303,7 @@ const PrepaidChatPackAstrologersScreen = ({ navigation, route }) => {
             {astrologer.rating > 0 && (
               <View style={styles.ratingSection}>
                 <View style={styles.starContainer}>
-                  <Ionicons name="star" size={14} color="#FFD700" />
+                  <Ionicons name="star" size={14} color="colors.warning" />
                   <Text style={styles.rating}>{astrologer.rating.toFixed(1)}</Text>
                 </View>
                 <Text style={styles.reviewCount}>
@@ -352,7 +353,7 @@ const PrepaidChatPackAstrologersScreen = ({ navigation, route }) => {
           <Ionicons 
             name="chatbubble-ellipses" 
             size={18} 
-            color="#fff" 
+            color={colors.textInverse} 
           />
           <Text style={styles.startChatBtnText}>
             {isOnline ? 'Start Chat' : 'Offline'}
@@ -381,7 +382,7 @@ const PrepaidChatPackAstrologersScreen = ({ navigation, route }) => {
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      <StatusBar barStyle="dark-content" backgroundColor="#fff" />
+      <StatusBar barStyle="light-content" backgroundColor={colors.background} />
       
       {/* Header */}
       <View style={styles.header}>
@@ -390,7 +391,7 @@ const PrepaidChatPackAstrologersScreen = ({ navigation, route }) => {
           style={styles.backButton}
           activeOpacity={0.7}
         >
-          <Ionicons name="arrow-back" size={24} color="#1a1a1a" />
+          <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
         </TouchableOpacity>
         <View style={styles.headerTitleContainer}>
           <Text style={styles.headerTitle}>Select Astrologer</Text>
@@ -400,17 +401,17 @@ const PrepaidChatPackAstrologersScreen = ({ navigation, route }) => {
 
       {/* Search Bar */}
       <View style={styles.searchContainer}>
-        <Ionicons name="search" size={20} color="#9CA3AF" style={styles.searchIcon} />
+        <Ionicons name="search" size={20} color={colors.textMuted} style={styles.searchIcon} />
         <TextInput
           style={styles.searchInput}
           placeholder="Search astrologers..."
           value={searchQuery}
           onChangeText={setSearchQuery}
-          placeholderTextColor="#9CA3AF"
+          placeholderTextColor={colors.textMuted}
         />
         {searchQuery.length > 0 && (
           <TouchableOpacity onPress={() => setSearchQuery('')}>
-            <Ionicons name="close-circle" size={20} color="#9CA3AF" />
+            <Ionicons name="close-circle" size={20} color={colors.textMuted} />
           </TouchableOpacity>
         )}
       </View>
@@ -431,7 +432,7 @@ const PrepaidChatPackAstrologersScreen = ({ navigation, route }) => {
       {/* Astrologers List */}
       {loading && astrologers.length === 0 ? (
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#F97316" />
+          <ActivityIndicator size="large" color="colors.primary" />
           <Text style={styles.loadingText}>Loading astrologers...</Text>
         </View>
       ) : (
@@ -443,7 +444,7 @@ const PrepaidChatPackAstrologersScreen = ({ navigation, route }) => {
           ListHeaderComponent={renderListHeader}
           ListEmptyComponent={
             <View style={styles.emptyContainer}>
-              <Ionicons name="people-outline" size={64} color="#ccc" />
+              <Ionicons name="people-outline" size={64} color="colors.border" />
               <Text style={styles.emptyTitle}>No Astrologers Found</Text>
               <Text style={styles.emptySubtitle}>
                 {searchQuery ? 'Try adjusting your search' : 'No astrologers available'}
@@ -454,8 +455,8 @@ const PrepaidChatPackAstrologersScreen = ({ navigation, route }) => {
             <RefreshControl
               refreshing={refreshing}
               onRefresh={onRefresh}
-              colors={['#F97316']}
-              tintColor="#F97316"
+              colors={[colors.primary]}
+              tintColor="colors.primary"
             />
           }
           showsVerticalScrollIndicator={false}
@@ -468,16 +469,16 @@ const PrepaidChatPackAstrologersScreen = ({ navigation, route }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f8f9fa',
+    backgroundColor: colors.background,
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 16,
     paddingVertical: 12,
-    backgroundColor: '#fff',
+    backgroundColor: colors.surface,
     borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
+    borderBottomColor: colors.surfaceSecondary,
   },
   backButton: {
     padding: 8,
@@ -489,17 +490,17 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: 20,
     fontWeight: 'bold',
-    color: '#1a1a1a',
+    color: colors.textPrimary,
   },
   headerSubtitle: {
     fontSize: 14,
-    color: '#666',
+    color: colors.textSecondary,
     marginTop: 2,
   },
   searchContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#fff',
+    backgroundColor: colors.surface,
     marginHorizontal: 16,
     marginTop: 12,
     marginBottom: 8,
@@ -507,7 +508,7 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#e0e0e0',
+    borderColor: colors.border,
   },
   searchIcon: {
     marginRight: 8,
@@ -515,7 +516,7 @@ const styles = StyleSheet.create({
   searchInput: {
     flex: 1,
     fontSize: 15,
-    color: '#1a1a1a',
+    color: colors.textPrimary,
   },
   categoryFilterSection: {
     marginHorizontal: 16,
@@ -529,22 +530,22 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 7,
     borderRadius: 16,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
     marginRight: 8,
     borderWidth: 1.5,
-    borderColor: '#E5E7EB',
+    borderColor: colors.border,
   },
   activeCategoryButton: {
-    backgroundColor: '#F97316',
-    borderColor: '#F97316',
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
   },
   categoryButtonText: {
     fontSize: 13,
     fontWeight: '500',
-    color: '#6B7280',
+    color: colors.textSecondary,
   },
   activeCategoryButtonText: {
-    color: '#FFFFFF',
+    color: colors.surface,
     fontWeight: '600',
   },
   listContent: {
@@ -555,7 +556,7 @@ const styles = StyleSheet.create({
   },
   resultsCount: {
     fontSize: 14,
-    color: '#666',
+    color: colors.textSecondary,
     marginBottom: 8,
   },
   restrictionBadge: {
@@ -574,7 +575,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   astrologerCard: {
-    backgroundColor: '#fff',
+    backgroundColor: colors.surface,
     borderRadius: 16,
     padding: 16,
     marginBottom: 12,
@@ -599,7 +600,7 @@ const styles = StyleSheet.create({
   premiumText: {
     fontSize: 8,
     fontWeight: '700',
-    color: '#FFD700',
+    color: colors.warning,
     letterSpacing: 0.5,
   },
   cardHeader: {
@@ -629,7 +630,7 @@ const styles = StyleSheet.create({
     height: 16,
     borderRadius: 8,
     borderWidth: 2,
-    borderColor: '#fff',
+    borderColor: colors.surface,
   },
   astrologerMainInfo: {
     flex: 1,
@@ -638,7 +639,7 @@ const styles = StyleSheet.create({
   astrologerName: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: '#1a1a1a',
+    color: colors.textPrimary,
     marginBottom: 6,
   },
   badgesRow: {
@@ -654,7 +655,7 @@ const styles = StyleSheet.create({
   },
   statusText: {
     fontSize: 11,
-    color: '#fff',
+    color: colors.surface,
     fontWeight: '600',
   },
   ratingSection: {
@@ -670,37 +671,37 @@ const styles = StyleSheet.create({
   rating: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#1a1a1a',
+    color: colors.textPrimary,
     marginLeft: 4,
   },
   reviewCount: {
     fontSize: 13,
-    color: '#666',
+    color: colors.textSecondary,
   },
   specialties: {
     fontSize: 13,
-    color: '#666',
+    color: colors.textSecondary,
     marginBottom: 3,
   },
   experience: {
     fontSize: 13,
-    color: '#F97316',
+    color: colors.primary,
     fontWeight: '500',
   },
   startChatBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#4CAF50',
+    backgroundColor: colors.success,
     paddingVertical: 12,
     borderRadius: 10,
     gap: 6,
   },
   startChatBtnDisabled: {
-    backgroundColor: '#ccc',
+    backgroundColor: colors.border,
   },
   startChatBtnText: {
-    color: '#fff',
+    color: colors.surface,
     fontSize: 15,
     fontWeight: '600',
   },
@@ -713,7 +714,7 @@ const styles = StyleSheet.create({
   loadingText: {
     marginTop: 12,
     fontSize: 15,
-    color: '#666',
+    color: colors.textSecondary,
   },
   emptyContainer: {
     alignItems: 'center',
@@ -722,12 +723,12 @@ const styles = StyleSheet.create({
   emptyTitle: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#1a1a1a',
+    color: colors.textPrimary,
     marginTop: 16,
   },
   emptySubtitle: {
     fontSize: 14,
-    color: '#666',
+    color: colors.textSecondary,
     marginTop: 8,
   },
 });

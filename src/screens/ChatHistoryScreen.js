@@ -12,6 +12,7 @@ import {
   ScrollView
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { colors, spacing, radius, shadows } from '../theme';
 import { chatHistoryAPI, followUpMessagesAPI } from '../services/api';
 
 const ChatHistoryScreen = ({ navigation, route }) => {
@@ -194,7 +195,7 @@ const ChatHistoryScreen = ({ navigation, route }) => {
                 <Ionicons 
                   name="document" 
                   size={16} 
-                  color="#666" 
+                  color={colors.textSecondary} 
                 />
                 <Text style={styles.attachmentName}>
                   {attachment.name || `${attachment.type} attachment`}
@@ -273,13 +274,13 @@ const ChatHistoryScreen = ({ navigation, route }) => {
       <SafeAreaView style={styles.container}>
         <View style={styles.header}>
           <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-            <Ionicons name="arrow-back" size={24} color="#333" />
+            <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>Chat History</Text>
         </View>
         
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#4A90E2" />
+          <ActivityIndicator size="large" color={colors.info} />
           <Text style={styles.loadingText}>Loading chat history...</Text>
         </View>
       </SafeAreaView>
@@ -291,13 +292,13 @@ const ChatHistoryScreen = ({ navigation, route }) => {
       <SafeAreaView style={styles.container}>
         <View style={styles.header}>
           <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-            <Ionicons name="arrow-back" size={24} color="#333" />
+            <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>Chat History</Text>
         </View>
         
         <View style={styles.errorContainer}>
-          <Ionicons name="alert-circle" size={64} color="#FF6B6B" />
+          <Ionicons name="alert-circle" size={64} color={colors.error} />
           <Text style={styles.errorTitle}>Unable to Load Chat History</Text>
           <Text style={styles.errorMessage}>{error}</Text>
           <TouchableOpacity style={styles.retryButton} onPress={fetchChatHistory}>
@@ -312,14 +313,14 @@ const ChatHistoryScreen = ({ navigation, route }) => {
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-          <Ionicons name="arrow-back" size={24} color="#333" />
+          <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Chat History</Text>
       </View>
 
       {messages.length === 0 ? (
         <View style={styles.emptyContainer}>
-          <Ionicons name="chatbubbles-outline" size={64} color="#ccc" />
+          <Ionicons name="chatbubbles-outline" size={64} color={colors.surfaceTertiary} />
           <Text style={styles.emptyTitle}>No Messages Found</Text>
           <Text style={styles.emptyMessage}>
             This consultation session doesn't have any chat messages.
@@ -346,7 +347,7 @@ const ChatHistoryScreen = ({ navigation, route }) => {
           {followUpMessages.length > 0 && (
             <View style={styles.followUpSection}>
               <View style={styles.followUpSectionHeader}>
-                <Ionicons name="medical" size={18} color="#4CAF50" />
+                <Ionicons name="medical" size={18} color={colors.success} />
                 <Text style={styles.followUpSectionTitle}>
                   Remedies from Astrologer ({followUpMessages.length})
                 </Text>
@@ -356,7 +357,7 @@ const ChatHistoryScreen = ({ navigation, route }) => {
                   <View style={styles.followUpMessageBubble}>
                     <View style={styles.followUpMessageHeader}>
                       <View style={styles.followUpBadge}>
-                        <Ionicons name="medical" size={12} color="#fff" />
+                        <Ionicons name="medical" size={12} color={colors.textInverse} />
                         <Text style={styles.followUpBadgeText}>REMEDY</Text>
                       </View>
                       <Text style={styles.followUpTimestamp}>
@@ -378,21 +379,18 @@ const ChatHistoryScreen = ({ navigation, route }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f8f9fa',
+    backgroundColor: colors.background,
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 16,
+    paddingHorizontal: spacing.lg,
     paddingVertical: 12,
-    backgroundColor: '#fff',
+    backgroundColor: colors.surface,
     borderBottomWidth: 1,
-    borderBottomColor: '#e1e8ed',
+    borderBottomColor: colors.border,
     elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
+    ...shadows.card,
   },
   backButton: {
     padding: 8,
@@ -401,7 +399,7 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#333',
+    color: colors.textPrimary,
     flex: 1,
   },
   content: {
@@ -416,7 +414,7 @@ const styles = StyleSheet.create({
   loadingText: {
     marginTop: 16,
     fontSize: 16,
-    color: '#666',
+    color: colors.textSecondary,
   },
   errorContainer: {
     flex: 1,
@@ -427,42 +425,39 @@ const styles = StyleSheet.create({
   errorTitle: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#333',
+    color: colors.textPrimary,
     marginTop: 16,
     marginBottom: 8,
   },
   errorMessage: {
     fontSize: 14,
-    color: '#666',
+    color: colors.textSecondary,
     textAlign: 'center',
     marginBottom: 20,
   },
   retryButton: {
-    backgroundColor: '#4A90E2',
+    backgroundColor: colors.info,
     paddingHorizontal: 24,
     paddingVertical: 12,
-    borderRadius: 8,
+    borderRadius: radius.sm,
   },
   retryButtonText: {
-    color: '#fff',
+    color: colors.textInverse,
     fontSize: 16,
     fontWeight: '600',
   },
   summaryContainer: {
-    backgroundColor: '#fff',
-    margin: 16,
-    padding: 16,
-    borderRadius: 12,
+    backgroundColor: colors.surface,
+    margin: spacing.lg,
+    padding: spacing.lg,
+    borderRadius: radius.md,
     elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
+    ...shadows.card,
   },
   summaryTitle: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#333',
+    color: colors.textPrimary,
     marginBottom: 12,
   },
   summaryRow: {
@@ -473,12 +468,12 @@ const styles = StyleSheet.create({
   },
   summaryLabel: {
     fontSize: 14,
-    color: '#666',
+    color: colors.textSecondary,
     fontWeight: '500',
   },
   summaryValue: {
     fontSize: 14,
-    color: '#333',
+    color: colors.textPrimary,
     fontWeight: '600',
   },
   messagesHeader: {
@@ -488,7 +483,7 @@ const styles = StyleSheet.create({
   messagesTitle: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#333',
+    color: colors.textPrimary,
   },
   messagesList: {
     paddingHorizontal: 16,
@@ -502,13 +497,13 @@ const styles = StyleSheet.create({
   },
   userMessage: {
     alignSelf: 'flex-end',
-    backgroundColor: '#4A90E2',
+    backgroundColor: colors.info,
   },
   astrologerMessage: {
     alignSelf: 'flex-start',
-    backgroundColor: '#fff',
+    backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: '#e1e8ed',
+    borderColor: colors.border,
   },
   lastMessage: {
     marginBottom: 8,
@@ -524,24 +519,24 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   userSenderName: {
-    color: '#fff',
+    color: colors.textInverse,
   },
   astrologerSenderName: {
-    color: '#4A90E2',
+    color: colors.info,
   },
   timestamp: {
     fontSize: 10,
-    color: '#999',
+    color: colors.textMuted,
   },
   messageContent: {
     fontSize: 14,
     lineHeight: 20,
   },
   userMessageContent: {
-    color: '#fff',
+    color: colors.textInverse,
   },
   astrologerMessageContent: {
-    color: '#333',
+    color: colors.textPrimary,
   },
   attachmentsContainer: {
     marginTop: 8,
@@ -553,7 +548,7 @@ const styles = StyleSheet.create({
   },
   attachmentName: {
     fontSize: 12,
-    color: '#666',
+    color: colors.textSecondary,
     marginLeft: 4,
   },
   messageImage: {
@@ -571,13 +566,13 @@ const styles = StyleSheet.create({
   emptyTitle: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#333',
+    color: colors.textPrimary,
     marginTop: 16,
     marginBottom: 8,
   },
   emptyMessage: {
     fontSize: 14,
-    color: '#666',
+    color: colors.textSecondary,
     textAlign: 'center',
   },
   // Reply preview styles
@@ -602,7 +597,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255, 255, 255, 0.6)',
   },
   astrologerReplyBar: {
-    backgroundColor: '#4A90E2',
+    backgroundColor: colors.info,
   },
   replyContent: {
     flex: 1,
@@ -616,7 +611,7 @@ const styles = StyleSheet.create({
     color: 'rgba(255, 255, 255, 0.9)',
   },
   astrologerReplySenderName: {
-    color: '#4A90E2',
+    color: colors.info,
   },
   replyText: {
     fontSize: 12,
@@ -625,13 +620,13 @@ const styles = StyleSheet.create({
     color: 'rgba(255, 255, 255, 0.8)',
   },
   astrologerReplyText: {
-    color: '#666',
+    color: colors.textSecondary,
   },
   // Follow-up Messages Section
   followUpSection: {
-    marginHorizontal: 16,
-    marginTop: 16,
-    marginBottom: 16,
+    marginHorizontal: spacing.lg,
+    marginTop: spacing.lg,
+    marginBottom: spacing.lg,
   },
   followUpSectionHeader: {
     flexDirection: 'row',
@@ -641,18 +636,18 @@ const styles = StyleSheet.create({
   followUpSectionTitle: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#4CAF50',
+    color: colors.success,
     marginLeft: 8,
   },
   followUpMessageContainer: {
     marginBottom: 8,
   },
   followUpMessageBubble: {
-    backgroundColor: '#E8F5E9',
-    borderRadius: 12,
-    padding: 12,
+    backgroundColor: colors.successMuted,
+    borderRadius: radius.md,
+    padding: spacing.md,
     borderLeftWidth: 4,
-    borderLeftColor: '#4CAF50',
+    borderLeftColor: colors.success,
   },
   followUpMessageHeader: {
     flexDirection: 'row',
@@ -663,24 +658,24 @@ const styles = StyleSheet.create({
   followUpBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#4CAF50',
+    backgroundColor: colors.success,
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: 10,
   },
   followUpBadgeText: {
-    color: '#fff',
+    color: colors.textInverse,
     fontSize: 10,
     fontWeight: '700',
     marginLeft: 4,
   },
   followUpTimestamp: {
     fontSize: 11,
-    color: '#666',
+    color: colors.textSecondary,
   },
   followUpMessageContent: {
     fontSize: 14,
-    color: '#333',
+    color: colors.textPrimary,
     lineHeight: 20,
   },
 });

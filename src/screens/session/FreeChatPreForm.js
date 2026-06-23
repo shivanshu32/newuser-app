@@ -17,6 +17,7 @@ import { Ionicons } from '@expo/vector-icons';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { useAuth } from '../../context/AuthContext';
 import { useSocket } from '../../context/SocketContext';
+import { colors, spacing, radius, shadows } from '../../theme';
 
 const FreeChatPreForm = ({ route, navigation }) => {
   const { user } = useAuth();
@@ -349,7 +350,7 @@ const FreeChatPreForm = ({ route, navigation }) => {
             style={styles.backButton} 
             onPress={() => navigation.goBack()}
           >
-            <Ionicons name="arrow-back" size={24} color="#333" />
+            <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>Free Chat Details</Text>
           <View style={styles.placeholder} />
@@ -359,7 +360,7 @@ const FreeChatPreForm = ({ route, navigation }) => {
           {/* Info Card */}
           <View style={styles.infoCard}>
             <View style={styles.infoHeader}>
-              <Ionicons name="information-circle" size={24} color="#4CAF50" />
+              <Ionicons name="information-circle" size={24} color={colors.success} />
               <Text style={styles.infoTitle}>Free Chat Session</Text>
             </View>
             <Text style={styles.infoText}>
@@ -377,7 +378,7 @@ const FreeChatPreForm = ({ route, navigation }) => {
                 value={formData.name}
                 onChangeText={(value) => handleInputChange('name', value)}
                 placeholder="Enter your full name"
-                placeholderTextColor="#999"
+                placeholderTextColor={colors.textMuted}
               />
               {errors.name && <Text style={styles.errorText}>{errors.name}</Text>}
             </View>
@@ -392,7 +393,7 @@ const FreeChatPreForm = ({ route, navigation }) => {
                 <Text style={[styles.selectText, !formData.gender && styles.placeholderText]}>
                   {getGenderDisplayText(formData.gender)}
                 </Text>
-                <Ionicons name="chevron-down" size={20} color="#666" />
+                <Ionicons name="chevron-down" size={20} color={colors.textSecondary} />
               </TouchableOpacity>
               {errors.gender && <Text style={styles.errorText}>{errors.gender}</Text>}
             </View>
@@ -405,7 +406,7 @@ const FreeChatPreForm = ({ route, navigation }) => {
                 onPress={() => setShowDatePicker(true)}
               >
                 <Text style={styles.selectText}>{formatDate(formData.dateOfBirth)}</Text>
-                <Ionicons name="calendar" size={20} color="#666" />
+                <Ionicons name="calendar" size={20} color={colors.textSecondary} />
               </TouchableOpacity>
               {errors.dateOfBirth && <Text style={styles.errorText}>{errors.dateOfBirth}</Text>}
             </View>
@@ -420,7 +421,7 @@ const FreeChatPreForm = ({ route, navigation }) => {
                 onPress={() => handleTimeOfBirthUnknownChange(!isTimeOfBirthUnknown)}
               >
                 <View style={[styles.checkbox, isTimeOfBirthUnknown && styles.checkboxChecked]}>
-                  {isTimeOfBirthUnknown && <Ionicons name="checkmark" size={16} color="#fff" />}
+                  {isTimeOfBirthUnknown && <Ionicons name="checkmark" size={16} color={colors.textInverse} />}
                 </View>
                 <Text style={styles.checkboxLabel}>I don't know my time of birth</Text>
               </TouchableOpacity>
@@ -432,7 +433,7 @@ const FreeChatPreForm = ({ route, navigation }) => {
                   onPress={() => setShowTimePicker(true)}
                 >
                   <Text style={styles.selectText}>{formatTime(formData.timeOfBirth)}</Text>
-                  <Ionicons name="time" size={20} color="#666" />
+                  <Ionicons name="time" size={20} color={colors.textSecondary} />
                 </TouchableOpacity>
               )}
               {errors.timeOfBirth && <Text style={styles.errorText}>{errors.timeOfBirth}</Text>}
@@ -446,7 +447,7 @@ const FreeChatPreForm = ({ route, navigation }) => {
                 value={formData.placeOfBirth}
                 onChangeText={(value) => handleInputChange('placeOfBirth', value)}
                 placeholder="Enter your birth city"
-                placeholderTextColor="#999"
+                placeholderTextColor={colors.textMuted}
               />
               {errors.placeOfBirth && <Text style={styles.errorText}>{errors.placeOfBirth}</Text>}
             </View>
@@ -461,10 +462,10 @@ const FreeChatPreForm = ({ route, navigation }) => {
             disabled={loading}
           >
             {loading ? (
-              <ActivityIndicator color="#fff" size="small" />
+              <ActivityIndicator color={colors.textInverse} size="small" />
             ) : (
               <>
-                <Ionicons name="chatbubbles" size={20} color="#fff" style={styles.buttonIcon} />
+                <Ionicons name="chatbubbles" size={20} color={colors.textInverse} style={styles.buttonIcon} />
                 <Text style={styles.submitButtonText}>Start Free Chat</Text>
               </>
             )}
@@ -508,7 +509,7 @@ const FreeChatPreForm = ({ route, navigation }) => {
                   onPress={() => setShowGenderModal(false)}
                   style={styles.modalCloseButton}
                 >
-                  <Ionicons name="close" size={24} color="#666" />
+                  <Ionicons name="close" size={24} color={colors.textSecondary} />
                 </TouchableOpacity>
               </View>
               
@@ -520,7 +521,7 @@ const FreeChatPreForm = ({ route, navigation }) => {
                 >
                   <Text style={styles.modalOptionText}>{option.label}</Text>
                   {formData.gender === option.value && (
-                    <Ionicons name="checkmark" size={20} color="#4CAF50" />
+                    <Ionicons name="checkmark" size={20} color={colors.success} />
                   )}
                 </TouchableOpacity>
               ))}
@@ -537,7 +538,7 @@ const FreeChatPreForm = ({ route, navigation }) => {
         >
           <View style={styles.waitingOverlay}>
             <View style={styles.waitingContent}>
-              <ActivityIndicator size="large" color="#4CAF50" />
+              <ActivityIndicator size="large" color={colors.success} />
               <Text style={styles.waitingTitle}>Finding Astrologer...</Text>
               <Text style={styles.waitingMessage}>{waitingMessage}</Text>
               
@@ -558,7 +559,7 @@ const FreeChatPreForm = ({ route, navigation }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f8f9fa',
+    backgroundColor: colors.background,
   },
   keyboardAvoid: {
     flex: 1,
@@ -569,9 +570,9 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: 16,
     paddingVertical: 12,
-    backgroundColor: '#fff',
+    backgroundColor: colors.surface,
     borderBottomWidth: 1,
-    borderBottomColor: '#e0e0e0',
+    borderBottomColor: colors.divider,
   },
   backButton: {
     padding: 8,
@@ -579,7 +580,7 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#333',
+    color: colors.textPrimary,
   },
   placeholder: {
     width: 40,
@@ -589,14 +590,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
   },
   infoCard: {
-    backgroundColor: '#fff',
+    backgroundColor: colors.surface,
     borderRadius: 12,
     padding: 16,
     marginTop: 16,
     marginBottom: 20,
     borderLeftWidth: 4,
-    borderLeftColor: '#4CAF50',
-    shadowColor: '#000',
+    borderLeftColor: colors.success,
+    shadowColor: colors.shadow,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 4,
@@ -610,20 +611,20 @@ const styles = StyleSheet.create({
   infoTitle: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#333',
+    color: colors.textPrimary,
     marginLeft: 8,
   },
   infoText: {
     fontSize: 14,
-    color: '#666',
+    color: colors.textSecondary,
     lineHeight: 20,
   },
   formContainer: {
-    backgroundColor: '#fff',
+    backgroundColor: colors.surface,
     borderRadius: 12,
     padding: 16,
     marginBottom: 20,
-    shadowColor: '#000',
+    shadowColor: colors.shadow,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 4,
@@ -635,21 +636,21 @@ const styles = StyleSheet.create({
   label: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#333',
+    color: colors.textPrimary,
     marginBottom: 8,
   },
   input: {
     borderWidth: 1,
-    borderColor: '#ddd',
+    borderColor: colors.divider,
     borderRadius: 8,
     paddingHorizontal: 12,
     paddingVertical: 12,
     fontSize: 16,
-    color: '#333',
-    backgroundColor: '#fff',
+    color: colors.textPrimary,
+    backgroundColor: colors.surface,
   },
   inputError: {
-    borderColor: '#f44336',
+    borderColor: colors.error,
   },
   selectInput: {
     flexDirection: 'row',
@@ -658,14 +659,14 @@ const styles = StyleSheet.create({
   },
   selectText: {
     fontSize: 16,
-    color: '#333',
+    color: colors.textPrimary,
   },
   placeholderText: {
-    color: '#999',
+    color: colors.textMuted,
   },
   errorText: {
     fontSize: 12,
-    color: '#f44336',
+    color: colors.error,
     marginTop: 4,
   },
   checkboxContainer: {
@@ -677,28 +678,28 @@ const styles = StyleSheet.create({
     width: 20,
     height: 20,
     borderWidth: 2,
-    borderColor: '#ddd',
+    borderColor: colors.divider,
     borderRadius: 4,
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 8,
   },
   checkboxChecked: {
-    backgroundColor: '#4CAF50',
-    borderColor: '#4CAF50',
+    backgroundColor: colors.success,
+    borderColor: colors.success,
   },
   checkboxLabel: {
     fontSize: 14,
-    color: '#666',
+    color: colors.textSecondary,
   },
   buttonContainer: {
     padding: 16,
-    backgroundColor: '#fff',
+    backgroundColor: colors.surface,
     borderTopWidth: 1,
-    borderTopColor: '#e0e0e0',
+    borderTopColor: colors.divider,
   },
   submitButton: {
-    backgroundColor: '#4CAF50',
+    backgroundColor: colors.success,
     borderRadius: 8,
     paddingVertical: 14,
     flexDirection: 'row',
@@ -706,13 +707,13 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   submitButtonDisabled: {
-    backgroundColor: '#ccc',
+    backgroundColor: colors.surfaceTertiary,
   },
   buttonIcon: {
     marginRight: 8,
   },
   submitButtonText: {
-    color: '#fff',
+    color: colors.textInverse,
     fontSize: 16,
     fontWeight: '600',
   },
@@ -722,7 +723,7 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   modalContent: {
-    backgroundColor: '#fff',
+    backgroundColor: colors.surface,
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
     paddingBottom: 20,
@@ -733,12 +734,12 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     padding: 16,
     borderBottomWidth: 1,
-    borderBottomColor: '#e0e0e0',
+    borderBottomColor: colors.divider,
   },
   modalTitle: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#333',
+    color: colors.textPrimary,
   },
   modalCloseButton: {
     padding: 4,
@@ -752,7 +753,7 @@ const styles = StyleSheet.create({
   },
   modalOptionText: {
     fontSize: 16,
-    color: '#333',
+    color: colors.textPrimary,
   },
   waitingOverlay: {
     flex: 1,
@@ -761,7 +762,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   waitingContent: {
-    backgroundColor: '#fff',
+    backgroundColor: colors.surface,
     borderRadius: 12,
     padding: 24,
     alignItems: 'center',
@@ -770,13 +771,13 @@ const styles = StyleSheet.create({
   waitingTitle: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#333',
+    color: colors.textPrimary,
     marginTop: 16,
     marginBottom: 8,
   },
   waitingMessage: {
     fontSize: 14,
-    color: '#666',
+    color: colors.textSecondary,
     textAlign: 'center',
     marginBottom: 20,
   },
@@ -785,11 +786,11 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     borderRadius: 6,
     borderWidth: 1,
-    borderColor: '#ddd',
+    borderColor: colors.divider,
   },
   cancelButtonText: {
     fontSize: 14,
-    color: '#666',
+    color: colors.textSecondary,
   },
 });
 

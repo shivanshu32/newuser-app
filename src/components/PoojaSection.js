@@ -9,6 +9,7 @@ import {
   ActivityIndicator
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
+import { colors, spacing, radius, shadows } from '../theme';
 import poojaAPI from '../services/poojaAPI';
 
 const PoojaSection = () => {
@@ -98,7 +99,7 @@ const PoojaSection = () => {
           </View>
         </View>
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#FF6B35" />
+          <ActivityIndicator size="large" color={colors.primary} />
           <Text style={styles.loadingText}>Loading poojas...</Text>
         </View>
       </View>
@@ -148,64 +149,64 @@ const PoojaSection = () => {
 
 const styles = StyleSheet.create({
   container: {
-    marginVertical: 20,
+    marginVertical: 24,
   },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 16,
-    marginBottom: 12,
+    paddingHorizontal: 24,
+    marginBottom: 16,
   },
   sectionTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#1a1a1a',
+    fontSize: 24,
+    fontWeight: '800',
+    color: colors.textPrimary,
+    letterSpacing: -0.3,
   },
   sectionSubtitle: {
     fontSize: 12,
-    color: '#666',
-    marginTop: 2,
+    color: colors.textMuted,
+    marginTop: 4,
+    letterSpacing: 0.3,
   },
   viewAll: {
-    fontSize: 14,
-    color: '#FF6B35',
-    fontWeight: '600',
+    fontSize: 13,
+    color: colors.textMuted,
+    fontWeight: '500',
   },
   listContainer: {
-    paddingHorizontal: 16,
+    paddingHorizontal: 24,
   },
   card: {
     width: 280,
-    backgroundColor: '#fff',
-    borderRadius: 12,
+    backgroundColor: '#1A1A1A',
+    borderRadius: 16,
     marginRight: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
     overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: '#2A2A2A',
   },
   image: {
     width: '100%',
     height: 160,
-    backgroundColor: '#f0f0f0',
+    backgroundColor: colors.surface,
   },
   cardContent: {
-    padding: 12,
+    padding: 14,
   },
   catchyHeading: {
-    fontSize: 12,
-    color: '#FF6B35',
-    fontWeight: '600',
-    marginBottom: 4,
+    fontSize: 11,
+    color: colors.primary,
+    fontWeight: '700',
+    marginBottom: 6,
     textTransform: 'uppercase',
+    letterSpacing: 1,
   },
   mainHeading: {
     fontSize: 16,
-    fontWeight: 'bold',
-    color: '#1a1a1a',
+    fontWeight: '700',
+    color: colors.textPrimary,
     marginBottom: 8,
     lineHeight: 22,
   },
@@ -216,28 +217,28 @@ const styles = StyleSheet.create({
   },
   location: {
     fontSize: 12,
-    color: '#666',
+    color: colors.textMuted,
     flex: 1,
   },
   date: {
     fontSize: 12,
-    color: '#666',
+    color: colors.textMuted,
   },
   priceContainer: {
     marginTop: 8,
     paddingTop: 8,
     borderTopWidth: 1,
-    borderTopColor: '#f0f0f0',
+    borderTopColor: '#2A2A2A',
   },
   priceLabel: {
     fontSize: 10,
-    color: '#999',
+    color: colors.textMuted,
     marginBottom: 2,
   },
   price: {
     fontSize: 16,
-    fontWeight: 'bold',
-    color: '#FF6B35',
+    fontWeight: '800',
+    color: colors.primary,
   },
   loadingContainer: {
     padding: 20,
@@ -246,7 +247,7 @@ const styles = StyleSheet.create({
   loadingText: {
     marginTop: 8,
     fontSize: 14,
-    color: '#666',
+    color: colors.textMuted,
   },
   emptyContainer: {
     padding: 20,
@@ -255,7 +256,7 @@ const styles = StyleSheet.create({
   },
   emptyText: {
     fontSize: 14,
-    color: '#666',
+    color: colors.textMuted,
     textAlign: 'center',
   },
 });

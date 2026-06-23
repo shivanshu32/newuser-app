@@ -499,8 +499,8 @@ export const AuthProvider = ({ children }) => {
       isTimeOfBirthUnknown: user.isTimeOfBirthUnknown
     });
     
-    // Core required fields that must always be present
-    const coreRequiredFields = ['name', 'birthDate', 'birthLocation'];
+    // All required fields: name, birthDate, birthLocation, gender
+    const coreRequiredFields = ['name', 'birthDate', 'birthLocation', 'gender'];
     
     // Check core required fields
     const coreFieldsValid = coreRequiredFields.every(field => {
@@ -514,26 +514,16 @@ export const AuthProvider = ({ children }) => {
     const birthTimeValid = user.isTimeOfBirthUnknown === true || 
                           (user.birthTime !== null && user.birthTime !== undefined && user.birthTime !== '');
     
-    // For gender, be flexible - if it's missing, consider profile complete for existing users
-    // This handles backward compatibility for users who completed profile before gender was required
-    const genderValid = user.gender !== null && user.gender !== undefined && user.gender !== '';
-    
     console.log('Birth time validation:', {
       isTimeOfBirthUnknown: user.isTimeOfBirthUnknown,
       birthTime: user.birthTime,
       birthTimeValid: birthTimeValid
     });
     
-    console.log('Gender validation:', {
-      gender: user.gender,
-      genderValid: genderValid
-    });
-    
     console.log('Core fields valid:', coreFieldsValid);
     console.log('Birth time valid:', birthTimeValid);
     
-    // Profile is complete if core fields and birth time are valid
-    // Gender is optional for backward compatibility
+    // Profile is complete only when all core fields (including gender) and birth time are valid
     const isComplete = coreFieldsValid && birthTimeValid;
     console.log('Profile complete:', isComplete);
     

@@ -8,6 +8,7 @@ import {
   ActivityIndicator,
   Alert
 } from 'react-native';
+import { colors } from '../../theme';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
@@ -182,7 +183,7 @@ const CheckoutScreen = ({ route, navigation }) => {
             contact: user?.mobileNumber || user?.phone || '',
             name: user?.name || ''
           },
-          theme: { color: '#F97316' }
+          theme: { color: colors.primary }
         };
 
         RazorpayCheckout.open(options)
@@ -345,7 +346,7 @@ const CheckoutScreen = ({ route, navigation }) => {
             <View style={styles.radioButton}>
               {paymentMethod === 'wallet' && <View style={styles.radioButtonInner} />}
             </View>
-            <Ionicons name="wallet" size={24} color="#F97316" />
+            <Ionicons name="wallet" size={24} color={colors.primary} />
             <View style={styles.paymentInfo}>
               <Text style={styles.paymentName}>Wallet</Text>
               <Text style={styles.paymentDesc}>Pay using wallet balance</Text>
@@ -362,7 +363,7 @@ const CheckoutScreen = ({ route, navigation }) => {
             <View style={styles.radioButton}>
               {paymentMethod === 'razorpay' && <View style={styles.radioButtonInner} />}
             </View>
-            <Ionicons name="card" size={24} color="#F97316" />
+            <Ionicons name="card" size={24} color={colors.primary} />
             <View style={styles.paymentInfo}>
               <Text style={styles.paymentName}>Card / UPI / Net Banking</Text>
               <Text style={styles.paymentDesc}>Pay via Razorpay</Text>
@@ -380,7 +381,7 @@ const CheckoutScreen = ({ route, navigation }) => {
               <View style={styles.radioButton}>
                 {paymentMethod === 'cod' && <View style={styles.radioButtonInner} />}
               </View>
-              <Ionicons name="cash" size={24} color="#F97316" />
+              <Ionicons name="cash" size={24} color={colors.primary} />
               <View style={styles.paymentInfo}>
                 <Text style={styles.paymentName}>Cash on Delivery</Text>
                 <Text style={styles.paymentDesc}>Pay when you receive</Text>
@@ -697,7 +698,7 @@ const styles = StyleSheet.create({
   },
   placeOrderButton: {
     paddingVertical: 14,
-    backgroundColor: '#F97316',
+    backgroundColor: colors.primary,
     borderRadius: 12,
     alignItems: 'center'
   },

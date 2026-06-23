@@ -9,6 +9,7 @@ import {
   ActivityIndicator,
   RefreshControl
 } from 'react-native';
+import { colors } from '../../theme';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
@@ -128,7 +129,7 @@ const PoojaListScreen = () => {
     if (!loading || page === 1) return null;
     return (
       <View style={styles.footerLoader}>
-        <ActivityIndicator size="small" color="#FF6B35" />
+        <ActivityIndicator size="small" color={colors.primary} />
       </View>
     );
   };
@@ -156,7 +157,7 @@ const PoojaListScreen = () => {
       
       {loading && page === 1 ? (
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#FF6B35" />
+          <ActivityIndicator size="large" color={colors.primary} />
         </View>
       ) : (
         <FlatList
@@ -168,8 +169,8 @@ const PoojaListScreen = () => {
             <RefreshControl
               refreshing={refreshing}
               onRefresh={handleRefresh}
-              colors={['#FF6B35']}
-              tintColor="#FF6B35"
+              colors={[colors.primary]}
+              tintColor={colors.primary}
             />
           }
           onEndReached={handleLoadMore}
@@ -234,7 +235,7 @@ const styles = StyleSheet.create({
   },
   catchyHeading: {
     fontSize: 12,
-    color: '#FF6B35',
+    color: colors.primary,
     fontWeight: '600',
     marginBottom: 4,
     textTransform: 'uppercase',
@@ -273,7 +274,7 @@ const styles = StyleSheet.create({
   price: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: '#FF6B35',
+    color: colors.primary,
   },
   footerLoader: {
     paddingVertical: 20,

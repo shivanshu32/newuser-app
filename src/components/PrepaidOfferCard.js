@@ -1,16 +1,19 @@
 import React, { useState } from 'react';
 import {
   View,
-  Text,
   StyleSheet,
   TouchableOpacity,
   Image,
   Alert,
   ActivityIndicator
 } from 'react-native';
-import { MaterialIcons } from '@expo/vector-icons';
+import { MaterialIcons, Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
+import { LinearGradient } from 'expo-linear-gradient';
 import prepaidOffersAPI from '../services/prepaidOffersAPI';
+import Text from './ui/Text';
+import { colors, spacing, radius, shadows } from '../theme';
+import { API_BASE } from '../services/api';
 
 const PrepaidOfferCard = ({ offer, onOfferUsed, onRefresh }) => {
   const navigation = useNavigation();
@@ -121,285 +124,328 @@ const PrepaidOfferCard = ({ offer, onOfferUsed, onRefresh }) => {
     return `${minutes}m left`;
   };
 
-  const getButtonText = () => {
-    console.log('🎯 [PREPAID_OFFER_CARD] Button text logic:', {
-      offerId: offer.offerId,
-      loading,
-      isPaid: offer.isPaid,
-      isAvailableToUse: offer.isAvailableToUse,
-      canStartChat: offer.isPaid && offer.isAvailableToUse
-    });
-    
-    if (loading) return 'Starting...';
-    if (offer.isPaid && offer.isAvailableToUse) return 'Start Offer Chat';
-    if (offer.isPaid) return 'Paid';
-    return 'Proceed to Pay';
-  };
+  const timeLeft = getTimeRemaining();
+  const isReady = offer.isPaid && offer.isAvailableToUse;
+  const isExpired = timeLeft === 'Expired';
 
-  const getButtonStyle = () => {
-    if (loading) return [styles.actionButton, styles.loadingButton];
-    if (offer.isPaid && offer.isAvailableToUse) return [styles.actionButton, styles.startChatButton];
-    if (offer.isPaid) return [styles.actionButton, styles.paidButton];
-    return [styles.actionButton, styles.payButton];
-  };
+  // Resolve astrologer image URL robustly
+  const astrologer = offer?.astrologer || {};
+  const baseHost = API_BASE?.replace('/api/v1', '') || '';
+  const resolvedImage = (() => {
+    const normalize = (u) => {
+      if (!u) return null;
+      if (typeof u !== 'string') return null;
+      if (u.startsWith('http')) return u;
+      if (u.startsWith('/')) return `${baseHost}${u}`;
+      return `${baseHost}/${u}`;
+    };
+    // STRICT PRIORITY: imageUrl first
+    if (typeof astrologer.imageUrl === 'string' && astrologer.imageUrl) {
+      return normalize(astrologer.imageUrl);
+    }
+    // Then profileImage (string or object.url)
+    const img = astrologer.profileImage;
+    if (typeof img === 'string' && img) {
+      return normalize(img);
+    }
+    if (img && typeof img === 'object' && typeof img.url === 'string') {
+      return normalize(img.url);
+    }
+    return null;
+  })();
+
+  // Resolve specializations to a compact string (up to 2)
+  const resolvedSpecs = (() => {
+    const primary = astrologer.specializations || astrologer.specialties || [];
+    let names = Array.isArray(primary)
+      ? primary.map(s => {
+          if (!s) return null;
+          if (typeof s === 'string') return s;
+          if (typeof s === 'object') return s.name || s.title || null;
+          return null;
+        }).filter(Boolean)
+      : [];
+    // Fallback: legacy singular 'specialization'
+    if (names.length === 0 && typeof astrologer.specialization === 'string' && astrologer.specialization.trim()) {
+      names = [astrologer.specialization.trim()];
+    }
+    // Fallback: categoryRefs (objects with name)
+    if (names.length === 0 && Array.isArray(astrologer.categoryRefs)) {
+      names = astrologer.categoryRefs
+        .map(c => (c && typeof c === 'object' ? (c.name || null) : null))
+        .filter(Boolean);
+    }
+    if (names.length === 0) return null;
+    return names.slice(0, 2).join(' · ');
+  })();
+
+  // Debug once if critical fields missing
+  if (!resolvedImage || !resolvedSpecs) {
+    console.log('🔎 [PREPAID_OFFER_CARD] Missing fields debug:', {
+      offerId: offer?.offerId,
+      imageFrom: {
+        profileImage: astrologer?.profileImage,
+        imageUrl: astrologer?.imageUrl,
+      },
+      specializations: astrologer?.specializations,
+      specialties: astrologer?.specialties,
+      specialization: astrologer?.specialization,
+      categoryRefs: astrologer?.categoryRefs,
+    });
+  }
 
   return (
-    <View style={styles.container}>
-      {/* Header with Fire Icon */}
-      <View style={styles.header}>
-        <View style={styles.offerBadge}>
-          <MaterialIcons name="local-fire-department" size={20} color="#FF6B35" />
-          <Text style={styles.offerBadgeText}>Special Offer</Text>
-        </View>
-        {/* Only show remove button for unpaid offers */}
-        {!offer.isPaid && (
-          <TouchableOpacity onPress={handleRemoveOffer} style={styles.closeButton}>
-            <MaterialIcons name="close" size={20} color="#666" />
-          </TouchableOpacity>
-        )}
-      </View>
-
-      {/* Astrologer Info */}
-      <View style={styles.astrologerSection}>
-        <Image 
-          source={{ 
-            uri: offer.astrologer?.profileImage || 'https://via.placeholder.com/50x50' 
-          }}
-          style={styles.astrologerImage}
-        />
-        <View style={styles.astrologerInfo}>
-          <Text style={styles.astrologerName}>{offer.astrologer?.name}</Text>
-          <View style={styles.astrologerMeta}>
-            {offer.astrologer?.averageRating && (
-              <View style={styles.ratingContainer}>
-                <MaterialIcons name="star" size={14} color="#FFD700" />
-                <Text style={styles.rating}>{offer.astrologer.averageRating}</Text>
-              </View>
-            )}
-            {offer.astrologer?.specializations && (
-              <Text style={styles.specializations}>
-                {offer.astrologer.specializations.slice(0, 2).join(', ')}
-              </Text>
-            )}
-          </View>
-        </View>
-      </View>
-
-      {/* Offer Details */}
-      <View style={styles.offerDetails}>
-        <Text style={styles.offerTitle}>Continue chat for {offer.durationMinutes} minutes</Text>
-        <View style={styles.priceContainer}>
-          <Text style={styles.priceText}>Just ₹{offer.basePrice}</Text>
-          <Text style={styles.gstText}>(GST extra)</Text>
-        </View>
-        
-        <View style={styles.benefitsContainer}>
-          <View style={styles.benefitItem}>
-            <MaterialIcons name="schedule" size={16} color="#4CAF50" />
-            <Text style={styles.benefitText}>{offer.durationMinutes} minutes</Text>
-          </View>
-          <View style={styles.benefitItem}>
-            <MaterialIcons name="flash-on" size={16} color="#4CAF50" />
-            <Text style={styles.benefitText}>Instant start</Text>
-          </View>
-        </View>
-      </View>
-
-      {/* Time Remaining */}
-      <View style={styles.timeContainer}>
-        <MaterialIcons name="access-time" size={16} color="#FF6B35" />
-        <Text style={styles.timeText}>{getTimeRemaining()}</Text>
-      </View>
-
-      {/* Action Button */}
-      <TouchableOpacity 
-        style={getButtonStyle()}
-        onPress={handleProceedToPay}
-        disabled={loading || (offer.isPaid && !offer.isAvailableToUse)}
-      >
-        {loading ? (
-          <ActivityIndicator color="#FFFFFF" size="small" />
+    <TouchableOpacity
+      style={[styles.container, isExpired && styles.containerExpired]}
+      onPress={handleProceedToPay}
+      disabled={loading || (offer.isPaid && !offer.isAvailableToUse) || isExpired}
+      activeOpacity={0.85}
+    >
+      {/* Glow effect for ready offers */}
+      {isReady && (
+        <View style={styles.glowEffect} />
+      )}
+      
+      {/* Left gradient border */}
+      <View style={[styles.leftBorder, isReady && styles.leftBorderReady, isExpired && styles.leftBorderExpired]} />
+      
+      {/* Avatar */}
+      <View style={styles.avatarWrap}>
+        {resolvedImage ? (
+          <Image
+            source={{ uri: resolvedImage }}
+            style={styles.avatar}
+            resizeMode="cover"
+            onError={() => console.log('🖼️ [PREPAID_OFFER_CARD] Image failed to load:', resolvedImage)}
+          />
         ) : (
-          <Text style={styles.actionButtonText}>{getButtonText()}</Text>
+          <View style={[styles.avatar, styles.avatarFallback]}>
+            <Text style={styles.avatarInitial}>
+              {(astrologer?.name || 'A')[0].toUpperCase()}
+            </Text>
+          </View>
         )}
-      </TouchableOpacity>
+        {/* Online indicator */}
+        {isReady && (
+          <View style={styles.onlineIndicator} />
+        )}
+      </View>
 
-      {/* Payment Status Indicator */}
-      {offer.isPaid && (
-        <View style={styles.statusContainer}>
-          <MaterialIcons name="check-circle" size={16} color="#4CAF50" />
-          <Text style={styles.statusText}>
-            {offer.isAvailableToUse ? 'Ready to start' : 'Payment completed'}
+      {/* Info block */}
+      <View style={styles.info}>
+        <Text style={styles.astrologerName} numberOfLines={1}>
+          {offer.astrologer?.name}
+        </Text>
+        {!!resolvedSpecs && (
+          <Text style={styles.specialization} numberOfLines={1}>
+            {resolvedSpecs}
+          </Text>
+        )}
+        <View style={styles.metaRow}>
+          <Text style={styles.highlightedText} numberOfLines={1}>
+            {offer.durationMinutes} min
+          </Text>
+          <Text style={styles.highlightedText} numberOfLines={1}>
+            · ₹{offer.basePrice}
           </Text>
         </View>
+      </View>
+
+      {/* CTA */}
+      <View style={[styles.ctaButton, isExpired ? styles.ctaExpired : isReady ? styles.ctaReady : styles.ctaPay]}>
+        {loading ? (
+          <ActivityIndicator color={isReady ? '#111111' : colors.primary} size="small" />
+        ) : isExpired ? (
+          <Text style={styles.ctaExpiredText}>Expired</Text>
+        ) : isReady ? (
+          <View style={styles.ctaReadyContent}>
+            <Ionicons name="chatbubble" size={14} color="#0F0F0F" />
+            <Text style={styles.ctaReadyText}>Start</Text>
+          </View>
+        ) : (
+          <Text style={styles.ctaText}>
+            {offer.isPaid ? 'Paid' : 'Pay'}
+          </Text>
+        )}
+      </View>
+
+      {/* Dismiss (unpaid only) */}
+      {!offer.isPaid && (
+        <TouchableOpacity onPress={handleRemoveOffer} style={styles.dismiss} hitSlop={{ top: 8, right: 8, bottom: 8, left: 8 }}>
+          <MaterialIcons name="close" size={14} color={colors.textMuted} />
+        </TouchableOpacity>
       )}
-    </View>
+    </TouchableOpacity>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    padding: 16,
-    marginHorizontal: 20,
-    marginVertical: 8,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-    borderLeftWidth: 4,
-    borderLeftColor: '#FF6B35',
-  },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  offerBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#FFF8F0',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
+    backgroundColor: '#1A1A1A',
+    borderRadius: 16,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    marginHorizontal: 16,
+    marginBottom: 10,
     borderWidth: 1,
-    borderColor: '#FFE4CC',
+    borderColor: 'rgba(200, 164, 106, 0.15)',
+    gap: 12,
+    position: 'relative',
+    overflow: 'hidden',
   },
-  offerBadgeText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#FF6B35',
-    marginLeft: 4,
+  containerExpired: {
+    backgroundColor: 'rgba(255, 82, 82, 0.08)',
+    borderColor: 'rgba(255, 82, 82, 0.3)',
+    opacity: 0.7,
   },
-  closeButton: {
-    padding: 4,
+  glowEffect: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(200, 164, 106, 0.08)',
+    borderRadius: 16,
   },
-  astrologerSection: {
-    flexDirection: 'row',
+  leftBorder: {
+    position: 'absolute',
+    left: 0,
+    top: 12,
+    bottom: 12,
+    width: 3,
+    backgroundColor: 'rgba(200, 164, 106, 0.3)',
+    borderTopLeftRadius: 8,
+    borderBottomLeftRadius: 8,
+  },
+  leftBorderReady: {
+    backgroundColor: '#C8A46A',
+    shadowColor: '#C8A46A',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.5,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  leftBorderExpired: {
+    backgroundColor: '#FF5252',
+  },
+  avatarWrap: {
+    flexShrink: 0,
+    position: 'relative',
+  },
+  avatar: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    borderWidth: 2,
+    borderColor: '#2A2A2A',
+  },
+  avatarFallback: {
+    backgroundColor: '#2A2A2A',
     alignItems: 'center',
-    marginBottom: 12,
+    justifyContent: 'center',
   },
-  astrologerImage: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-    marginRight: 12,
+  avatarInitial: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: colors.primary,
   },
-  astrologerInfo: {
+  onlineIndicator: {
+    position: 'absolute',
+    bottom: 2,
+    right: 2,
+    width: 14,
+    height: 14,
+    borderRadius: 7,
+    backgroundColor: '#4CAF50',
+    borderWidth: 2,
+    borderColor: '#1A1A1A',
+  },
+  info: {
     flex: 1,
+    justifyContent: 'center',
   },
   astrologerName: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#333',
-    marginBottom: 4,
+    fontSize: 15,
+    fontWeight: '700',
+    color: colors.textPrimary,
+    marginBottom: 2,
   },
-  astrologerMeta: {
+  specialization: {
+    fontSize: 12,
+    color: colors.textMuted,
+    marginBottom: 5,
+  },
+  metaRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 4,
   },
-  ratingContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  rating: {
+  highlightedText: {
     fontSize: 12,
-    color: '#666',
-    marginLeft: 2,
+    color: '#C8A46A',
+    fontWeight: '700',
   },
-  specializations: {
-    fontSize: 12,
-    color: '#666',
+  meta: {
+    fontSize: 11,
+    color: colors.textMuted,
+    fontWeight: '400',
   },
-  offerDetails: {
-    marginBottom: 12,
+  expiredText: {
+    color: '#FF5252',
+    fontWeight: '700',
   },
-  offerTitle: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: '#333',
-    marginBottom: 6,
-  },
-  priceContainer: {
-    flexDirection: 'row',
-    alignItems: 'baseline',
-    marginBottom: 8,
-  },
-  priceText: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#FF6B35',
-    marginRight: 6,
-  },
-  gstText: {
-    fontSize: 12,
-    color: '#666',
-  },
-  benefitsContainer: {
-    flexDirection: 'row',
-    gap: 16,
-  },
-  benefitItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  benefitText: {
-    fontSize: 12,
-    color: '#333',
-    marginLeft: 4,
-  },
-  timeContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  timeText: {
-    fontSize: 12,
-    color: '#FF6B35',
-    fontWeight: '500',
-    marginLeft: 4,
-  },
-  actionButton: {
-    paddingVertical: 12,
-    borderRadius: 8,
+  ctaButton: {
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
+    minWidth: 56,
+    flexShrink: 0,
   },
-  payButton: {
-    backgroundColor: '#FF6B35',
+  ctaReady: {
+    backgroundColor: '#C8A46A',
+    shadowColor: '#C8A46A',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 6,
+    elevation: 3,
   },
-  startChatButton: {
-    backgroundColor: '#4CAF50',
-  },
-  paidButton: {
-    backgroundColor: '#9E9E9E',
-  },
-  loadingButton: {
-    backgroundColor: '#CCC',
-  },
-  actionButtonText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#FFFFFF',
-  },
-  statusContainer: {
+  ctaReadyContent: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 8,
-    paddingTop: 8,
-    borderTopWidth: 1,
-    borderTopColor: '#F0F0F0',
+    gap: 4,
   },
-  statusText: {
-    fontSize: 12,
-    color: '#4CAF50',
-    marginLeft: 4,
-    fontWeight: '500',
+  ctaReadyText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#0F0F0F',
+  },
+  ctaPay: {
+    backgroundColor: 'transparent',
+    borderWidth: 1.5,
+    borderColor: colors.primary,
+  },
+  ctaExpired: {
+    backgroundColor: 'rgba(255, 82, 82, 0.15)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 82, 82, 0.4)',
+  },
+  ctaExpiredText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#FF5252',
+  },
+  ctaText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: colors.primary,
+  },
+  dismiss: {
+    padding: 2,
+    flexShrink: 0,
   },
 });
 

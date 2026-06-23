@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   StyleSheet,
   View,
@@ -8,227 +8,124 @@ import {
   Alert,
   ActivityIndicator,
   TextInput,
-  ScrollView,
   Modal,
+  RefreshControl,
+  Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
+import { colors, spacing, radius } from '../../theme';
 import { useAuth } from '../../context/AuthContext';
-import { walletAPI, offersAPI } from '../../services/api';
+import { walletAPI, offersAPI, ledgerAPI } from '../../services/api';
 import RazorpayWebView from '../../components/RazorpayWebView';
 
 const WalletScreen = () => {
+  const [walletBalance, setWalletBalance] = useState(0);
   const [transactions, setTransactions] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [transactionError, setTransactionError] = useState(false);
   const [amount, setAmount] = useState('');
   const [processingPayment, setProcessingPayment] = useState(false);
   const [offers, setOffers] = useState([]);
   const [selectedOffer, setSelectedOffer] = useState(null);
   const [loadingOffers, setLoadingOffers] = useState(false);
-  const [isFirstTimeUser, setIsFirstTimeUser] = useState(true); // Track if user has never recharged
-  const [page, setPage] = useState(1);
-  const [hasMoreTransactions, setHasMoreTransactions] = useState(true);
-  const [loadingMoreTransactions, setLoadingMoreTransactions] = useState(false);
+  const [isFirstTimeUser, setIsFirstTimeUser] = useState(true);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [paymentOrder, setPaymentOrder] = useState(null);
   const [razorpayConfig, setRazorpayConfig] = useState(null);
-  const [walletBalance, setWalletBalance] = useState(0);
   const [showPaymentSummary, setShowPaymentSummary] = useState(false);
   const [selectedPackage, setSelectedPackage] = useState(null);
   const { user, updateUser } = useAuth();
   const navigation = useNavigation();
-  const initialLoadDone = useRef(false);
-  const isLoadingTransactions = useRef(false);
+  const isLoadingRef = useRef(false);
   const lastBalanceUpdate = useRef(null);
 
   const quickAmounts = [100, 500, 1000, 2000];
 
-  // Fetch recharge packages on component mount and when screen comes into focus
-  useEffect(() => {
-    const unsubscribe = navigation.addListener('focus', () => {
-      console.log('🔄 WalletScreen focused - refreshing data...');
+  useFocusEffect(
+    useCallback(() => {
+      fetchData();
       fetchOffers();
-      fetchTransactions(); // Always refresh transactions and balance on focus
-    });
+    }, [])
+  );
 
-    // Initial load
-    fetchOffers();
-    fetchTransactions();
-
-    return unsubscribe;
-  }, [navigation]);
-
-  const fetchTransactions = async () => {
-    // Prevent multiple simultaneous calls
-    if (isLoadingTransactions.current) {
-      console.log('🚫 fetchTransactions already in progress, skipping...');
-      return;
-    }
+  const fetchData = async (isRefresh = false) => {
+    if (isLoadingRef.current && !isRefresh) return;
     try {
-      isLoadingTransactions.current = true;
-      setLoading(true);
-      console.log('🔄 Starting fetchTransactions...');
-      
-      // Fetch wallet balance
-      const balanceResponse = await walletAPI.getBalance();
-      console.log('💰 Balance response:', balanceResponse);
-      
-      // Handle API response structure correctly (same as HomeScreen)
-      if (balanceResponse && balanceResponse.success && balanceResponse.data) {
+      isLoadingRef.current = true;
+      if (isRefresh) {
+        setRefreshing(true);
+      } else {
+        setLoading(true);
+      }
+      setTransactionError(false);
+
+      const [balanceResponse, ledgerResponse] = await Promise.all([
+        walletAPI.getBalance(),
+        ledgerAPI.getMyTransactions({ page: 1, limit: 5, sortBy: 'timestamp', sortOrder: 'desc' }),
+      ]);
+
+      if (balanceResponse?.success && balanceResponse?.data) {
         const currentBalance = balanceResponse.data.balance || 0;
-        
-        // Update local state immediately for display
         setWalletBalance(currentBalance);
-        console.log('✅ Local wallet balance updated:', currentBalance);
-        
-        // Only update user context if balance has actually changed and enough time has passed
-        const shouldUpdate = user?.walletBalance !== currentBalance && 
-                           (!lastBalanceUpdate.current || 
-                            Date.now() - lastBalanceUpdate.current > 1000); // 1 second debounce
-        
+        const shouldUpdate =
+          user?.walletBalance !== currentBalance &&
+          (!lastBalanceUpdate.current || Date.now() - lastBalanceUpdate.current > 1000);
         if (shouldUpdate) {
           lastBalanceUpdate.current = Date.now();
           await updateUser({ walletBalance: currentBalance });
-          console.log('✅ User context wallet balance updated:', currentBalance);
-        } else {
-          console.log('⏭️ Skipping user context update (no change or too frequent)');
         }
       } else {
-        console.warn('⚠️ Wallet API returned success: false or no data');
-        // Fallback to user context value if API fails
         setWalletBalance(user?.walletBalance || 0);
-        console.log('⚠️ Using fallback balance from user context:', user?.walletBalance || 0);
       }
-      
-      // Fetch wallet transactions
-      console.log('📋 Fetching wallet transactions...');
-      const transactionsResponse = await walletAPI.getTransactions();
-      console.log('📋 Full transactions response:', JSON.stringify(transactionsResponse, null, 2));
-      
-      // Backend returns transactions in data array format
-      if (transactionsResponse && transactionsResponse.data && Array.isArray(transactionsResponse.data)) {
-        setTransactions(transactionsResponse.data);
-        console.log('✅ Transactions loaded:', transactionsResponse.data.length);
-        
-        // Check if user has made any previous wallet top-ups
-        const hasWalletTopups = transactionsResponse.data.some(transaction => 
-          transaction.type === 'wallet_topup' && transaction.status === 'completed'
+
+      if (ledgerResponse?.success) {
+        const txns = ledgerResponse.data?.transactions || [];
+        setTransactions(txns);
+        const hasTopup = txns.some(
+          (t) => t.transactionReason === 'wallet_topup' && t.reflectedOnLiveWallet
         );
-        setIsFirstTimeUser(!hasWalletTopups);
-        console.log('🔍 User first time recharge status:', !hasWalletTopups);
+        setIsFirstTimeUser(!hasTopup);
       } else {
-        console.log('❌ No transactions found in response');
         setTransactions([]);
-        // If no transactions, user is definitely first time
         setIsFirstTimeUser(true);
       }
-      
-      setLoading(false);
-      isLoadingTransactions.current = false;
     } catch (error) {
       console.error('Error fetching wallet data:', error);
-      setLoading(false);
-      isLoadingTransactions.current = false;
-      
-      // Show more specific error message
-      // Use userMessage from API interceptor if available, otherwise check response
-      // Don't show alert for auth errors - the LOGOUT_REQUIRED handler will show it
+      setTransactionError(true);
+      setWalletBalance(user?.walletBalance || 0);
       if (error.isAuthError) {
-        // Auth error is handled by the global LOGOUT_REQUIRED event
-        console.log('Auth error detected - user will be redirected to login');
-      } else if (error.userMessage) {
-        Alert.alert('Error', error.userMessage);
-      } else if (error.response) {
-        console.error('API Error Response:', error.response.data);
-        Alert.alert('Error', error.response.data?.message || 'Failed to load wallet data. Please try again.');
+        console.log('Auth error — will be redirected');
       } else if (error.isNetworkError) {
-        Alert.alert('Error', 'Network connection failed. Please check your internet connection and try again.');
-      } else {
-        Alert.alert('Error', error.message || 'Network error. Please check your connection and try again.');
+        Alert.alert('No Connection', 'Check your internet connection and pull down to retry.');
       }
-      
-      // Fallback to dummy transactions in case of error for development
-      const dummyTransactions = [
-        {
-          _id: '1',
-          type: 'wallet_topup',
-          amount: 500,
-          status: 'completed',
-          description: 'Wallet top-up',
-          createdAt: new Date(Date.now() - 86400000).toISOString(), // 1 day ago
-        },
-        {
-          _id: '2',
-          type: 'consultation_payment',
-          amount: -225,
-          status: 'completed',
-          description: 'Video consultation payment',
-          createdAt: new Date(Date.now() - 172800000).toISOString(), // 2 days ago
-        },
-        {
-          _id: '3',
-          type: 'wallet_topup',
-          amount: 1000,
-          status: 'completed',
-          description: 'Wallet top-up with bonus',
-          createdAt: new Date(Date.now() - 604800000).toISOString(), // 7 days ago
-        },
-      ];
-      
-      setTransactions(dummyTransactions);
     } finally {
-      isLoadingTransactions.current = false;
+      isLoadingRef.current = false;
+      setLoading(false);
+      setRefreshing(false);
     }
   };
 
-  useEffect(() => {
-    if (!initialLoadDone.current) {
-      initialLoadDone.current = true;
-      fetchTransactions();
-      fetchOffers();
-    }
-  }, []); // Empty dependency array to run only once on mount
+  const onRefresh = () => fetchData(true);
 
   const fetchOffers = async () => {
     try {
       setLoadingOffers(true);
-      console.log('🔄 Starting fetchOffers...');
-      
-      // Fetch all active recharge packages
-      console.log('📡 Calling offersAPI.getRechargePackages()...');
       const offersResponse = await offersAPI.getRechargePackages();
-      console.log('📦 Offers API Response:', offersResponse);
-      
-      // API interceptor returns response.data, so offersResponse is already the data object
-      if (offersResponse && offersResponse.success) {
+      if (offersResponse?.success) {
         const packages = offersResponse.data || [];
-        console.log('✅ Found packages:', packages.length, packages);
-        
-        // Log first recharge packages for debugging
-        const firstRechargePackages = packages.filter(pkg => pkg.firstRecharge);
-        console.log('🎁 First recharge packages found:', firstRechargePackages.length, firstRechargePackages.map(p => p.name));
-        
-        // Sort by priority (lower number = higher priority)
         const sortedPackages = packages.sort((a, b) => (a.priority || 0) - (b.priority || 0));
-        console.log('📊 Sorted packages:', sortedPackages);
         setOffers(sortedPackages);
       } else {
-        console.log('❌ No valid offers response:', offersResponse);
         setOffers([]);
       }
-      
-      setLoadingOffers(false);
     } catch (error) {
-      console.error('❌ Error fetching recharge packages:', error);
-      console.error('Error details:', {
-        message: error.message,
-        response: error.response?.data,
-        status: error.response?.status,
-        config: error.config
-      });
-      setLoadingOffers(false);
+      console.error('Error fetching recharge packages:', error);
       setOffers([]);
+    } finally {
+      setLoadingOffers(false);
     }
   };
 
@@ -351,7 +248,7 @@ const WalletScreen = () => {
         // Reset form and refresh data
         setAmount('');
         setSelectedOffer(null);
-        fetchTransactions(); // Refresh transactions list
+        fetchData(true);
 
       
     } catch (error) {
@@ -481,62 +378,67 @@ const WalletScreen = () => {
     setAmount('');
   };
 
-  const renderTransaction = ({ item }) => {
-    // For users: wallet_topup, bonus_credit, refund, admin_credit are credits (+)
-    // session_payment, admin_debit are debits (-)
-    const isCredit = item.type === 'wallet_topup' || 
-                     item.type === 'bonus_credit' || 
-                     item.type === 'refund' || 
-                     item.type === 'admin_credit';
-    const iconName = isCredit ? 'add-circle' : 'remove-circle';
-    const iconColor = isCredit ? '#4CAF50' : '#F44336';
-    const amountPrefix = isCredit ? '+' : '-';
-    
-    // Get transaction description based on type
-    const getTransactionDescription = (transaction) => {
-      switch (transaction.type) {
-        case 'wallet_topup':
-          return 'Wallet Recharge';
-        case 'bonus_credit':
-          return 'Bonus Credit';
-        case 'consultation_payment':
-          return 'Consultation Payment';
-        case 'refund':
-          return 'Refund';
-        default:
-          return transaction.description || 'Transaction';
-      }
+  const getLedgerIcon = (reason) => {
+    switch (reason) {
+      case 'wallet_topup': return { name: 'arrow-down-circle', color: colors.success };
+      case 'bonus_credit': return { name: 'gift', color: colors.warning };
+      case 'consultation_payment': return { name: 'chatbubbles', color: colors.info };
+      case 'refund': return { name: 'refresh-circle', color: colors.accentPurple };
+      case 'admin_adjustment': return { name: 'settings', color: colors.secondary };
+      default: return { name: 'swap-horizontal', color: colors.textSecondary };
+    }
+  };
+
+  const formatReason = (reason) => {
+    const map = {
+      wallet_topup: 'Wallet Recharge',
+      bonus_credit: 'Bonus Credit',
+      consultation_payment: 'Consultation',
+      refund: 'Refund',
+      admin_adjustment: 'Adjustment',
     };
+    return map[reason] || (reason || 'Transaction').replace(/_/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase());
+  };
+
+  const formatDate = (dateString) => {
+    const date = new Date(dateString);
+    const now = new Date();
+    const diffMs = now - date;
+    const diffDays = Math.floor(diffMs / 86400000);
+    if (diffDays === 0) return `Today · ${date.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}`;
+    if (diffDays === 1) return `Yesterday · ${date.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}`;
+    return date.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+  };
+
+  const renderTransaction = ({ item, index }) => {
+    const isCredit = item.transactionType === 'credit';
+    const icon = getLedgerIcon(item.transactionReason);
+    const isPending = !item.reflectedOnLiveWallet;
 
     return (
-      <View style={styles.transactionItem}>
-        <View style={styles.transactionLeft}>
-          <Ionicons name={iconName} size={24} color={iconColor} />
-          <View style={styles.transactionDetails}>
-            <Text style={styles.transactionType}>
-              {getTransactionDescription(item)}
-            </Text>
-            <Text style={styles.transactionDate}>
-              {new Date(item.createdAt).toLocaleDateString('en-IN', {
-                year: 'numeric',
-                month: 'short',
-                day: 'numeric',
-                hour: '2-digit',
-                minute: '2-digit'
-              })}
-            </Text>
-            <Text style={[styles.transactionStatus, { 
-              color: item.status === 'completed' ? '#4CAF50' : 
-                     item.status === 'pending' ? '#FF9800' : '#F44336' 
-            }]}>
-              Status: {item.status?.charAt(0).toUpperCase() + item.status?.slice(1)}
-            </Text>
-          </View>
+      <TouchableOpacity
+        style={[styles.txItem, index === 0 && styles.txItemFirst]}
+        onPress={() => navigation.navigate('TransactionHistory')}
+        activeOpacity={0.7}
+      >
+        <View style={[styles.txIconWrap, { backgroundColor: `${icon.color}18` }]}>
+          <Ionicons name={icon.name} size={20} color={icon.color} />
         </View>
-        <Text style={[styles.transactionAmount, { color: iconColor }]}>
-          {amountPrefix}₹{Math.abs(item.amount)}
-        </Text>
-      </View>
+        <View style={styles.txInfo}>
+          <Text style={styles.txTitle} numberOfLines={1}>{formatReason(item.transactionReason)}</Text>
+          <Text style={styles.txDate}>{formatDate(item.timestamp)}</Text>
+        </View>
+        <View style={styles.txRight}>
+          <Text style={[styles.txAmount, { color: isCredit ? colors.success : colors.error }]}>
+            {isCredit ? '+' : '−'}₹{item.amount?.toFixed(2)}
+          </Text>
+          {isPending && (
+            <View style={styles.pendingPill}>
+              <Text style={styles.pendingPillText}>Pending</Text>
+            </View>
+          )}
+        </View>
+      </TouchableOpacity>
     );
   };
 
@@ -604,7 +506,7 @@ const WalletScreen = () => {
         
         {processingPayment && isSelected && (
           <View style={styles.selectedIndicator}>
-            <ActivityIndicator size="small" color="#F97316" />
+            <ActivityIndicator size="small" color={colors.primary} />
             <Text style={styles.selectedText}>Processing...</Text>
           </View>
         )}
@@ -612,172 +514,193 @@ const WalletScreen = () => {
     );
   };
 
-  const handleLoadMoreTransactions = async () => {
-    console.log('🔄 handleLoadMoreTransactions called - hasMoreTransactions:', hasMoreTransactions, 'loadingMoreTransactions:', loadingMoreTransactions, 'page:', page);
-    
-    if (!hasMoreTransactions || loadingMoreTransactions) {
-      console.log('⏭️ Skipping handleLoadMoreTransactions - no more data or already loading');
-      return;
-    }
+  const filteredOffers = offers.filter((offer) => !(offer.firstRecharge && !isFirstTimeUser));
 
-    console.log('📄 Loading more transactions for page:', page + 1);
-    setLoadingMoreTransactions(true);
-    try {
-      const transactionsResponse = await walletAPI.getTransactions({ page: page + 1 });
-      if (transactionsResponse.data && transactionsResponse.data.data) {
-        setTransactions([...transactions, ...transactionsResponse.data.data]);
-        setPage(page + 1);
-        setHasMoreTransactions(transactionsResponse.data.pagination?.next ? true : false);
-        console.log('✅ More transactions loaded:', transactionsResponse.data.data.length);
-      }
-    } catch (error) {
-      console.error('❌ Error loading more transactions:', error);
-    } finally {
-      setLoadingMoreTransactions(false);
+  const renderListHeader = () => (
+    <View>
+      {/* ── Balance Hero Card ── */}
+      <View style={styles.heroCard}>
+        <View style={styles.heroTop}>
+          <View>
+            <Text style={styles.heroLabel}>Available Balance</Text>
+            {loading ? (
+              <ActivityIndicator color={colors.primary} style={{ marginTop: 6 }} />
+            ) : (
+              <Text style={styles.heroBalance}>₹{walletBalance.toFixed(2)}</Text>
+            )}
+          </View>
+          <View style={styles.heroBadge}>
+            <Ionicons name="shield-checkmark" size={14} color={colors.primary} />
+            <Text style={styles.heroBadgeText}>Secure</Text>
+          </View>
+        </View>
+        <View style={styles.heroDivider} />
+        <View style={styles.heroActions}>
+          <View style={styles.heroHint}>
+            <Ionicons name="lock-closed" size={12} color={colors.textMuted} />
+            <Text style={styles.heroHintText}>Funds used for consultations only</Text>
+          </View>
+        </View>
+      </View>
+
+      {/* ── Add Money Section ── */}
+      <View style={styles.sectionCard}>
+        <Text style={styles.sectionTitle}>Add Money</Text>
+        <View style={styles.amountInputRow}>
+          <Text style={styles.currencySymbol}>₹</Text>
+          <TextInput
+            style={styles.amountInput}
+            placeholder="Enter amount"
+            placeholderTextColor={colors.textMuted}
+            keyboardType="number-pad"
+            value={amount}
+            onChangeText={setAmount}
+            editable={!processingPayment}
+          />
+        </View>
+        <View style={styles.quickAmounts}>
+          {quickAmounts.map((q) => (
+            <TouchableOpacity
+              key={q}
+              style={[styles.quickBtn, amount === q.toString() && styles.quickBtnActive]}
+              onPress={() => setAmount(q.toString())}
+              disabled={processingPayment}
+            >
+              <Text style={[styles.quickBtnText, amount === q.toString() && styles.quickBtnTextActive]}>
+                ₹{q}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+        <TouchableOpacity
+          style={[styles.addMoneyBtn, (!amount || processingPayment) && styles.addMoneyBtnDisabled]}
+          onPress={handleAddMoney}
+          disabled={!amount || processingPayment}
+          activeOpacity={0.85}
+        >
+          {processingPayment ? (
+            <ActivityIndicator color={colors.textInverse} size="small" />
+          ) : (
+            <>
+              <Ionicons name="add-circle-outline" size={18} color={colors.textInverse} style={{ marginRight: 6 }} />
+              <Text style={styles.addMoneyBtnText}>Proceed to Add Money</Text>
+            </>
+          )}
+        </TouchableOpacity>
+        <Text style={styles.gstNote}>* Prices include 18% GST. No hidden charges.</Text>
+      </View>
+
+      {/* ── Recharge Packages ── */}
+      <View style={styles.sectionCard}>
+        <View style={styles.sectionHeaderRow}>
+          <Text style={styles.sectionTitle}>Recharge Packages</Text>
+          {isFirstTimeUser && (
+            <View style={styles.newUserBadge}>
+              <Text style={styles.newUserBadgeText}>New User Offers</Text>
+            </View>
+          )}
+        </View>
+        {loadingOffers ? (
+          <View style={styles.centeredLoader}>
+            <ActivityIndicator size="small" color={colors.primary} />
+            <Text style={styles.loadingHint}>Loading packages...</Text>
+          </View>
+        ) : filteredOffers.length === 0 ? (
+          <View style={styles.emptyPackages}>
+            <Ionicons name="gift-outline" size={40} color={colors.textMuted} />
+            <Text style={styles.emptyPackagesText}>No packages available right now</Text>
+          </View>
+        ) : (
+          filteredOffers.map((offer) => renderOffer({ item: offer }))
+        )}
+      </View>
+
+      {/* ── Recent Transactions header ── */}
+      <View style={styles.sectionHeaderRow2}>
+        <Text style={styles.sectionTitle2}>Recent Transactions</Text>
+        <TouchableOpacity
+          style={styles.viewAllBtn}
+          onPress={() => navigation.navigate('TransactionHistory')}
+        >
+          <Text style={styles.viewAllText}>View All</Text>
+          <Ionicons name="chevron-forward" size={14} color={colors.primary} />
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+
+  const renderListFooter = () => (
+    <View style={{ paddingBottom: 32 }} />
+  );
+
+  const renderEmptyTransactions = () => {
+    if (loading) return null;
+    if (transactionError) {
+      return (
+        <View style={styles.emptyState}>
+          <Ionicons name="cloud-offline-outline" size={48} color={colors.textMuted} />
+          <Text style={styles.emptyStateTitle}>Couldn't load transactions</Text>
+          <TouchableOpacity style={styles.retryBtn} onPress={() => fetchData()}>
+            <Text style={styles.retryBtnText}>Retry</Text>
+          </TouchableOpacity>
+        </View>
+      );
     }
+    return (
+      <View style={styles.emptyState}>
+        <Ionicons name="receipt-outline" size={48} color={colors.textMuted} />
+        <Text style={styles.emptyStateTitle}>No transactions yet</Text>
+        <Text style={styles.emptyStateSubtitle}>Add money to get started</Text>
+      </View>
+    );
   };
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
       <View style={styles.contentWrapper}>
+        {/* ── Header ── */}
         <View style={styles.header}>
-        <TouchableOpacity 
-          style={styles.backButton} 
-          onPress={() => navigation.navigate('Home')}
+          <TouchableOpacity
+            style={styles.backButton}
+            onPress={() => navigation.navigate('Home')}
+          >
+            <Ionicons name="arrow-back" size={22} color={colors.textPrimary} />
+          </TouchableOpacity>
+          <Text style={styles.title}>My Wallet</Text>
+          <TouchableOpacity
+            style={styles.historyButton}
+            onPress={() => navigation.navigate('TransactionHistory')}
+          >
+            <Ionicons name="time-outline" size={22} color={colors.primary} />
+          </TouchableOpacity>
+        </View>
+
+        <FlatList
+          data={loading ? [] : transactions}
+          renderItem={renderTransaction}
+          keyExtractor={(item) => item._id || item.id || String(Math.random())}
+          ListHeaderComponent={renderListHeader}
+          ListFooterComponent={renderListFooter}
+          ListEmptyComponent={renderEmptyTransactions}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              tintColor={colors.primary}
+              colors={[colors.primary]}
+            />
+          }
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={styles.listContent}
+        />
+
+        {/* Payment Summary Modal */}
+        <Modal
+          visible={showPaymentSummary}
+          animationType="slide"
+          transparent={true}
+          onRequestClose={handleCancelPayment}
         >
-          <Ionicons name="arrow-back" size={24} color="#333" />
-        </TouchableOpacity>
-        <Text style={styles.title}>My Wallet</Text>
-      </View>
-      <FlatList
-        data={transactions}
-        renderItem={renderTransaction}
-        keyExtractor={(item) => item._id || item.id}
-        onEndReached={null}
-        onEndReachedThreshold={0.5}
-        ListHeaderComponent={
-          <View>
-            <View style={styles.walletCard}>
-              <Text style={styles.walletLabel}>Wallet Balance</Text>
-              <Text style={styles.walletBalance}>₹{walletBalance.toFixed(2)}</Text>
-              
-              <View style={styles.topUpContainer}>
-                <Text style={styles.topUpLabel}>Top Up Amount</Text>
-                <View style={styles.amountInputContainer}>
-                  <Text style={styles.currencySymbol}>₹</Text>
-                  <TextInput
-                    style={styles.amountInput}
-                    placeholder="Enter amount"
-                    keyboardType="number-pad"
-                    value={amount}
-                    onChangeText={setAmount}
-                    editable={!processingPayment}
-                  />
-                </View>
-                
-                <View style={styles.quickAmounts}>
-                  {quickAmounts.map((quickAmount) => (
-                    <TouchableOpacity
-                      key={quickAmount}
-                      style={styles.quickAmountButton}
-                      onPress={() => setAmount(quickAmount.toString())}
-                      disabled={processingPayment}
-                    >
-                      <Text style={styles.quickAmountText}>₹{quickAmount}</Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-                
-                <TouchableOpacity
-                  style={[styles.topUpButton, processingPayment && styles.disabledButton]}
-                  onPress={handleAddMoney}
-                  disabled={processingPayment}
-                >
-                  {processingPayment ? (
-                    <ActivityIndicator color="#fff" />
-                  ) : (
-                    <Text style={styles.topUpButtonText}>Top Up Wallet</Text>
-                  )}
-                </TouchableOpacity>
-              </View>
-              
-              <View style={styles.offersContainer}>
-                <Text style={styles.offersTitle}>Recharge Packages</Text>
-                {loadingOffers ? (
-                  <ActivityIndicator style={styles.loader} size="large" color="#F97316" />
-                ) : (() => {
-                  // Filter offers based on user's recharge history
-                  const filteredOffers = offers.filter((offer) => {
-                    // Hide first recharge packages if user has already completed their first recharge
-                    if (offer.firstRecharge && !isFirstTimeUser) {
-                      console.log('🚫 Hiding first recharge package for returning user:', offer.name);
-                      return false;
-                    }
-                    return true;
-                  });
-                  
-                  // Show appropriate message based on filtered results
-                  if (offers.length === 0) {
-                    return (
-                      <View style={styles.emptyOffers}>
-                        <Ionicons name="gift-outline" size={60} color="#ccc" />
-                        <Text style={styles.emptyText}>No offers available</Text>
-                      </View>
-                    );
-                  } else if (filteredOffers.length === 0) {
-                    return (
-                      <View style={styles.emptyOffers}>
-                        <Ionicons name="gift-outline" size={60} color="#ccc" />
-                        <Text style={styles.emptyText}>No packages available</Text>
-                        <Text style={[styles.emptyText, { fontSize: 12, marginTop: 5, opacity: 0.7 }]}>First recharge offers are no longer available</Text>
-                      </View>
-                    );
-                  } else {
-                    return (
-                      <View>
-                        {filteredOffers.map((offer) => renderOffer({ item: offer }))}
-                      </View>
-                    );
-                  }
-                })()}
-              </View>
-            </View>
-            
-            <View style={styles.transactionsContainer}>
-              <View style={styles.transactionHeader}>
-                <Text style={styles.transactionsTitle}>Transaction History</Text>
-                <TouchableOpacity 
-                  style={styles.viewAllButton}
-                  onPress={() => navigation.navigate('TransactionHistory')}
-                >
-                  <Text style={styles.viewAllText}>View All</Text>
-                  <Ionicons name="chevron-forward" size={16} color="#F97316" />
-                </TouchableOpacity>
-              </View>
-              {loading && (
-                <ActivityIndicator style={styles.loader} size="large" color="#F97316" />
-              )}
-              {!loading && transactions.length === 0 && (
-                <View style={styles.emptyTransactions}>
-                  <Ionicons name="wallet-outline" size={60} color="#ccc" />
-                  <Text style={styles.emptyText}>No transactions yet</Text>
-                </View>
-              )}
-            </View>
-          </View>
-        }
-        ListFooterComponent={loadingMoreTransactions ? (
-          <ActivityIndicator style={styles.loader} size="small" color="#F97316" />
-        ) : null}
-      />
-      
-      {/* Payment Summary Modal */}
-      <Modal
-        visible={showPaymentSummary}
-        animationType="slide"
-        transparent={true}
-        onRequestClose={handleCancelPayment}
-      >
         <View style={styles.modalOverlay}>
           <View style={styles.paymentSummaryModal}>
             {selectedPackage && (() => {
@@ -794,7 +717,7 @@ const WalletScreen = () => {
                   <View style={styles.summaryHeader}>
                     <Text style={styles.summaryTitle}>Payment Summary</Text>
                     <TouchableOpacity onPress={handleCancelPayment}>
-                      <Ionicons name="close" size={24} color="#666" />
+                      <Ionicons name="close" size={24} color={colors.textSecondary} />
                     </TouchableOpacity>
                   </View>
                   
@@ -895,532 +818,633 @@ const WalletScreen = () => {
             onClose={handlePaymentClose}
           />
         )}
-      </Modal>
+        </Modal>
       </View>
     </SafeAreaView>
   );
 };
 
 const styles = StyleSheet.create({
+  // ── Layout ──────────────────────────────────────────────
   container: {
     flex: 1,
-    backgroundColor: '#f8f8f8',
+    backgroundColor: colors.background,
   },
   contentWrapper: {
     flex: 1,
-    maxWidth: 500, // Responsive max width for tablets
+    maxWidth: 520,
     alignSelf: 'center',
     width: '100%',
   },
+  listContent: {
+    paddingBottom: 16,
+  },
+
+  // ── Header ──────────────────────────────────────────────
   header: {
-    padding: 16,
-    paddingTop: 10, // SafeAreaView now handles safe area properly
-    backgroundColor: '#fff',
-    borderBottomWidth: 1,
-    borderBottomColor: '#eee',
     flexDirection: 'row',
-    justifyContent: 'flex-start',
     alignItems: 'center',
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+    backgroundColor: colors.surface,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
   },
   backButton: {
-    marginRight: 16,
-    padding: 8,
-    borderRadius: 20,
-    backgroundColor: '#f0f0f0',
+    width: 36,
+    height: 36,
+    borderRadius: radius.full,
+    backgroundColor: colors.surfaceSecondary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: spacing.md,
   },
   title: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#333',
     flex: 1,
+    fontSize: 18,
+    fontWeight: '700',
+    color: colors.textPrimary,
+    letterSpacing: 0.2,
   },
-  scrollView: {
-    flex: 1,
+  historyButton: {
+    width: 36,
+    height: 36,
+    borderRadius: radius.full,
+    backgroundColor: colors.primaryMuted,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  walletCard: {
-    backgroundColor: '#fff',
-    borderRadius: 10,
-    padding: 20,
-    margin: 15,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2,
+
+  // ── Hero Balance Card ────────────────────────────────────
+  heroCard: {
+    margin: spacing.lg,
+    marginBottom: spacing.md,
+    backgroundColor: colors.surface,
+    borderRadius: radius.xl,
+    padding: spacing.xl,
+    borderWidth: 1,
+    borderColor: colors.border,
+    ...Platform.select({
+      ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.15, shadowRadius: 12 },
+      android: { elevation: 4 },
+    }),
   },
-  walletLabel: {
-    fontSize: 16,
-    color: '#666',
+  heroTop: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
   },
-  walletBalance: {
-    fontSize: 36,
-    fontWeight: 'bold',
-    color: '#F97316',
-    marginVertical: 10,
+  heroLabel: {
+    fontSize: 13,
+    color: colors.textSecondary,
+    fontWeight: '500',
+    letterSpacing: 0.6,
+    textTransform: 'uppercase',
   },
-  topUpContainer: {
-    marginTop: 20,
+  heroBalance: {
+    fontSize: 40,
+    fontWeight: '800',
+    color: colors.primary,
+    marginTop: 4,
+    letterSpacing: -0.5,
   },
-  topUpLabel: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    marginBottom: 10,
-  },
-  amountInputContainer: {
+  heroBadge: {
     flexDirection: 'row',
     alignItems: 'center',
+    backgroundColor: colors.primaryMuted,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    borderRadius: radius.full,
+    gap: 4,
+  },
+  heroBadgeText: {
+    fontSize: 11,
+    color: colors.primary,
+    fontWeight: '600',
+  },
+  heroDivider: {
+    height: 1,
+    backgroundColor: colors.divider,
+    marginVertical: spacing.md,
+  },
+  heroActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  heroHint: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+  },
+  heroHintText: {
+    fontSize: 12,
+    color: colors.textMuted,
+  },
+
+  // ── Section Card ─────────────────────────────────────────
+  sectionCard: {
+    marginHorizontal: spacing.lg,
+    marginBottom: spacing.md,
+    backgroundColor: colors.surface,
+    borderRadius: radius.lg,
+    padding: spacing.xl,
     borderWidth: 1,
-    borderColor: '#ddd',
-    borderRadius: 8,
-    paddingHorizontal: 15,
+    borderColor: colors.border,
+    ...Platform.select({
+      ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.08, shadowRadius: 8 },
+      android: { elevation: 2 },
+    }),
+  },
+  sectionTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: colors.textPrimary,
+    marginBottom: spacing.md,
+  },
+  sectionHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: spacing.md,
+  },
+
+  // ── Add Money ─────────────────────────────────────────────
+  amountInputRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.surfaceSecondary,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+    paddingHorizontal: spacing.md,
+    marginBottom: spacing.md,
   },
   currencySymbol: {
-    fontSize: 18,
-    color: '#666',
-    marginRight: 5,
+    fontSize: 20,
+    fontWeight: '700',
+    color: colors.textSecondary,
+    marginRight: spacing.xs,
   },
   amountInput: {
     flex: 1,
-    paddingVertical: 15,
-    fontSize: 16,
+    paddingVertical: spacing.md,
+    fontSize: 22,
+    fontWeight: '700',
+    color: colors.textPrimary,
   },
   quickAmounts: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginTop: 15,
+    gap: spacing.xs,
+    marginBottom: spacing.md,
   },
-  quickAmountButton: {
-    backgroundColor: '#fef3e2',
-    paddingVertical: 10,
-    paddingHorizontal: 15,
-    borderRadius: 20,
-  },
-  quickAmountText: {
-    color: '#F97316',
-    fontWeight: 'bold',
-  },
-  topUpButton: {
-    backgroundColor: '#F97316',
-    paddingVertical: 15,
-    borderRadius: 8,
-    alignItems: 'center',
-    marginTop: 20,
-  },
-  disabledButton: {
-    backgroundColor: '#ccc',
-  },
-  topUpButtonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: 'bold',
-  },
-  offersContainer: {
-    marginTop: 20,
-  },
-  offersTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    marginBottom: 10,
-  },
-  // Legacy offer styles (keeping for compatibility)
-  offerCard: {
-    backgroundColor: '#fff',
-    borderRadius: 10,
-    padding: 15,
-    marginBottom: 10,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  selectedOfferCard: {
-    backgroundColor: '#fef3e2',
-  },
-  offerHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  offerName: {
-    fontSize: 16,
-    fontWeight: 'bold',
-  },
-  offerBadge: {
-    backgroundColor: '#F97316',
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 20,
-  },
-  offerBadgeText: {
-    color: '#fff',
-    fontSize: 12,
-  },
-  offerDescription: {
-    fontSize: 14,
-    color: '#666',
-    marginBottom: 10,
-  },
-  offerMinAmount: {
-    fontSize: 14,
-    color: '#666',
-  },
-  offerMaxBonus: {
-    fontSize: 14,
-    color: '#666',
-  },
-  // New recharge package styles
-  rechargePackageCard: {
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+  quickBtn: {
+    flex: 1,
+    paddingVertical: spacing.sm,
+    borderRadius: radius.sm,
+    backgroundColor: colors.surfaceSecondary,
     borderWidth: 1,
-    borderColor: '#f0f0f0',
+    borderColor: colors.border,
+    alignItems: 'center',
+  },
+  quickBtnActive: {
+    backgroundColor: colors.primaryMuted,
+    borderColor: colors.primary,
+  },
+  quickBtnText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: colors.textSecondary,
+  },
+  quickBtnTextActive: {
+    color: colors.primary,
+  },
+  addMoneyBtn: {
+    flexDirection: 'row',
+    backgroundColor: colors.primary,
+    paddingVertical: spacing.md,
+    borderRadius: radius.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: spacing.sm,
+  },
+  addMoneyBtnDisabled: {
+    backgroundColor: colors.surfaceTertiary,
+  },
+  addMoneyBtnText: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: colors.textInverse,
+  },
+  gstNote: {
+    fontSize: 11,
+    color: colors.textMuted,
+    textAlign: 'center',
+  },
+
+  // ── Recharge Packages ────────────────────────────────────
+  newUserBadge: {
+    backgroundColor: colors.successMuted,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    borderRadius: radius.full,
+    borderWidth: 1,
+    borderColor: colors.success,
+  },
+  newUserBadgeText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: colors.success,
+  },
+  rechargePackageCard: {
+    backgroundColor: colors.surfaceSecondary,
+    borderRadius: radius.md,
+    padding: spacing.lg,
+    marginBottom: spacing.md,
+    borderWidth: 1,
+    borderColor: colors.border,
   },
   selectedPackageCard: {
-    backgroundColor: '#fef3e2',
-    borderColor: '#F97316',
-    borderWidth: 2,
+    backgroundColor: colors.primaryMuted,
+    borderColor: colors.primary,
+    borderWidth: 1.5,
   },
   packageHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 12,
+    marginBottom: spacing.sm,
   },
   packageName: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#333',
+    fontSize: 15,
+    fontWeight: '700',
+    color: colors.textPrimary,
     flex: 1,
   },
   firstRechargeBadge: {
-    backgroundColor: '#10B981',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
+    backgroundColor: colors.successMuted,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 3,
+    borderRadius: radius.full,
   },
   firstRechargeText: {
-    color: '#fff',
+    color: colors.success,
     fontSize: 10,
-    fontWeight: 'bold',
+    fontWeight: '700',
   },
   packagePricing: {
-    marginBottom: 12,
+    marginBottom: spacing.sm,
   },
   pricingRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 6,
+    marginBottom: 5,
   },
   totalRow: {
     borderTopWidth: 1,
-    borderTopColor: '#e0e0e0',
-    paddingTop: 8,
-    marginTop: 4,
+    borderTopColor: colors.border,
+    paddingTop: spacing.sm,
+    marginTop: 3,
   },
   pricingLabel: {
-    fontSize: 14,
-    color: '#666',
+    fontSize: 13,
+    color: colors.textSecondary,
   },
   payAmount: {
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: '600',
-    color: '#333',
+    color: colors.textPrimary,
   },
   bonusAmount: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#10B981',
+    fontSize: 14,
+    fontWeight: '700',
+    color: colors.success,
   },
   totalLabel: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#333',
+    fontSize: 14,
+    fontWeight: '700',
+    color: colors.textPrimary,
   },
   totalAmount: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#F97316',
+    fontSize: 16,
+    fontWeight: '800',
+    color: colors.primary,
   },
   bonusBadge: {
-    backgroundColor: '#F97316',
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 16,
+    backgroundColor: colors.primary,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 3,
+    borderRadius: radius.full,
     alignSelf: 'flex-start',
-    marginBottom: 8,
+    marginTop: 4,
   },
   bonusBadgeText: {
-    color: '#fff',
-    fontSize: 12,
-    fontWeight: 'bold',
+    color: colors.textInverse,
+    fontSize: 11,
+    fontWeight: '700',
   },
   selectedIndicator: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: 8,
-    paddingTop: 8,
+    marginTop: spacing.sm,
+    paddingTop: spacing.sm,
     borderTopWidth: 1,
-    borderTopColor: '#F97316',
+    borderTopColor: colors.primaryDark,
   },
   selectedText: {
     marginLeft: 6,
+    fontSize: 13,
+    fontWeight: '700',
+    color: colors.primary,
+  },
+  centeredLoader: {
+    alignItems: 'center',
+    paddingVertical: spacing.xxl,
+    gap: spacing.sm,
+  },
+  loadingHint: {
+    fontSize: 13,
+    color: colors.textMuted,
+  },
+  emptyPackages: {
+    alignItems: 'center',
+    paddingVertical: spacing.xxl,
+    gap: spacing.sm,
+  },
+  emptyPackagesText: {
     fontSize: 14,
-    fontWeight: 'bold',
-    color: '#F97316',
+    color: colors.textMuted,
   },
-  emptyOffers: {
-    alignItems: 'center',
-    padding: 30,
-  },
-  transactionsContainer: {
-    backgroundColor: '#fff',
-    borderRadius: 10,
-    padding: 20,
-    margin: 15,
-    marginTop: 0,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  transactionsTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    marginBottom: 15,
-  },
-  loader: {
-    marginVertical: 20,
-  },
-  emptyTransactions: {
-    alignItems: 'center',
-    padding: 30,
-  },
-  emptyText: {
-    fontSize: 16,
-    color: '#666',
-    marginTop: 10,
-  },
-  transactionItem: {
+
+  // ── Recent Transactions ───────────────────────────────────
+  sectionHeaderRow2: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 15,
+    justifyContent: 'space-between',
+    paddingHorizontal: spacing.lg,
+    marginBottom: spacing.sm,
+    marginTop: spacing.xs,
+  },
+  sectionTitle2: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: colors.textPrimary,
+  },
+  viewAllBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs,
+    borderRadius: radius.full,
+    backgroundColor: colors.primaryMuted,
+    gap: 2,
+  },
+  viewAllText: {
+    color: colors.primary,
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  txItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
     borderBottomWidth: 1,
-    borderBottomColor: '#eee',
+    borderBottomColor: colors.border,
+    backgroundColor: colors.surface,
   },
-  transactionLeft: {
-    flexDirection: 'row',
+  txItemFirst: {
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+  },
+  txIconWrap: {
+    width: 40,
+    height: 40,
+    borderRadius: radius.md,
     alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: spacing.md,
   },
-  transactionDetails: {
-    marginLeft: 15,
+  txInfo: {
+    flex: 1,
   },
-  transactionType: {
-    fontSize: 16,
+  txTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: colors.textPrimary,
+    marginBottom: 2,
   },
-  transactionDate: {
+  txDate: {
     fontSize: 12,
-    color: '#666',
+    color: colors.textMuted,
   },
-  transactionStatus: {
-    fontSize: 12,
-    color: '#666',
+  txRight: {
+    alignItems: 'flex-end',
+    gap: 3,
   },
-  transactionAmount: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    marginLeft: 20,
+  txAmount: {
+    fontSize: 14,
+    fontWeight: '700',
   },
-  // Payment Summary Modal Styles
+  pendingPill: {
+    backgroundColor: colors.warningMuted,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: radius.full,
+  },
+  pendingPillText: {
+    fontSize: 10,
+    color: colors.warning,
+    fontWeight: '600',
+  },
+
+  // ── Empty / Error States ──────────────────────────────────
+  emptyState: {
+    alignItems: 'center',
+    paddingVertical: spacing.hero,
+    paddingHorizontal: spacing.xxxl,
+    gap: spacing.sm,
+  },
+  emptyStateTitle: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: colors.textSecondary,
+    marginTop: spacing.xs,
+  },
+  emptyStateSubtitle: {
+    fontSize: 13,
+    color: colors.textMuted,
+    textAlign: 'center',
+  },
+  retryBtn: {
+    marginTop: spacing.sm,
+    paddingHorizontal: spacing.xl,
+    paddingVertical: spacing.sm,
+    borderRadius: radius.full,
+    backgroundColor: colors.primaryMuted,
+    borderWidth: 1,
+    borderColor: colors.primary,
+  },
+  retryBtnText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: colors.primary,
+  },
+
+  // ── Payment Summary Modal ─────────────────────────────────
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 20,
+    backgroundColor: colors.overlay,
+    justifyContent: 'flex-end',
   },
   paymentSummaryModal: {
-    backgroundColor: '#fff',
-    borderRadius: 16,
-    padding: 24,
-    width: '100%',
-    maxWidth: 400,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.25,
-    shadowRadius: 8,
-    elevation: 8,
+    backgroundColor: colors.surface,
+    borderTopLeftRadius: radius.xxl,
+    borderTopRightRadius: radius.xxl,
+    padding: spacing.xxl,
+    paddingBottom: spacing.xxxl,
+    ...Platform.select({
+      ios: { shadowColor: '#000', shadowOffset: { width: 0, height: -4 }, shadowOpacity: 0.15, shadowRadius: 12 },
+      android: { elevation: 12 },
+    }),
   },
   summaryHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 20,
-    paddingBottom: 16,
+    marginBottom: spacing.xl,
+    paddingBottom: spacing.lg,
     borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
+    borderBottomColor: colors.divider,
   },
   summaryTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#333',
+    fontSize: 18,
+    fontWeight: '700',
+    color: colors.textPrimary,
   },
   packageSummary: {
-    marginBottom: 20,
-    padding: 16,
-    backgroundColor: '#f8f9fa',
-    borderRadius: 12,
+    marginBottom: spacing.lg,
+    padding: spacing.lg,
+    backgroundColor: colors.background,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.border,
   },
   packageSummaryName: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#333',
+    fontSize: 16,
+    fontWeight: '700',
+    color: colors.textPrimary,
     marginBottom: 4,
   },
   packageSummaryDesc: {
-    fontSize: 14,
-    color: '#666',
-    marginBottom: 8,
+    fontSize: 13,
+    color: colors.textSecondary,
   },
   summaryBreakdown: {
-    marginBottom: 24,
+    marginBottom: spacing.xl,
+    gap: 2,
   },
   summaryRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: 8,
+    paddingVertical: 7,
   },
   summaryLabel: {
-    fontSize: 16,
-    color: '#666',
+    fontSize: 14,
+    color: colors.textSecondary,
   },
   summaryAmount: {
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: '600',
-    color: '#333',
+    color: colors.textPrimary,
   },
   summaryBonus: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#10B981',
-  },
-  totalRow: {
-    borderTopWidth: 1,
-    borderTopColor: '#f0f0f0',
-    marginTop: 8,
-    paddingTop: 12,
+    fontSize: 14,
+    fontWeight: '700',
+    color: colors.success,
   },
   summaryTotalLabel: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#333',
+    fontSize: 16,
+    fontWeight: '700',
+    color: colors.textPrimary,
   },
   summaryTotal: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#F97316',
+    fontSize: 18,
+    fontWeight: '800',
+    color: colors.primary,
   },
   payableRow: {
-    backgroundColor: '#fff3cd',
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    marginVertical: 8,
+    backgroundColor: colors.warningMuted,
+    borderRadius: radius.sm,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    marginVertical: spacing.xs,
     borderWidth: 1,
-    borderColor: '#ffeaa7',
+    borderColor: colors.warning,
   },
   summaryPayableLabel: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#856404',
+    fontSize: 15,
+    fontWeight: '700',
+    color: colors.warning,
   },
   summaryPayable: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#856404',
+    fontSize: 17,
+    fontWeight: '800',
+    color: colors.warning,
   },
   walletCreditSection: {
-    marginTop: 16,
-    padding: 16,
-    backgroundColor: '#e8f5e8',
-    borderRadius: 12,
+    marginTop: spacing.md,
+    padding: spacing.md,
+    backgroundColor: colors.successMuted,
+    borderRadius: radius.md,
     borderWidth: 1,
-    borderColor: '#c3e6c3',
+    borderColor: colors.success,
   },
   walletCreditTitle: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#155724',
-    marginBottom: 12,
+    fontSize: 13,
+    fontWeight: '700',
+    color: colors.success,
+    marginBottom: spacing.sm,
     textAlign: 'center',
   },
   summaryActions: {
     flexDirection: 'row',
-    gap: 12,
+    gap: spacing.md,
+    marginTop: spacing.xs,
   },
   cancelButton: {
     flex: 1,
-    backgroundColor: '#f8f9fa',
-    paddingVertical: 14,
-    borderRadius: 12,
+    backgroundColor: colors.surfaceSecondary,
+    paddingVertical: spacing.md,
+    borderRadius: radius.md,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
-    borderColor: '#e9ecef',
+    borderColor: colors.divider,
   },
   cancelButtonText: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '600',
-    color: '#666',
-    textAlign: 'center',
+    color: colors.textSecondary,
   },
   confirmButton: {
-    flex: 1,
-    backgroundColor: '#F97316',
-    paddingVertical: 14,
-    borderRadius: 12,
+    flex: 2,
+    backgroundColor: colors.primary,
+    paddingVertical: spacing.md,
+    borderRadius: radius.md,
     alignItems: 'center',
     justifyContent: 'center',
   },
   confirmButtonText: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#fff',
-    textAlign: 'center',
+    fontSize: 15,
+    fontWeight: '700',
+    color: colors.textInverse,
   },
   disabledButton: {
-    backgroundColor: '#ccc',
-  },
-  transactionHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 15,
-  },
-  viewAllButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 20,
-    backgroundColor: '#FEF3E2',
-  },
-  viewAllText: {
-    color: '#F97316',
-    fontSize: 14,
-    fontWeight: '600',
-    marginRight: 4,
+    backgroundColor: colors.textMuted,
   },
 });
 

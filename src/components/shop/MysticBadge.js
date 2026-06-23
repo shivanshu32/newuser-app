@@ -1,26 +1,27 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
+import { colors } from '../../theme';
 
 const BADGE_STYLES = {
   discount: {
-    background: '#EF4444',
-    text: '#FFFFFF',
+    background: colors.error,
+    text: colors.textInverse,
   },
   new: {
-    background: '#3B82F6',
-    text: '#FFFFFF',
+    background: colors.info,
+    text: colors.textInverse,
   },
   trending: {
-    background: '#8B5CF6',
-    text: '#FFFFFF',
+    background: colors.primary,
+    text: colors.textInverse,
   },
   bestseller: {
-    background: '#FBBF24',
-    text: '#1F2937',
+    background: colors.warning,
+    text: colors.textPrimary,
   },
   outOfStock: {
-    background: '#6B7280',
-    text: '#FFFFFF',
+    background: colors.textSecondary,
+    text: colors.textInverse,
   },
 };
 

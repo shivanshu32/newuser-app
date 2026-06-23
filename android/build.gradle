@@ -6,26 +6,10 @@ buildscript {
     mavenCentral()
   }
   dependencies {
-    classpath('com.android.tools.build:gradle:8.10.0') {
-      // Exclude any transitive dependencies that might pull in different versions
-      exclude group: 'com.android.tools.build', module: 'gradle'
-    }
+        classpath 'com.google.gms:google-services:4.4.1'
+    classpath('com.android.tools.build:gradle')
     classpath('com.facebook.react:react-native-gradle-plugin')
     classpath('org.jetbrains.kotlin:kotlin-gradle-plugin')
-    classpath('com.google.gms:google-services:4.4.0')
-  }
-  
-  // Force AGP version resolution for Android Studio
-  configurations.classpath {
-    resolutionStrategy {
-      force 'com.android.tools.build:gradle:8.10.0'
-      eachDependency { details ->
-        if (details.requested.group == 'com.android.tools.build' && details.requested.name == 'gradle') {
-          details.useVersion '8.10.0'
-          details.because 'Android Studio AGP compatibility'
-        }
-      }
-    }
   }
 }
 
@@ -35,21 +19,7 @@ allprojects {
     mavenCentral()
     maven { url 'https://www.jitpack.io' }
   }
-  
-  // Global AGP version override for all subprojects
-  configurations.all {
-    resolutionStrategy {
-      force 'com.android.tools.build:gradle:8.10.0'
-      eachDependency { details ->
-        if (details.requested.group == 'com.android.tools.build' && details.requested.name == 'gradle') {
-          details.useVersion '8.10.0'
-          details.because 'Global AGP 8.10.0 override'
-        }
-      }
-    }
-  }
 }
 
 apply plugin: "expo-root-project"
 apply plugin: "com.facebook.react.rootproject"
-

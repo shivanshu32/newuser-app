@@ -27,6 +27,7 @@ import useMessagePersistence from '../../hooks/useMessagePersistence';
 import PrepaidOfferBottomSheet from '../../components/PrepaidOfferBottomSheet';
 import prepaidOffersAPI from '../../services/prepaidOffersAPI';
 import { uploadChatImage } from '../../services/cloudinaryService';
+import { colors, spacing, radius, shadows } from '../../theme';
 
 const API_BASE_URL = 'https://jyotishcallbackend-2uxrv.ondigitalocean.app/api/v1';
 
@@ -1485,7 +1486,13 @@ const FixedFreeChatScreen = React.memo(({ route, navigation }) => {
       Alert.alert(
         'Prepaid Offer Available',
         'A prepaid offer has been created for you. Please check the home screen.',
-        [{ text: 'OK', onPress: () => navigation.navigate('Home') }]
+        [{ 
+          text: 'OK', 
+          onPress: () => navigation.reset({
+            index: 0,
+            routes: [{ name: 'Main', params: { screen: 'Home' } }],
+          })
+        }]
       );
     }
   }, [astrologer, effectiveBookingDetails, sessionId, effectiveFreeChatId, navigation, safeSetState]);
@@ -1526,7 +1533,13 @@ const FixedFreeChatScreen = React.memo(({ route, navigation }) => {
         Alert.alert(
           'Free Chat Ended',
           'Your free chat session has ended. Please check the home screen for any available offers.',
-          [{ text: 'OK', onPress: () => navigation.navigate('Home') }]
+          [{ 
+            text: 'OK', 
+            onPress: () => navigation.reset({
+              index: 0,
+              routes: [{ name: 'Main', params: { screen: 'Home' } }],
+            })
+          }]
         );
       }
     } catch (error) {
@@ -1535,7 +1548,13 @@ const FixedFreeChatScreen = React.memo(({ route, navigation }) => {
       Alert.alert(
         'Free Chat Ended',
         'Your free chat session has ended. Please check the home screen for any available offers.',
-        [{ text: 'OK', onPress: () => navigation.navigate('Home') }]
+        [{ 
+          text: 'OK', 
+          onPress: () => navigation.reset({
+            index: 0,
+            routes: [{ name: 'Main', params: { screen: 'Home' } }],
+          })
+        }]
       );
     }
   }, [astrologerId, astrologer, effectiveBookingDetails, sessionId, effectiveFreeChatId, navigation]);
@@ -1576,8 +1595,11 @@ const FixedFreeChatScreen = React.memo(({ route, navigation }) => {
     // Check if this is an existing paid offer
     if (offerData.isExisting && offerData.isPaid) {
       console.log('💰 [PREPAID_OFFER] Existing offer is already paid, navigating to home to show offer');
-      // Navigate to home where the user can see the paid offer
-      navigation.navigate('Home');
+      // Reset navigation stack to home
+      navigation.reset({
+        index: 0,
+        routes: [{ name: 'Main', params: { screen: 'Home' } }],
+      });
     } else {
       console.log('💰 [PREPAID_OFFER] Navigating to payment screen for unpaid offer');
       // Navigate to payment screen for new or unpaid offers
@@ -1601,15 +1623,21 @@ const FixedFreeChatScreen = React.memo(({ route, navigation }) => {
           {
             text: 'OK',
             onPress: () => {
-              // Navigate to home where user can see the offer
-              navigation.navigate('Home');
+              // Reset navigation stack to prevent going back to profile form
+              navigation.reset({
+                index: 0,
+                routes: [{ name: 'Main', params: { screen: 'Home' } }],
+              });
             }
           }
         ]
       );
     } else {
-      // User proceeded to pay, just navigate to home without alert
-      navigation.navigate('Home');
+      // User proceeded to pay, reset navigation stack
+      navigation.reset({
+        index: 0,
+        routes: [{ name: 'Main', params: { screen: 'Home' } }],
+      });
     }
   }, [navigation]);
 
@@ -1910,7 +1938,13 @@ const FixedFreeChatScreen = React.memo(({ route, navigation }) => {
       Alert.alert(
         'Free Chat Ended',
         data.message || 'Your free chat session has ended. Please check the home screen for any available offers.',
-        [{ text: 'OK', onPress: () => navigation.navigate('Home') }]
+        [{ 
+          text: 'OK', 
+          onPress: () => navigation.reset({
+            index: 0,
+            routes: [{ name: 'Main', params: { screen: 'Home' } }],
+          })
+        }]
       );
     });
     
@@ -2609,6 +2643,48 @@ const FixedFreeChatScreen = React.memo(({ route, navigation }) => {
     };
   }, [freeChatId, sessionId, astrologerId]); // Use stable route parameters only
 
+  // ===== HARDWARE BACK BUTTON HANDLER =====
+  useEffect(() => {
+    const backHandler = BackHandler.addEventListener('hardwareBackPress', () => {
+      // If session has ended or prepaid offer is showing, prevent going back
+      if (sessionEnded || showPrepaidOffer) {
+        console.log('🔙 [BACK_BUTTON] Preventing back navigation - session ended or offer showing');
+        // Navigate to home instead
+        navigation.reset({
+          index: 0,
+          routes: [{ name: 'Main', params: { screen: 'Home' } }],
+        });
+        return true; // Prevent default back behavior
+      }
+      
+      // During active session, show confirmation
+      if (sessionActive && !sessionEnded) {
+        Alert.alert(
+          'End Free Chat?',
+          'Are you sure you want to end this free chat session?',
+          [
+            { text: 'Cancel', style: 'cancel' },
+            {
+              text: 'End Session',
+              style: 'destructive',
+              onPress: () => {
+                navigation.reset({
+                  index: 0,
+                  routes: [{ name: 'Main', params: { screen: 'Home' } }],
+                });
+              }
+            }
+          ]
+        );
+        return true; // Prevent default back behavior
+      }
+      
+      return false; // Allow default back behavior
+    });
+
+    return () => backHandler.remove();
+  }, [sessionEnded, showPrepaidOffer, sessionActive, navigation]);
+
   // ===== REPLY HANDLER =====
   const handleReplyToMessage = useCallback((message) => {
     setReplyingTo(message);
@@ -2676,21 +2752,21 @@ const FixedFreeChatScreen = React.memo(({ route, navigation }) => {
             </Text>
             {isOwnMessage && (
               <View style={styles.messageStatus}>
-                {item.status === 'sending' && <ActivityIndicator size={10} color="#999" />}
-                {item.status === 'queued' && <Ionicons name="time-outline" size={12} color="#F59E0B" />}
-                {item.status === 'sent' && <Ionicons name="checkmark" size={12} color="#4CAF50" />}
+                {item.status === 'sending' && <ActivityIndicator size={10} color={colors.textMuted} />}
+                {item.status === 'queued' && <Ionicons name="time-outline" size={12} color={colors.warning} />}
+                {item.status === 'sent' && <Ionicons name="checkmark" size={12} color={colors.success} />}
                 {item.status === 'delivered' && (
                   <View style={styles.readReceiptContainer}>
-                    <Ionicons name="checkmark" size={12} color="#4CAF50" />
+                    <Ionicons name="checkmark" size={12} color={colors.success} />
                   </View>
                 )}
                 {item.status === 'read' && (
                   <View style={styles.readReceiptContainer}>
-                    <Ionicons name="checkmark" size={12} color="#2196F3" style={styles.readTick1} />
-                    <Ionicons name="checkmark" size={12} color="#2196F3" style={styles.readTick2} />
+                    <Ionicons name="checkmark" size={12} color={colors.info} style={styles.readTick1} />
+                    <Ionicons name="checkmark" size={12} color={colors.info} style={styles.readTick2} />
                   </View>
                 )}
-                {item.status === 'failed' && <Ionicons name="alert-circle" size={12} color="#FF6B6B" />}
+                {item.status === 'failed' && <Ionicons name="alert-circle" size={12} color={colors.error} />}
               </View>
             )}
           </View>
@@ -2703,7 +2779,7 @@ const FixedFreeChatScreen = React.memo(({ route, navigation }) => {
     return (
       <SafeAreaView style={styles.safeArea}>
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#6B46C1" />
+          <ActivityIndicator size="large" color={colors.secondary} />
           <Text style={styles.loadingText}>Connecting to consultation...</Text>
         </View>
       </SafeAreaView>
@@ -2716,40 +2792,40 @@ const FixedFreeChatScreen = React.memo(({ route, navigation }) => {
     const queueCount = offlineQueue.length;
     
     if (loading) {
-      return { color: '#F59E0B', text: 'Connecting...', icon: 'cloud-outline', showSpinner: true };
+      return { color: colors.warning, text: 'Connecting...', icon: 'cloud-outline', showSpinner: true };
     }
     if (sessionEnded) {
-      return { color: '#6B7280', text: 'Session ended', icon: 'checkmark-done', showSpinner: false };
+      return { color: colors.textSecondary, text: 'Session ended', icon: 'checkmark-done', showSpinner: false };
     }
     if (connectionStatus === 'error') {
-      return { color: '#EF4444', text: 'Connection error', icon: 'alert-circle', showSpinner: false };
+      return { color: colors.error, text: 'Connection error', icon: 'alert-circle', showSpinner: false };
     }
     if (connectionStatus === 'reconnecting') {
-      return { color: '#F59E0B', text: 'Reconnecting...', icon: 'refresh', showSpinner: true };
+      return { color: colors.warning, text: 'Reconnecting...', icon: 'refresh', showSpinner: true };
     }
     if (connected && sessionActive) {
       if (queueCount > 0) {
-        return { color: '#F59E0B', text: `Connected (${queueCount} queued)`, icon: 'cloud-upload', showSpinner: false };
+        return { color: colors.warning, text: `Connected (${queueCount} queued)`, icon: 'cloud-upload', showSpinner: false };
       }
-      return { color: '#10B981', text: 'Connected', icon: 'checkmark-circle', showSpinner: false };
+      return { color: colors.success, text: 'Connected', icon: 'checkmark-circle', showSpinner: false };
     }
     if (connected && !sessionActive) {
-      return { color: '#F59E0B', text: 'Waiting for session to start...', icon: 'time', showSpinner: true };
+      return { color: colors.warning, text: 'Waiting for session to start...', icon: 'time', showSpinner: true };
     }
     if (!connected) {
       if (queueCount > 0) {
-        return { color: '#EF4444', text: `Offline (${queueCount} queued)`, icon: 'cloud-offline', showSpinner: false };
+        return { color: colors.error, text: `Offline (${queueCount} queued)`, icon: 'cloud-offline', showSpinner: false };
       }
-      return { color: '#EF4444', text: 'Connection lost. Retrying...', icon: 'cloud-offline', showSpinner: true };
+      return { color: colors.error, text: 'Connection lost. Retrying...', icon: 'cloud-offline', showSpinner: true };
     }
-    return { color: '#6B7280', text: 'Initializing...', icon: 'ellipsis-horizontal', showSpinner: true };
+    return { color: colors.textSecondary, text: 'Initializing...', icon: 'ellipsis-horizontal', showSpinner: true };
   };
 
   const statusInfo = getStatusInfo();
 
   return (
     <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
-      <StatusBar barStyle="light-content" backgroundColor="#6B46C1" />
+      <StatusBar barStyle="light-content" backgroundColor={colors.secondary} />
       
       <KeyboardAvoidingView 
         style={styles.container}
@@ -2790,14 +2866,14 @@ const FixedFreeChatScreen = React.memo(({ route, navigation }) => {
             {/* Connection Status - Just dot */}
             <View style={[
               styles.connectionDot, 
-              { backgroundColor: connected ? '#4ADE80' : '#EF4444' }
+              { backgroundColor: connected ? colors.success : colors.error }
             ]} />
             
             {/* Timer or Question Counter */}
             {sessionActive && (
               freeChatMode === 'question_based' ? (
                 <View style={styles.questionCounterContainer}>
-                  <Ionicons name="help-circle-outline" size={16} color="#FFFFFF" />
+                  <Ionicons name="help-circle-outline" size={16} color={colors.textInverse} />
                   <Text style={styles.questionCounterText}>
                     {questionsRemaining} Q
                   </Text>
@@ -2814,7 +2890,7 @@ const FixedFreeChatScreen = React.memo(({ route, navigation }) => {
             {/* End Session Button - Icon only */}
             {sessionActive && !sessionEnded && (
               <TouchableOpacity style={styles.endSessionButton} onPress={handleUserEndSession}>
-                <Ionicons name="stop-circle" size={20} color="#FF4444" />
+                <Ionicons name="stop-circle" size={20} color={colors.error} />
               </TouchableOpacity>
             )}
           </View>
@@ -2822,10 +2898,10 @@ const FixedFreeChatScreen = React.memo(({ route, navigation }) => {
 
         <View style={[styles.statusBanner, { backgroundColor: statusInfo.color }]}>
           <View style={styles.statusContent}>
-            <Ionicons name={statusInfo.icon} size={16} color="#FFFFFF" style={styles.statusIcon} />
+            <Ionicons name={statusInfo.icon} size={16} color={colors.textInverse} style={styles.statusIcon} />
             <Text style={styles.statusText}>{statusInfo.text}</Text>
             {statusInfo.showSpinner && (
-              <ActivityIndicator size="small" color="#FFFFFF" style={styles.statusSpinner} />
+              <ActivityIndicator size="small" color={colors.textInverse} style={styles.statusSpinner} />
             )}
           </View>
         </View>
@@ -2850,7 +2926,7 @@ const FixedFreeChatScreen = React.memo(({ route, navigation }) => {
         {/* Question Hint Banner */}
         {questionHint && !sessionEnded && (
           <View style={styles.hintBanner}>
-            <Ionicons name="bulb-outline" size={16} color="#FCD34D" />
+            <Ionicons name="bulb-outline" size={16} color={colors.warning} />
             <Text style={styles.hintText}>{questionHint}</Text>
           </View>
         )}
@@ -2858,7 +2934,7 @@ const FixedFreeChatScreen = React.memo(({ route, navigation }) => {
         {/* Session Ending Countdown */}
         {sessionEndingCountdown !== null && (
           <View style={styles.countdownBanner}>
-            <Ionicons name="time-outline" size={16} color="#FFFFFF" />
+            <Ionicons name="time-outline" size={16} color={colors.textInverse} />
             <Text style={styles.countdownText}>
               Session ending in {sessionEndingCountdown}s - Special offer coming!
             </Text>
@@ -2869,7 +2945,7 @@ const FixedFreeChatScreen = React.memo(({ route, navigation }) => {
         {sessionEnded && (
           <View style={styles.sessionEndContainer}>
             <View style={styles.sessionEndMessage}>
-              <Ionicons name="information-circle" size={24} color="#6B46C1" />
+              <Ionicons name="information-circle" size={24} color={colors.secondary} />
               <Text style={styles.sessionEndText}>
                 This free chat session has ended. To continue, please start a new session.
               </Text>
@@ -2890,7 +2966,7 @@ const FixedFreeChatScreen = React.memo(({ route, navigation }) => {
               </Text>
             </View>
             <TouchableOpacity style={styles.cancelReplyButton} onPress={cancelReply}>
-              <Ionicons name="close" size={20} color="#666" />
+              <Ionicons name="close" size={20} color={colors.textSecondary} />
             </TouchableOpacity>
           </View>
         )}
@@ -2904,7 +2980,7 @@ const FixedFreeChatScreen = React.memo(({ route, navigation }) => {
             <Ionicons 
               name="image-outline" 
               size={24} 
-              color={sessionActive && !uploadingImage && !sessionEnded ? '#6B46C1' : '#ccc'} 
+              color={sessionActive && !uploadingImage && !sessionEnded ? colors.secondary : colors.surfaceTertiary} 
             />
           </TouchableOpacity>
           <TextInput
@@ -2915,7 +2991,7 @@ const FixedFreeChatScreen = React.memo(({ route, navigation }) => {
             value={messageText}
             onChangeText={handleInputChange}
             placeholder={sessionEnded ? "Session ended" : "Type your message..."}
-            placeholderTextColor={sessionEnded ? "#ccc" : "#999"}
+            placeholderTextColor={sessionEnded ? colors.surfaceTertiary : colors.textMuted}
             multiline
             maxLength={1000}
             editable={sessionActive && connected && !sessionEnded}
@@ -2928,7 +3004,7 @@ const FixedFreeChatScreen = React.memo(({ route, navigation }) => {
             onPress={sendMessage}
             disabled={!messageText.trim() || !sessionActive || sessionEnded}
           >
-            <Ionicons name="send" size={20} color="#FFFFFF" />
+            <Ionicons name="send" size={20} color={colors.textInverse} />
           </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>
@@ -2963,7 +3039,7 @@ const FixedFreeChatScreen = React.memo(({ route, navigation }) => {
                 disabled={uploadingImage}
               >
                 {uploadingImage ? (
-                  <ActivityIndicator size="small" color="#fff" />
+                  <ActivityIndicator size="small" color={colors.textInverse} />
                 ) : (
                   <Text style={styles.imagePreviewSendText}>Send</Text>
                 )}
@@ -2985,7 +3061,7 @@ const FixedFreeChatScreen = React.memo(({ route, navigation }) => {
             style={styles.fullScreenCloseButton}
             onPress={closeFullScreenImage}
           >
-            <Ionicons name="close" size={30} color="#fff" />
+            <Ionicons name="close" size={30} color={colors.textInverse} />
           </TouchableOpacity>
           {fullScreenImage && (
             <Image
@@ -3013,33 +3089,33 @@ const FixedFreeChatScreen = React.memo(({ route, navigation }) => {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: '#6B46C1',
+    backgroundColor: colors.secondary,
   },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#F5F5F5',
+    backgroundColor: colors.background,
   },
   loadingText: {
     marginTop: 10,
     fontSize: 16,
-    color: '#666',
+    color: colors.textSecondary,
   },
   container: {
     flex: 1,
-    backgroundColor: '#F5F5F5',
+    backgroundColor: colors.background,
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#6B46C1',
+    backgroundColor: colors.secondary,
     paddingTop: 10, // SafeAreaView now handles safe area properly
     paddingBottom: 15,
     paddingLeft: 5,
     paddingRight: 15,
     elevation: 4,
-    shadowColor: '#000',
+    shadowColor: colors.shadow,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 4,
@@ -3059,7 +3135,7 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(255, 255, 255, 0.3)',
   },
   freeText: {
-    color: '#FFFFFF',
+    color: colors.textInverse,
     fontSize: 12,
     fontWeight: 'bold',
     marginLeft: 4,
@@ -3083,7 +3159,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   headerTitle: {
-    color: '#FFFFFF',
+    color: colors.textInverse,
     fontSize: 18,
     fontWeight: 'bold',
   },
@@ -3113,7 +3189,7 @@ const styles = StyleSheet.create({
     minWidth: 45,
   },
   timerText: {
-    color: '#FFFFFF',
+    color: colors.textInverse,
     fontSize: 14,
     fontWeight: 'bold',
   },
@@ -3129,7 +3205,7 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(139, 92, 246, 0.5)',
   },
   questionCounterText: {
-    color: '#FFFFFF',
+    color: colors.textInverse,
     fontSize: 13,
     fontWeight: 'bold',
     marginLeft: 4,
@@ -3163,7 +3239,7 @@ const styles = StyleSheet.create({
     marginRight: 6,
   },
   statusText: {
-    color: '#FFFFFF',
+    color: colors.textInverse,
     fontWeight: 'bold',
     fontSize: 14,
   },
@@ -3193,14 +3269,14 @@ const styles = StyleSheet.create({
     borderRadius: 20,
   },
   ownBubble: {
-    backgroundColor: '#6B46C1',
+    backgroundColor: colors.secondary,
     borderBottomRightRadius: 5,
   },
   otherBubble: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
     borderBottomLeftRadius: 5,
     elevation: 1,
-    shadowColor: '#000',
+    shadowColor: colors.shadow,
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.1,
     shadowRadius: 2,
@@ -3210,10 +3286,10 @@ const styles = StyleSheet.create({
     lineHeight: 20,
   },
   ownMessageText: {
-    color: '#FFFFFF',
+    color: colors.textInverse,
   },
   otherMessageText: {
-    color: '#333333',
+    color: colors.textPrimary,
   },
   messageFooter: {
     flexDirection: 'row',
@@ -3225,10 +3301,10 @@ const styles = StyleSheet.create({
     marginRight: 5,
   },
   ownMessageTime: {
-    color: '#E0E0E0',
+    color: colors.border,
   },
   otherMessageTime: {
-    color: '#999999',
+    color: colors.textMuted,
   },
   messageStatus: {
     marginLeft: 5,
@@ -3236,10 +3312,10 @@ const styles = StyleSheet.create({
   typingContainer: {
     paddingHorizontal: 16,
     paddingVertical: 8,
-    backgroundColor: '#F3F4F6',
+    backgroundColor: colors.divider,
   },
   typingText: {
-    color: '#6B7280',
+    color: colors.textSecondary,
     fontStyle: 'italic',
     fontSize: 14,
   },
@@ -3248,14 +3324,14 @@ const styles = StyleSheet.create({
     alignItems: 'flex-end',
     paddingHorizontal: 15,
     paddingVertical: 10,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
     borderTopWidth: 1,
-    borderTopColor: '#E0E0E0',
+    borderTopColor: colors.border,
   },
   textInput: {
     flex: 1,
     borderWidth: 1,
-    borderColor: '#E0E0E0',
+    borderColor: colors.border,
     borderRadius: 20,
     paddingHorizontal: 15,
     paddingVertical: 10,
@@ -3264,7 +3340,7 @@ const styles = StyleSheet.create({
     marginRight: 10,
   },
   sendButton: {
-    backgroundColor: '#6B46C1',
+    backgroundColor: colors.secondary,
     borderRadius: 20,
     paddingHorizontal: 20,
     paddingVertical: 10,
@@ -3272,26 +3348,26 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   sendButtonDisabled: {
-    backgroundColor: '#CCCCCC',
+    backgroundColor: colors.surfaceTertiary,
   },
   sessionEndContainer: {
     paddingHorizontal: 16,
     paddingVertical: 12,
-    backgroundColor: '#F8F9FA',
+    backgroundColor: colors.background,
     borderTopWidth: 1,
-    borderTopColor: '#E0E0E0',
+    borderTopColor: colors.border,
   },
   sessionEndMessage: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
     paddingHorizontal: 16,
     paddingVertical: 12,
     borderRadius: 8,
     borderLeftWidth: 4,
-    borderLeftColor: '#6B46C1',
+    borderLeftColor: colors.secondary,
     elevation: 1,
-    shadowColor: '#000',
+    shadowColor: colors.shadow,
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.1,
     shadowRadius: 2,
@@ -3300,12 +3376,12 @@ const styles = StyleSheet.create({
     flex: 1,
     marginLeft: 12,
     fontSize: 14,
-    color: '#374151',
+    color: colors.textSecondary,
     lineHeight: 20,
   },
   textInputDisabled: {
-    backgroundColor: '#F5F5F5',
-    color: '#999',
+    backgroundColor: colors.background,
+    color: colors.textMuted,
   },
   typingContainer: {
     paddingHorizontal: 16,
@@ -3315,7 +3391,7 @@ const styles = StyleSheet.create({
     borderTopColor: 'rgba(107, 70, 193, 0.2)',
   },
   typingText: {
-    color: '#6B46C1',
+    color: colors.secondary,
     fontSize: 14,
     fontStyle: 'italic',
   },
@@ -3330,7 +3406,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   hintText: {
-    color: '#B45309',
+    color: colors.warning,
     fontSize: 13,
     flex: 1,
     fontWeight: '500',
@@ -3341,11 +3417,11 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingHorizontal: 16,
     paddingVertical: 12,
-    backgroundColor: '#6B46C1',
+    backgroundColor: colors.secondary,
     gap: 8,
   },
   countdownText: {
-    color: '#FFFFFF',
+    color: colors.textInverse,
     fontSize: 14,
     fontWeight: '600',
   },
@@ -3384,7 +3460,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255, 255, 255, 0.6)',
   },
   otherReplyBar: {
-    backgroundColor: '#6B46C1',
+    backgroundColor: colors.secondary,
   },
   replyContent: {
     flex: 1,
@@ -3398,7 +3474,7 @@ const styles = StyleSheet.create({
     color: 'rgba(255, 255, 255, 0.9)',
   },
   otherReplySenderName: {
-    color: '#6B46C1',
+    color: colors.secondary,
   },
   replyText: {
     fontSize: 13,
@@ -3407,23 +3483,23 @@ const styles = StyleSheet.create({
     color: 'rgba(255, 255, 255, 0.8)',
   },
   otherReplyText: {
-    color: '#666',
+    color: colors.textSecondary,
   },
   // Replying-to bar styles (above input)
   replyingToContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#F5F5F5',
+    backgroundColor: colors.background,
     paddingHorizontal: 15,
     paddingVertical: 10,
     borderTopWidth: 1,
-    borderTopColor: '#E0E0E0',
+    borderTopColor: colors.border,
   },
   replyingToBar: {
     width: 4,
     height: '100%',
     minHeight: 35,
-    backgroundColor: '#6B46C1',
+    backgroundColor: colors.secondary,
     borderRadius: 2,
     marginRight: 10,
   },
@@ -3433,12 +3509,12 @@ const styles = StyleSheet.create({
   replyingToLabel: {
     fontSize: 12,
     fontWeight: 'bold',
-    color: '#6B46C1',
+    color: colors.secondary,
     marginBottom: 2,
   },
   replyingToText: {
     fontSize: 14,
-    color: '#666',
+    color: colors.textSecondary,
   },
   cancelReplyButton: {
     padding: 5,
@@ -3472,7 +3548,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   imagePreviewContainer: {
-    backgroundColor: '#fff',
+    backgroundColor: colors.surface,
     borderRadius: 15,
     padding: 20,
     width: '90%',
@@ -3482,7 +3558,7 @@ const styles = StyleSheet.create({
   imagePreviewTitle: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#333',
+    color: colors.textPrimary,
     marginBottom: 15,
   },
   imagePreviewImage: {
@@ -3500,12 +3576,12 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     paddingHorizontal: 20,
     borderRadius: 10,
-    backgroundColor: '#f0f0f0',
+    backgroundColor: colors.divider,
     alignItems: 'center',
   },
   imagePreviewCancelText: {
     fontSize: 16,
-    color: '#666',
+    color: colors.textSecondary,
     fontWeight: '600',
   },
   imagePreviewSendButton: {
@@ -3513,15 +3589,15 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     paddingHorizontal: 20,
     borderRadius: 10,
-    backgroundColor: '#6B46C1',
+    backgroundColor: colors.secondary,
     alignItems: 'center',
   },
   imagePreviewSendButtonDisabled: {
-    backgroundColor: '#ccc',
+    backgroundColor: colors.surfaceTertiary,
   },
   imagePreviewSendText: {
     fontSize: 16,
-    color: '#fff',
+    color: colors.textInverse,
     fontWeight: '600',
   },
   // Full screen image modal styles

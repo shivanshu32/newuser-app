@@ -15,6 +15,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import horoscopeService, { ZODIAC_SIGNS, DAY_OPTIONS } from '../../services/horoscopeService';
+import { colors, spacing, radius, shadows } from '../../theme';
 
 const { width } = Dimensions.get('window');
 
@@ -66,7 +67,7 @@ const DailyHoroscopeScreen = ({ navigation }) => {
           <Text style={styles.signDates}>{item.dates}</Text>
         </View>
         {selectedSign.key === item.key && (
-          <Ionicons name="checkmark-circle" size={24} color="#4CAF50" />
+          <Ionicons name="checkmark-circle" size={24} color={colors.success} />
         )}
       </View>
     </TouchableOpacity>
@@ -80,7 +81,7 @@ const DailyHoroscopeScreen = ({ navigation }) => {
       <View style={styles.dayItemContent}>
         <Text style={styles.dayName}>{item.name}</Text>
         {selectedDay.key === item.key && (
-          <Ionicons name="checkmark-circle" size={24} color="#4CAF50" />
+          <Ionicons name="checkmark-circle" size={24} color={colors.success} />
         )}
       </View>
     </TouchableOpacity>
@@ -118,7 +119,7 @@ const DailyHoroscopeScreen = ({ navigation }) => {
           style={styles.backButton}
           onPress={() => navigation.goBack()}
         >
-          <Ionicons name="arrow-back" size={24} color="#1F2937" />
+          <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Daily Horoscope</Text>
         <View style={styles.placeholder} />
@@ -140,7 +141,7 @@ const DailyHoroscopeScreen = ({ navigation }) => {
                   <Text style={styles.selectorText}>{selectedSign.name}</Text>
                 </View>
               </View>
-              <Ionicons name="chevron-down" size={20} color="#6B7280" />
+              <Ionicons name="chevron-down" size={20} color={colors.textSecondary} />
             </View>
           </TouchableOpacity>
 
@@ -154,7 +155,7 @@ const DailyHoroscopeScreen = ({ navigation }) => {
               <View style={styles.selectorMainContent}>
                 <Text style={styles.selectorText}>{selectedDay.name}</Text>
               </View>
-              <Ionicons name="chevron-down" size={20} color="#6B7280" />
+              <Ionicons name="chevron-down" size={20} color={colors.textSecondary} />
             </View>
           </TouchableOpacity>
         </View>
@@ -174,12 +175,12 @@ const DailyHoroscopeScreen = ({ navigation }) => {
             <View style={styles.horoscopeContent}>
               {loading ? (
                 <View style={styles.loadingContainer}>
-                  <ActivityIndicator size="large" color="#FFFFFF" />
+                  <ActivityIndicator size="large" color={colors.textInverse} />
                   <Text style={styles.loadingText}>Loading your horoscope...</Text>
                 </View>
               ) : horoscopeData?.error ? (
                 <View style={styles.errorContainer}>
-                  <Ionicons name="warning-outline" size={48} color="#FFD700" />
+                  <Ionicons name="warning-outline" size={48} color={colors.warning} />
                   <Text style={styles.errorText}>{horoscopeData.errorMessage}</Text>
                   {horoscopeData.fallbackMessage && (
                     <View style={styles.fallbackContainer}>
@@ -198,7 +199,7 @@ const DailyHoroscopeScreen = ({ navigation }) => {
                 <View style={styles.horoscopeTextContainer}>
                   {horoscopeData?.fallbackUsed && (
                     <View style={styles.fallbackNoticeContainer}>
-                      <Ionicons name="information-circle-outline" size={20} color="#F97316" />
+                      <Ionicons name="information-circle-outline" size={20} color={colors.primary} />
                       <Text style={styles.fallbackNoticeText}>
                         {horoscopeData.fallbackMessage}
                       </Text>
@@ -230,7 +231,7 @@ const DailyHoroscopeScreen = ({ navigation }) => {
                 onPress={() => setShowSignModal(false)}
                 style={styles.modalCloseButton}
               >
-                <Ionicons name="close" size={24} color="#333" />
+                <Ionicons name="close" size={24} color={colors.textPrimary} />
               </TouchableOpacity>
             </View>
             <FlatList
@@ -258,7 +259,7 @@ const DailyHoroscopeScreen = ({ navigation }) => {
                 onPress={() => setShowDayModal(false)}
                 style={styles.modalCloseButton}
               >
-                <Ionicons name="close" size={24} color="#333" />
+                <Ionicons name="close" size={24} color={colors.textPrimary} />
               </TouchableOpacity>
             </View>
             <FlatList
@@ -277,7 +278,7 @@ const DailyHoroscopeScreen = ({ navigation }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F9FAFB',
+    backgroundColor: colors.background,
   },
   header: {
     flexDirection: 'row',
@@ -285,14 +286,14 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: 20,
     paddingVertical: 15,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
     elevation: 2,
-    shadowColor: '#000',
+    shadowColor: colors.shadow,
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.1,
     shadowRadius: 2,
     borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
+    borderBottomColor: colors.divider,
   },
   backButton: {
     padding: 8,
@@ -300,7 +301,7 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: 20,
     fontWeight: '600',
-    color: '#1F2937',
+    color: colors.textPrimary,
   },
   placeholder: {
     width: 40,
@@ -317,15 +318,15 @@ const styles = StyleSheet.create({
   },
   selectorCard: {
     flex: 0.48,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
     borderRadius: 12,
     elevation: 3,
-    shadowColor: '#000',
+    shadowColor: colors.shadow,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 3.84,
     borderWidth: 1,
-    borderColor: '#E5E7EB',
+    borderColor: colors.divider,
     padding: 15,
     height: 96,
   },
@@ -342,7 +343,7 @@ const styles = StyleSheet.create({
   },
   selectorLabel: {
     fontSize: 12,
-    color: '#6B7280',
+    color: colors.textSecondary,
     fontWeight: '500',
   },
   selectorValue: {
@@ -356,22 +357,22 @@ const styles = StyleSheet.create({
   selectorText: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#1F2937',
+    color: colors.textPrimary,
   },
   horoscopeContainer: {
     marginBottom: 20,
   },
   horoscopeCard: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
     borderRadius: 16,
     padding: 20,
     elevation: 4,
-    shadowColor: '#000',
+    shadowColor: colors.shadow,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 4,
     borderWidth: 1,
-    borderColor: '#E5E7EB',
+    borderColor: colors.divider,
   },
   horoscopeHeader: {
     alignItems: 'center',
@@ -380,13 +381,13 @@ const styles = StyleSheet.create({
   horoscopeTitle: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#1F2937',
+    color: colors.textPrimary,
     textAlign: 'center',
     marginBottom: 8,
   },
   horoscopeDate: {
     fontSize: 14,
-    color: '#6B7280',
+    color: colors.textSecondary,
     textAlign: 'center',
     marginBottom: 20,
   },
@@ -400,7 +401,7 @@ const styles = StyleSheet.create({
   },
   loadingText: {
     fontSize: 16,
-    color: '#6B7280',
+    color: colors.textSecondary,
     marginTop: 15,
   },
   errorContainer: {
@@ -409,7 +410,7 @@ const styles = StyleSheet.create({
   },
   errorText: {
     fontSize: 16,
-    color: '#DC2626',
+    color: colors.error,
     textAlign: 'center',
     marginTop: 15,
     marginBottom: 20,
@@ -424,22 +425,22 @@ const styles = StyleSheet.create({
   fallbackLabel: {
     fontSize: 14,
     fontWeight: 'bold',
-    color: '#FFD700',
+    color: colors.warning,
     marginBottom: 8,
   },
   fallbackText: {
     fontSize: 14,
-    color: '#6B7280',
+    color: colors.textSecondary,
     lineHeight: 20,
   },
   retryButton: {
-    backgroundColor: '#F97316',
+    backgroundColor: colors.primary,
     paddingHorizontal: 20,
     paddingVertical: 10,
     borderRadius: 8,
   },
   retryButtonText: {
-    color: '#FFFFFF',
+    color: colors.textInverse,
     fontWeight: '600',
   },
   horoscopeTextContainer: {
@@ -447,7 +448,7 @@ const styles = StyleSheet.create({
   },
   horoscopeText: {
     fontSize: 16,
-    color: '#374151',
+    color: colors.textSecondary,
     lineHeight: 24,
     textAlign: 'center',
     marginBottom: 15,
@@ -460,11 +461,11 @@ const styles = StyleSheet.create({
     padding: 12,
     marginBottom: 15,
     borderLeftWidth: 3,
-    borderLeftColor: '#F97316',
+    borderLeftColor: colors.primary,
   },
   fallbackNoticeText: {
     fontSize: 14,
-    color: '#F97316',
+    color: colors.primary,
     marginLeft: 8,
     flex: 1,
     lineHeight: 18,
@@ -472,7 +473,7 @@ const styles = StyleSheet.create({
   refreshButton: {
     borderRadius: 25,
     elevation: 5,
-    shadowColor: '#000',
+    shadowColor: colors.shadow,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.25,
     shadowRadius: 3.84,
@@ -487,7 +488,7 @@ const styles = StyleSheet.create({
   refreshText: {
     fontSize: 16,
     fontWeight: 'bold',
-    color: '#FFFFFF',
+    color: colors.textInverse,
     marginLeft: 10,
   },
   rotating: {
@@ -499,7 +500,7 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   modalContainer: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
     borderTopLeftRadius: 16,
     borderTopRightRadius: 16,
     maxHeight: '70%',
@@ -510,12 +511,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: 20,
     borderBottomWidth: 1,
-    borderBottomColor: '#E0E0E0',
+    borderBottomColor: colors.border,
   },
   modalTitle: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#1F2937',
+    color: colors.textPrimary,
   },
   modalCloseButton: {
     padding: 5,
@@ -524,7 +525,7 @@ const styles = StyleSheet.create({
     paddingVertical: 16,
     paddingHorizontal: 20,
     borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
+    borderBottomColor: colors.divider,
   },
   signItemContent: {
     flexDirection: 'row',
@@ -540,12 +541,12 @@ const styles = StyleSheet.create({
   signName: {
     fontSize: 16,
     fontWeight: '500',
-    color: '#1F2937',
+    color: colors.textPrimary,
     marginLeft: 12,
   },
   signDates: {
     fontSize: 12,
-    color: '#6B7280',
+    color: colors.textSecondary,
     marginLeft: 12,
     marginTop: 2,
   },
@@ -557,7 +558,7 @@ const styles = StyleSheet.create({
   dayName: {
     fontSize: 16,
     fontWeight: '500',
-    color: '#1F2937',
+    color: colors.textPrimary,
   },
 });
 

@@ -10,6 +10,7 @@ import {
   Dimensions,
   Alert
 } from 'react-native';
+import { colors } from '../../theme';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import productAPI from '../../services/productAPI';
@@ -597,7 +598,7 @@ const styles = StyleSheet.create({
     gap: 8,
     paddingVertical: 14,
     borderRadius: 12,
-    backgroundColor: '#F97316'
+    backgroundColor: colors.primary
   },
   addToCartText: {
     fontSize: 16,

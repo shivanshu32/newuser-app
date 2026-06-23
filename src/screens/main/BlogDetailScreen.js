@@ -14,6 +14,7 @@ import {
 import { MaterialIcons, Ionicons } from '@expo/vector-icons';
 import { blogAPI } from '../../services/api';
 import RenderHtml from 'react-native-render-html';
+import { colors, spacing, radius, shadows } from '../../theme';
 
 const { width } = Dimensions.get('window');
 
@@ -74,16 +75,16 @@ const BlogDetailScreen = ({ route, navigation }) => {
   if (loading) {
     return (
       <View style={styles.container}>
-        <StatusBar barStyle="light-content" backgroundColor="#1a1a1a" />
+        <StatusBar barStyle="light-content" backgroundColor={colors.background} />
         <View style={styles.header}>
           <TouchableOpacity style={styles.headerButton} onPress={() => navigation.goBack()}>
-            <Ionicons name="arrow-back" size={24} color="#fff" />
+            <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>Blog</Text>
           <View style={styles.headerButton} />
         </View>
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#F97316" />
+          <ActivityIndicator size="large" color={colors.primary} />
           <Text style={styles.loadingText}>Loading blog...</Text>
         </View>
       </View>
@@ -93,7 +94,7 @@ const BlogDetailScreen = ({ route, navigation }) => {
   if (error || !blog) {
     return (
       <View style={styles.errorContainer}>
-        <MaterialIcons name="error-outline" size={64} color="#666" />
+        <MaterialIcons name="error-outline" size={64} color={colors.textSecondary} />
         <Text style={styles.errorText}>{error || 'Blog post not found'}</Text>
         <TouchableOpacity
           style={styles.backButton}
@@ -124,28 +125,28 @@ const BlogDetailScreen = ({ route, navigation }) => {
       // Render HTML content using react-native-render-html
       const tagsStyles = {
         p: {
-          color: '#e0e0e0',
+          color: colors.textPrimary,
           fontSize: 16,
           lineHeight: 26,
           marginBottom: 16,
           textAlign: 'justify',
         },
         h1: {
-          color: '#F97316',
+          color: colors.primary,
           fontSize: 22,
           fontWeight: 'bold',
           marginTop: 24,
           marginBottom: 12,
         },
         h2: {
-          color: '#F97316',
+          color: colors.primary,
           fontSize: 20,
           fontWeight: 'bold',
           marginTop: 20,
           marginBottom: 10,
         },
         h3: {
-          color: '#F97316',
+          color: colors.primary,
           fontSize: 18,
           fontWeight: 'bold',
           marginTop: 18,
@@ -155,20 +156,20 @@ const BlogDetailScreen = ({ route, navigation }) => {
           marginBottom: 16,
         },
         li: {
-          color: '#e0e0e0',
+          color: colors.textPrimary,
           fontSize: 16,
           lineHeight: 24,
           marginBottom: 4,
         },
         strong: {
           fontWeight: 'bold',
-          color: '#fff',
+          color: colors.textPrimary,
         },
         em: {
           fontStyle: 'italic',
         },
         a: {
-          color: '#F97316',
+          color: colors.primary,
           textDecorationLine: 'underline',
         },
       };
@@ -178,7 +179,7 @@ const BlogDetailScreen = ({ route, navigation }) => {
           contentWidth={width - 40}
           source={{ html: htmlContent }}
           tagsStyles={tagsStyles}
-          baseStyle={{ color: '#e0e0e0' }}
+          baseStyle={{ color: colors.textPrimary }}
         />
       );
     } else {
@@ -222,7 +223,7 @@ const BlogDetailScreen = ({ route, navigation }) => {
 
   return (
     <View style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor="#1a1a1a" />
+      <StatusBar barStyle="light-content" backgroundColor={colors.background} />
       
       {/* Header */}
       <View style={styles.header}>
@@ -230,7 +231,7 @@ const BlogDetailScreen = ({ route, navigation }) => {
           style={styles.headerButton}
           onPress={() => navigation.goBack()}
         >
-          <Ionicons name="arrow-back" size={24} color="#fff" />
+          <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
         </TouchableOpacity>
         
         <Text style={styles.headerTitle}>Blog</Text>
@@ -239,7 +240,7 @@ const BlogDetailScreen = ({ route, navigation }) => {
           style={styles.headerButton}
           onPress={handleShare}
         >
-          <Ionicons name="share-outline" size={24} color="#fff" />
+          <Ionicons name="share-outline" size={24} color={colors.textPrimary} />
         </TouchableOpacity>
       </View>
 
@@ -286,7 +287,7 @@ const BlogDetailScreen = ({ route, navigation }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#1a1a1a',
+    backgroundColor: colors.background,
   },
   header: {
     flexDirection: 'row',
@@ -295,9 +296,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingTop: 50,
     paddingBottom: 16,
-    backgroundColor: '#1a1a1a',
+    backgroundColor: colors.background,
     borderBottomWidth: 1,
-    borderBottomColor: '#333',
+    borderBottomColor: colors.textSecondary,
   },
   headerButton: {
     width: 40,
@@ -310,7 +311,7 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#fff',
+    color: colors.textPrimary,
   },
   scrollView: {
     flex: 1,
@@ -322,7 +323,7 @@ const styles = StyleSheet.create({
   },
   blogHeader: {
     padding: 20,
-    backgroundColor: '#1a1a1a',
+    backgroundColor: colors.background,
   },
   categoryContainer: {
     flexDirection: 'row',
@@ -332,8 +333,8 @@ const styles = StyleSheet.create({
   category: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#F97316',
-    backgroundColor: 'rgba(249, 115, 22, 0.1)',
+    color: colors.primary,
+    backgroundColor: colors.primaryMuted,
     paddingHorizontal: 12,
     paddingVertical: 4,
     borderRadius: 12,
@@ -341,12 +342,12 @@ const styles = StyleSheet.create({
   },
   readTime: {
     fontSize: 14,
-    color: '#888',
+    color: colors.textMuted,
   },
   title: {
     fontSize: 24,
     fontWeight: 'bold',
-    color: '#fff',
+    color: colors.textPrimary,
     lineHeight: 32,
     marginBottom: 16,
   },
@@ -358,12 +359,12 @@ const styles = StyleSheet.create({
   },
   author: {
     fontSize: 14,
-    color: '#10B981',
+    color: colors.success,
     fontWeight: '500',
   },
   publishedAt: {
     fontSize: 14,
-    color: '#888',
+    color: colors.textMuted,
   },
   tagsContainer: {
     flexDirection: 'row',
@@ -378,23 +379,23 @@ const styles = StyleSheet.create({
   },
   tagText: {
     fontSize: 12,
-    color: '#ccc',
+    color: colors.divider,
   },
   contentContainer: {
     padding: 20,
-    backgroundColor: '#1a1a1a',
+    backgroundColor: colors.background,
   },
   contentHeading: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: '#F97316',
+    color: colors.primary,
     marginTop: 24,
     marginBottom: 12,
   },
   contentParagraph: {
     fontSize: 16,
     lineHeight: 26,
-    color: '#e0e0e0',
+    color: colors.textPrimary,
     marginBottom: 16,
     textAlign: 'justify',
   },
@@ -404,7 +405,7 @@ const styles = StyleSheet.create({
   bulletPoint: {
     fontSize: 16,
     lineHeight: 24,
-    color: '#e0e0e0',
+    color: colors.textPrimary,
     marginBottom: 4,
     paddingLeft: 8,
   },
@@ -413,25 +414,25 @@ const styles = StyleSheet.create({
   },
   errorContainer: {
     flex: 1,
-    backgroundColor: '#1a1a1a',
+    backgroundColor: colors.background,
     alignItems: 'center',
     justifyContent: 'center',
     padding: 20,
   },
   errorText: {
     fontSize: 18,
-    color: '#888',
+    color: colors.textMuted,
     marginTop: 16,
     marginBottom: 24,
   },
   backButton: {
-    backgroundColor: '#F97316',
+    backgroundColor: colors.primary,
     paddingHorizontal: 24,
     paddingVertical: 12,
     borderRadius: 8,
   },
   backButtonText: {
-    color: '#fff',
+    color: colors.textPrimary,
     fontSize: 16,
     fontWeight: '600',
   },
@@ -439,12 +440,12 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#1a1a1a',
+    backgroundColor: colors.background,
   },
   loadingText: {
     marginTop: 16,
     fontSize: 16,
-    color: '#888',
+    color: colors.textMuted,
   },
 });
 

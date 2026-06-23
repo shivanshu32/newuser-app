@@ -20,6 +20,7 @@ import { astrologersAPI, walletAPI, ratingsAPI } from '../../services/api';
 import { initiateRealTimeBooking, listenForBookingStatusUpdates } from '../../services/socketService';
 import { addPendingConsultation, getPendingConsultations } from '../../utils/pendingConsultationsStore';
 import analyticsService from '../../services/analyticsService';
+import { colors, spacing, radius, shadows } from '../../theme';
 
 const AstrologerProfileScreen = ({ route, navigation }) => {
   const { socket } = useSocket();
@@ -518,16 +519,16 @@ const AstrologerProfileScreen = ({ route, navigation }) => {
 
   // Helper function to get status color based on onlineStatus
   const getStatusColor = (astrologer) => {
-    if (!astrologer) return '#9E9E9E'; // Gray for unknown
+    if (!astrologer) return colors.textSecondary; // Gray for unknown
     
     // Check if astrologer is busy (legacy status field)
     if (astrologer.status === 'busy') {
-      return '#FF9800'; // Orange for busy
+      return colors.warning; // Orange for busy
     }
     
     // Check onlineStatus for availability
     const isOnline = astrologer.onlineStatus?.chat === 1 || astrologer.onlineStatus?.call === 1;
-    return isOnline ? '#4CAF50' : '#9E9E9E'; // Green for online, Gray for offline
+    return isOnline ? colors.success : colors.textSecondary; // Green for online, Gray for offline
   };
   
   // Helper function to get status text based on onlineStatus
@@ -998,7 +999,7 @@ const AstrologerProfileScreen = ({ route, navigation }) => {
       >
         <View style={styles.modalOverlay}>
           <View style={styles.modalContainer}>
-            <ActivityIndicator size="large" color="#F97316" />
+            <ActivityIndicator size="large" color={colors.primary} />
             <Text style={styles.modalText}>Waiting for astrologer response...</Text>
             <Text style={styles.modalSubText}>This request will expire in 2 minutes if not answered</Text>
             <TouchableOpacity 
@@ -1020,7 +1021,7 @@ const AstrologerProfileScreen = ({ route, navigation }) => {
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#F97316" />
+        <ActivityIndicator size="large" color={colors.primary} />
         <Text style={styles.loadingText}>Loading astrologer profile...</Text>
       </View>
     );
@@ -1030,7 +1031,7 @@ const AstrologerProfileScreen = ({ route, navigation }) => {
   if (error) {
     return (
       <View style={styles.errorContainer}>
-        <Ionicons name="alert-circle-outline" size={60} color="#F44336" />
+        <Ionicons name="alert-circle-outline" size={60} color={colors.error} />
         <Text style={styles.errorText}>{error}</Text>
         <TouchableOpacity style={styles.retryButton} onPress={fetchAstrologerDetails}>
           <Text style={styles.retryButtonText}>Retry</Text>
@@ -1129,7 +1130,7 @@ const AstrologerProfileScreen = ({ route, navigation }) => {
   
   return (
     <SafeAreaView style={styles.container}>
-      <StatusBar backgroundColor="#fff" barStyle="dark-content" />
+      <StatusBar backgroundColor={colors.background} barStyle="light-content" />
       
       {/* Header with back button */}
    
@@ -1159,7 +1160,7 @@ const AstrologerProfileScreen = ({ route, navigation }) => {
             <Text style={styles.specialization}>{astrologer.specialization || astrologer.specialties?.[0] || 'Astrologer'}</Text>
             
             <View style={styles.ratingContainer}>
-              <Ionicons name="star" size={16} color="#FFD700" />
+              <Ionicons name="star" size={16} color={colors.warning} />
               <Text style={styles.rating}>{ratingText}</Text>
               {ratingCount > 0 && (
                 <Text style={styles.ratingCount} numberOfLines={1} ellipsizeMode="tail">({ratingCount} reviews)</Text>
@@ -1233,7 +1234,7 @@ const AstrologerProfileScreen = ({ route, navigation }) => {
                 <Ionicons 
                   name="chatbubble" 
                   size={24} 
-                  color="#fff" 
+                  color={colors.textInverse} 
                 />
                 <Text style={styles.bookingButtonText}>
                   Chat
@@ -1262,7 +1263,7 @@ const AstrologerProfileScreen = ({ route, navigation }) => {
                 <Ionicons 
                   name="call" 
                   size={24} 
-                  color="#fff" 
+                  color={colors.textInverse} 
                 />
                 <Text style={styles.bookingButtonText}>
                   Voice Call
@@ -1282,7 +1283,7 @@ const AstrologerProfileScreen = ({ route, navigation }) => {
               <Ionicons 
                 name="videocam" 
                 size={24} 
-                color="#fff" 
+                color={colors.textInverse} 
               />
               <Text style={styles.bookingButtonText}>
                 Video Call
@@ -1344,7 +1345,7 @@ const AstrologerProfileScreen = ({ route, navigation }) => {
           <View style={styles.detailSection}>
             <Text style={styles.sectionTitle}>Experience</Text>
             <View style={styles.experienceContainer}>
-              <Ionicons name="briefcase-outline" size={20} color="#F97316" />
+              <Ionicons name="briefcase-outline" size={20} color={colors.primary} />
               <Text style={styles.detailText}>{astrologer.experience || 'Not specified'} years of professional experience</Text>
             </View>
           </View>
@@ -1360,7 +1361,7 @@ const AstrologerProfileScreen = ({ route, navigation }) => {
               {reviews.length > 0 && (
                 <TouchableOpacity style={styles.viewAllButton}>
                   <Text style={styles.viewAllButtonText}>View All</Text>
-                  <Ionicons name="chevron-forward" size={16} color="#F97316" />
+                  <Ionicons name="chevron-forward" size={16} color={colors.primary} />
                 </TouchableOpacity>
               )}
             </View>
@@ -1375,7 +1376,7 @@ const AstrologerProfileScreen = ({ route, navigation }) => {
                         key={star}
                         name={star <= (astrologer.rating?.average || 0) ? "star" : "star-outline"}
                         size={18}
-                        color="#FFD700"
+                        color={colors.warning}
                       />
                     ))}
                   </View>
@@ -1389,7 +1390,7 @@ const AstrologerProfileScreen = ({ route, navigation }) => {
                     return (
                       <View key={rating} style={styles.ratingBar}>
                         <Text style={styles.ratingNumber}>{rating}</Text>
-                        <Ionicons name="star" size={12} color="#FFD700" />
+                        <Ionicons name="star" size={12} color={colors.warning} />
                         <View style={styles.barContainer}>
                           <View style={[styles.barFill, { width: `${percentage}%` }]} />
                         </View>
@@ -1414,7 +1415,7 @@ const AstrologerProfileScreen = ({ route, navigation }) => {
           
           {reviewsLoading ? (
             <View style={styles.reviewsLoading}>
-              <ActivityIndicator size="small" color="#F97316" />
+              <ActivityIndicator size="small" color={colors.primary} />
               <Text style={styles.loadingText}>Loading reviews...</Text>
             </View>
           ) : reviewsError ? (
@@ -1426,7 +1427,7 @@ const AstrologerProfileScreen = ({ route, navigation }) => {
             </View>
           ) : reviews.length === 0 ? (
             <View style={styles.noReviews}>
-              <Ionicons name="star-outline" size={48} color="#D1D5DB" />
+              <Ionicons name="star-outline" size={48} color={colors.textMuted} />
               <Text style={styles.noReviewsText}>No reviews yet</Text>
               <Text style={styles.noReviewsSubtext}>Be the first to review this astrologer</Text>
             </View>
@@ -1436,7 +1437,7 @@ const AstrologerProfileScreen = ({ route, navigation }) => {
                 <Text style={styles.recentReviewsTitle}>Recent Reviews</Text>
                 <View style={styles.reviewsFilter}>
                   <Text style={styles.filterText}>Most Recent</Text>
-                  <Ionicons name="chevron-down" size={14} color="#6B7280" />
+                  <Ionicons name="chevron-down" size={14} color={colors.textSecondary} />
                 </View>
               </View>
               
@@ -1466,7 +1467,7 @@ const AstrologerProfileScreen = ({ route, navigation }) => {
                               {review.user?.name || 'Anonymous User'}
                             </Text>
                             <View style={styles.reviewRatingBadge}>
-                              <Ionicons name="star" size={12} color="#FFD700" />
+                              <Ionicons name="star" size={12} color={colors.warning} />
                               <Text style={styles.reviewRatingBadgeText}>{review.rating}.0</Text>
                             </View>
                           </View>
@@ -1487,7 +1488,7 @@ const AstrologerProfileScreen = ({ route, navigation }) => {
                             </Text>
                             <View style={styles.reviewDot} />
                             <View style={styles.consultationTypeBadge}>
-                              <Ionicons name="chatbubble" size={10} color="#6B7280" />
+                              <Ionicons name="chatbubble" size={10} color={colors.textSecondary} />
                               <Text style={styles.consultationTypeText}>Chat</Text>
                             </View>
                           </View>
@@ -1502,7 +1503,7 @@ const AstrologerProfileScreen = ({ route, navigation }) => {
                     ) : (
                       <View style={styles.reviewCommentSection}>
                         <Text style={styles.reviewNoComment}>
-                          <Ionicons name="star" size={14} color="#FFD700" />
+                          <Ionicons name="star" size={14} color={colors.warning} />
                           {' '}Rated {review.rating} stars without written feedback
                         </Text>
                       </View>
@@ -1510,12 +1511,12 @@ const AstrologerProfileScreen = ({ route, navigation }) => {
                     
                     <View style={styles.reviewActions}>
                       <View style={styles.reviewVerified}>
-                        <Ionicons name="shield-checkmark" size={14} color="#10B981" />
+                        <Ionicons name="shield-checkmark" size={14} color={colors.success} />
                         <Text style={styles.reviewVerifiedText}>Verified Purchase</Text>
                       </View>
                       <View style={styles.reviewHelpful}>
                         <TouchableOpacity style={styles.helpfulButton}>
-                          <Ionicons name="thumbs-up-outline" size={14} color="#6B7280" />
+                          <Ionicons name="thumbs-up-outline" size={14} color={colors.textSecondary} />
                           <Text style={styles.helpfulText}>Helpful</Text>
                         </TouchableOpacity>
                       </View>
@@ -1532,7 +1533,7 @@ const AstrologerProfileScreen = ({ route, navigation }) => {
                 >
                   {loadingMoreReviews ? (
                     <View style={styles.loadMoreContent}>
-                      <ActivityIndicator size="small" color="#F97316" />
+                      <ActivityIndicator size="small" color={colors.primary} />
                       <Text style={styles.loadMoreText}>Loading more reviews...</Text>
                     </View>
                   ) : (
@@ -1544,7 +1545,7 @@ const AstrologerProfileScreen = ({ route, navigation }) => {
                     </View>
                   )}
                   {!loadingMoreReviews && (
-                    <Ionicons name="chevron-down" size={20} color="#F97316" />
+                    <Ionicons name="chevron-down" size={20} color={colors.primary} />
                   )}
                 </TouchableOpacity>
               )}
@@ -1580,7 +1581,7 @@ const AstrologerProfileScreen = ({ route, navigation }) => {
                 <Ionicons 
                   name="chatbubble" 
                   size={24} 
-                  color="#fff" 
+                  color={colors.textInverse} 
                 />
                 <Text style={styles.bookingButtonText}>
                   Chat
@@ -1609,7 +1610,7 @@ const AstrologerProfileScreen = ({ route, navigation }) => {
                 <Ionicons 
                   name="call" 
                   size={24} 
-                  color="#fff" 
+                  color={colors.textInverse} 
                 />
                 <Text style={styles.bookingButtonText}>
                   Voice Call
@@ -1629,7 +1630,7 @@ const AstrologerProfileScreen = ({ route, navigation }) => {
               <Ionicons 
                 name="videocam" 
                 size={24} 
-                color="#fff" 
+                color={colors.textInverse} 
               />
               <Text style={styles.bookingButtonText}>
                 Video Call
@@ -1651,7 +1652,7 @@ const AstrologerProfileScreen = ({ route, navigation }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#ffffff',
+    backgroundColor: colors.surface,
   },
   header: {
     flexDirection: 'row',
@@ -1659,9 +1660,9 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: 16,
     paddingVertical: 12,
-    backgroundColor: '#ffffff',
+    backgroundColor: colors.surface,
     borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
+    borderBottomColor: colors.divider,
   },
   backButton: {
     padding: 8,
@@ -1669,7 +1670,7 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#374151',
+    color: colors.textSecondary,
     textAlign: 'center',
     flex: 1,
   },
@@ -1685,7 +1686,7 @@ const styles = StyleSheet.create({
   },
   modalContainer: {
     width: '80%',
-    backgroundColor: 'white',
+    backgroundColor: colors.surface,
     borderRadius: 10,
     padding: 20,
     alignItems: 'center',
@@ -1699,20 +1700,20 @@ const styles = StyleSheet.create({
     fontSize: 16,
     marginVertical: 10,
     textAlign: 'center',
-    color: '#333'
+    color: colors.textPrimary
   },
   modalSubText: {
     fontSize: 14,
     marginBottom: 15,
     textAlign: 'center',
-    color: '#666'
+    color: colors.textSecondary
   },
   inPageNotification: {
     margin: 10,
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: '#e0e0e0',
-    backgroundColor: 'white',
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
     overflow: 'hidden',
     elevation: 3,
     shadowColor: '#000',
@@ -1721,11 +1722,11 @@ const styles = StyleSheet.create({
     shadowRadius: 2.22,
   },
   notificationHeader: {
-    backgroundColor: '#8A2BE2',
+    backgroundColor: colors.secondary,
     padding: 10,
   },
   notificationHeaderText: {
-    color: 'white',
+    color: colors.textInverse,
     fontWeight: 'bold',
     fontSize: 16,
   },
@@ -1735,33 +1736,33 @@ const styles = StyleSheet.create({
   notificationBodyText: {
     fontSize: 14,
     marginBottom: 15,
-    color: '#333',
+    color: colors.textPrimary,
   },
   notificationActions: {
     flexDirection: 'row',
     justifyContent: 'flex-end',
   },
   joinNowButton: {
-    backgroundColor: '#8A2BE2',
+    backgroundColor: colors.secondary,
     paddingVertical: 8,
     paddingHorizontal: 15,
     borderRadius: 5,
     marginLeft: 10,
   },
   joinNowButtonText: {
-    color: 'white',
+    color: colors.textInverse,
     fontWeight: 'bold',
     fontSize: 14,
   },
   dismissButton: {
-    backgroundColor: '#f0f0f0',
+    backgroundColor: colors.divider,
     paddingVertical: 8,
     paddingHorizontal: 15,
     borderRadius: 5,
     marginLeft: 10,
   },
   dismissButtonText: {
-    color: '#666',
+    color: colors.textSecondary,
     fontSize: 14,
   },
   scrollContent: {
@@ -1771,12 +1772,12 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#ffffff',
+    backgroundColor: colors.surface,
   },
   loadingText: {
     marginTop: 10,
     fontSize: 16,
-    color: '#6B7280',
+    color: colors.textSecondary,
     fontWeight: '500',
   },
   errorContainer: {
@@ -1784,16 +1785,16 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     padding: 20,
-    backgroundColor: '#ffffff',
+    backgroundColor: colors.surface,
   },
   errorText: {
     fontSize: 16,
-    color: '#4B5563',
+    color: colors.textSecondary,
     marginVertical: 20,
     textAlign: 'center',
   },
   retryButton: {
-    backgroundColor: '#6366F1',
+    backgroundColor: colors.secondary,
     paddingHorizontal: 20,
     paddingVertical: 10,
     borderRadius: 8,
@@ -1804,7 +1805,7 @@ const styles = StyleSheet.create({
     shadowRadius: 1.41,
   },
   retryButtonText: {
-    color: '#fff',
+    color: colors.textInverse,
     fontSize: 16,
     fontWeight: 'bold',
   },
@@ -1823,7 +1824,7 @@ const styles = StyleSheet.create({
     height: 100,
     borderRadius: 50,
     borderWidth: 3,
-    borderColor: '#ffffff',
+    borderColor: colors.surface,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
@@ -1838,8 +1839,8 @@ const styles = StyleSheet.create({
     height: 16,
     borderRadius: 8,
     borderWidth: 2,
-    borderColor: '#ffffff',
-    backgroundColor: '#4CAF50',
+    borderColor: colors.surface,
+    backgroundColor: colors.success,
   },
   nameContainer: {
     flex: 1,
@@ -1847,12 +1848,12 @@ const styles = StyleSheet.create({
   name: {
     fontSize: 22,
     fontWeight: 'bold',
-    color: '#1F2937',
+    color: colors.textPrimary,
     marginBottom: 4,
   },
   specialization: {
     fontSize: 16,
-    color: '#6B7280',
+    color: colors.textSecondary,
     marginBottom: 8,
   },
   ratingContainer: {
@@ -1864,12 +1865,12 @@ const styles = StyleSheet.create({
   rating: {
     fontSize: 16,
     fontWeight: 'bold',
-    color: '#1F2937',
+    color: colors.textPrimary,
     marginLeft: 4,
   },
   ratingCount: {
     fontSize: 14,
-    color: '#6B7280',
+    color: colors.textSecondary,
     marginLeft: 4,
     flexShrink: 0,
     borderWidth: 1,
@@ -1882,13 +1883,13 @@ const styles = StyleSheet.create({
   },
   statusText: {
     fontSize: 14,
-    color: '#6B7280',
+    color: colors.textSecondary,
     fontWeight: '500',
   },
   statsContainer: {
     flexDirection: 'row',
     justifyContent: 'space-around',
-    backgroundColor: '#F9FAFB',
+    backgroundColor: colors.background,
     borderRadius: 12,
     padding: 16,
     marginBottom: 24,
@@ -1905,21 +1906,21 @@ const styles = StyleSheet.create({
   statValue: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: '#1F2937',
+    color: colors.textPrimary,
     marginBottom: 4,
   },
   statLabel: {
     fontSize: 14,
-    color: '#6B7280',
+    color: colors.textSecondary,
   },
   statDivider: {
     width: 1,
     height: '70%',
-    backgroundColor: '#E5E7EB',
+    backgroundColor: colors.divider,
     alignSelf: 'center',
   },
   detailsContainer: {
-    backgroundColor: '#fff',
+    backgroundColor: colors.surface,
     borderRadius: 12,
     padding: 16,
     marginBottom: 24,
@@ -1935,17 +1936,17 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: '#1F2937',
+    color: colors.textPrimary,
     marginBottom: 12,
   },
   bioText: {
     fontSize: 16,
-    color: '#4B5563',
+    color: colors.textSecondary,
     lineHeight: 24,
   },
   detailText: {
     fontSize: 16,
-    color: '#4B5563',
+    color: colors.textSecondary,
   },
   tagsContainer: {
     flexDirection: 'row',
@@ -1953,7 +1954,7 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   tagItem: {
-    backgroundColor: '#F3F4F6',
+    backgroundColor: colors.divider,
     borderRadius: 16,
     paddingHorizontal: 12,
     paddingVertical: 6,
@@ -1961,7 +1962,7 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   tagText: {
-    color: '#4B5563',
+    color: colors.textSecondary,
     fontSize: 14,
   },
   experienceContainer: {
@@ -1974,7 +1975,7 @@ const styles = StyleSheet.create({
   chargeCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#F9FAFB',
+    backgroundColor: colors.background,
     borderRadius: 12,
     padding: 16,
     marginBottom: 12,
@@ -1988,38 +1989,38 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: '#6366F1',
+    backgroundColor: colors.secondary,
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 16,
   },
   voiceIconContainer: {
-    backgroundColor: '#F97316',
+    backgroundColor: colors.primary,
   },
   videoIconContainer: {
-    backgroundColor: '#10B981',
+    backgroundColor: colors.success,
   },
   chargeContent: {
     flex: 1,
   },
   chargeLabel: {
     fontSize: 16,
-    color: '#4B5563',
+    color: colors.textSecondary,
     marginBottom: 4,
   },
   chargeValue: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: '#1F2937',
+    color: colors.textPrimary,
   },
   perMinText: {
     fontSize: 14,
     fontWeight: 'normal',
-    color: '#6B7280',
+    color: colors.textSecondary,
   },
   bookingSection: {
     marginBottom: 24,
-    backgroundColor: '#fff',
+    backgroundColor: colors.surface,
     borderRadius: 12,
     padding: 16,
     elevation: 2,
@@ -2031,12 +2032,12 @@ const styles = StyleSheet.create({
   bookingSectionTitle: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: '#1F2937',
+    color: colors.textPrimary,
     marginBottom: 8,
   },
   bookingSubtitle: {
     fontSize: 14,
-    color: '#6B7280',
+    color: colors.textSecondary,
     marginBottom: 16,
   },
   bookingButtonsContainer: {
@@ -2057,36 +2058,36 @@ const styles = StyleSheet.create({
     shadowRadius: 2,
   },
   chatButton: {
-    backgroundColor: '#6366F1',
+    backgroundColor: colors.secondary,
   },
   voiceButton: {
-    backgroundColor: '#F97316',
+    backgroundColor: colors.primary,
   },
   videoButton: {
-    backgroundColor: '#10B981',
+    backgroundColor: colors.success,
   },
   disabledButton: {
-    backgroundColor: '#F3F4F6',
+    backgroundColor: colors.divider,
   },
   bookingButtonText: {
-    color: '#fff',
+    color: colors.textInverse,
     fontSize: 16,
     fontWeight: 'bold',
     marginLeft: 8,
     flex: 1,
   },
   bookingButtonPrice: {
-    color: '#fff',
+    color: colors.textInverse,
     fontSize: 14,
     fontWeight: '500',
   },
   disabledButtonText: {
-    color: '#9CA3AF',
+    color: colors.textMuted,
   },
   
   // Reviews Section Styles
   reviewsSection: {
-    backgroundColor: '#fff',
+    backgroundColor: colors.surface,
     borderRadius: 12,
     padding: 16,
     marginBottom: 24,
@@ -2110,20 +2111,20 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 12,
     paddingVertical: 6,
-    backgroundColor: '#FEF3E2',
+    backgroundColor: colors.primaryMuted,
     borderRadius: 20,
   },
   viewAllButtonText: {
     fontSize: 12,
     fontWeight: '600',
-    color: '#F97316',
+    color: colors.primary,
     marginRight: 4,
   },
   ratingOverview: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
-    backgroundColor: '#F9FAFB',
+    backgroundColor: colors.background,
     borderRadius: 12,
     padding: 16,
   },
@@ -2134,7 +2135,7 @@ const styles = StyleSheet.create({
   overallRating: {
     fontSize: 32,
     fontWeight: 'bold',
-    color: '#1F2937',
+    color: colors.textPrimary,
     marginBottom: 4,
   },
   overallStars: {
@@ -2144,7 +2145,7 @@ const styles = StyleSheet.create({
   },
   totalReviews: {
     fontSize: 12,
-    color: '#6B7280',
+    color: colors.textSecondary,
     fontWeight: '500',
   },
   ratingDistribution: {
@@ -2159,24 +2160,24 @@ const styles = StyleSheet.create({
   ratingNumber: {
     fontSize: 12,
     fontWeight: '600',
-    color: '#4B5563',
+    color: colors.textSecondary,
     width: 12,
   },
   barContainer: {
     flex: 1,
     height: 6,
-    backgroundColor: '#E5E7EB',
+    backgroundColor: colors.divider,
     borderRadius: 3,
     marginHorizontal: 8,
   },
   barFill: {
     height: '100%',
-    backgroundColor: '#FFD700',
+    backgroundColor: colors.warning,
     borderRadius: 3,
   },
   ratingCount: {
     fontSize: 12,
-    color: '#6B7280',
+    color: colors.textSecondary,
     width: 20,
     textAlign: 'right',
   },
@@ -2189,7 +2190,7 @@ const styles = StyleSheet.create({
   loadingText: {
     marginLeft: 8,
     fontSize: 14,
-    color: '#6B7280',
+    color: colors.textSecondary,
   },
   reviewsError: {
     alignItems: 'center',
@@ -2197,17 +2198,17 @@ const styles = StyleSheet.create({
   },
   errorText: {
     fontSize: 14,
-    color: '#EF4444',
+    color: colors.error,
     marginBottom: 8,
   },
   retryButton: {
     paddingHorizontal: 16,
     paddingVertical: 8,
-    backgroundColor: '#F97316',
+    backgroundColor: colors.primary,
     borderRadius: 8,
   },
   retryButtonText: {
-    color: '#fff',
+    color: colors.textInverse,
     fontSize: 14,
     fontWeight: '500',
   },
@@ -2218,12 +2219,12 @@ const styles = StyleSheet.create({
   noReviewsText: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#4B5563',
+    color: colors.textSecondary,
     marginTop: 12,
   },
   noReviewsSubtext: {
     fontSize: 14,
-    color: '#9CA3AF',
+    color: colors.textMuted,
     marginTop: 4,
   },
   reviewsList: {
@@ -2236,24 +2237,24 @@ const styles = StyleSheet.create({
     marginBottom: 16,
     paddingBottom: 12,
     borderBottomWidth: 1,
-    borderBottomColor: '#F3F4F6',
+    borderBottomColor: colors.divider,
   },
   recentReviewsTitle: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#1F2937',
+    color: colors.textPrimary,
   },
   reviewsFilter: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 8,
     paddingVertical: 4,
-    backgroundColor: '#F9FAFB',
+    backgroundColor: colors.background,
     borderRadius: 6,
   },
   filterText: {
     fontSize: 12,
-    color: '#6B7280',
+    color: colors.textSecondary,
     marginRight: 4,
   },
   reviewItem: {
@@ -2263,11 +2264,11 @@ const styles = StyleSheet.create({
     marginBottom: 0,
   },
   reviewCard: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
     borderRadius: 16,
     padding: 20,
     borderWidth: 1,
-    borderColor: '#F3F4F6',
+    borderColor: colors.divider,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.05,
@@ -2293,17 +2294,17 @@ const styles = StyleSheet.create({
     width: 48,
     height: 48,
     borderRadius: 24,
-    backgroundColor: '#F97316',
+    backgroundColor: colors.primary,
     justifyContent: 'center',
     alignItems: 'center',
-    shadowColor: '#F97316',
+    shadowColor: colors.primary,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.2,
     shadowRadius: 4,
     elevation: 3,
   },
   reviewAvatarText: {
-    color: '#fff',
+    color: colors.textInverse,
     fontSize: 20,
     fontWeight: '700',
   },
@@ -2319,13 +2320,13 @@ const styles = StyleSheet.create({
   reviewUserName: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#1F2937',
+    color: colors.textPrimary,
     flex: 1,
   },
   reviewRatingBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#FEF3E2',
+    backgroundColor: colors.primaryMuted,
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 12,
@@ -2333,7 +2334,7 @@ const styles = StyleSheet.create({
   reviewRatingBadgeText: {
     fontSize: 12,
     fontWeight: '600',
-    color: '#F97316',
+    color: colors.primary,
     marginLeft: 2,
   },
   reviewMetadata: {
@@ -2342,27 +2343,27 @@ const styles = StyleSheet.create({
   },
   reviewDate: {
     fontSize: 12,
-    color: '#9CA3AF',
+    color: colors.textMuted,
     fontWeight: '500',
   },
   reviewDot: {
     width: 3,
     height: 3,
     borderRadius: 1.5,
-    backgroundColor: '#D1D5DB',
+    backgroundColor: colors.surfaceTertiary,
     marginHorizontal: 8,
   },
   consultationTypeBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#F0F9FF',
+    backgroundColor: colors.infoMuted,
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: 8,
   },
   consultationTypeText: {
     fontSize: 10,
-    color: '#6B7280',
+    color: colors.textSecondary,
     fontWeight: '500',
     marginLeft: 2,
   },
@@ -2370,20 +2371,20 @@ const styles = StyleSheet.create({
     marginBottom: 16,
     paddingHorizontal: 12,
     paddingVertical: 12,
-    backgroundColor: '#F9FAFB',
+    backgroundColor: colors.background,
     borderRadius: 12,
     borderLeftWidth: 3,
-    borderLeftColor: '#F97316',
+    borderLeftColor: colors.primary,
   },
   reviewComment: {
     fontSize: 15,
-    color: '#374151',
+    color: colors.textSecondary,
     lineHeight: 22,
     fontStyle: 'italic',
   },
   reviewNoComment: {
     fontSize: 14,
-    color: '#9CA3AF',
+    color: colors.textMuted,
     fontStyle: 'italic',
     flexDirection: 'row',
     alignItems: 'center',
@@ -2394,7 +2395,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingTop: 12,
     borderTopWidth: 1,
-    borderTopColor: '#F3F4F6',
+    borderTopColor: colors.divider,
   },
   reviewVerified: {
     flexDirection: 'row',
@@ -2402,7 +2403,7 @@ const styles = StyleSheet.create({
   },
   reviewVerifiedText: {
     fontSize: 12,
-    color: '#10B981',
+    color: colors.success,
     fontWeight: '500',
     marginLeft: 4,
   },
@@ -2416,11 +2417,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 6,
-    backgroundColor: '#F9FAFB',
+    backgroundColor: colors.background,
   },
   helpfulText: {
     fontSize: 12,
-    color: '#6B7280',
+    color: colors.textSecondary,
     marginLeft: 4,
   },
   loadMoreButton: {
@@ -2429,11 +2430,11 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingVertical: 16,
     paddingHorizontal: 20,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
     borderRadius: 12,
     marginTop: 16,
     borderWidth: 1,
-    borderColor: '#E5E7EB',
+    borderColor: colors.border,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.05,
@@ -2448,12 +2449,12 @@ const styles = StyleSheet.create({
   loadMoreText: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#F97316',
+    color: colors.primary,
     marginLeft: 8,
   },
   loadMoreSubtext: {
     fontSize: 12,
-    color: '#9CA3AF',
+    color: colors.textMuted,
     fontWeight: '500',
     marginLeft: 12,
   },

@@ -10,6 +10,7 @@ import {
   TextInput,
   Modal
 } from 'react-native';
+import { colors } from '../../theme';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import productAPI from '../../services/productAPI';
@@ -166,7 +167,7 @@ const ProductListScreen = ({ route, navigation }) => {
           style={styles.filterButton}
           onPress={() => setShowFilters(true)}
         >
-          <Ionicons name="options-outline" size={20} color="#F97316" />
+          <Ionicons name="options-outline" size={20} color={colors.primary} />
           <Text style={styles.filterButtonText}>Filters</Text>
         </TouchableOpacity>
       </View>
@@ -177,7 +178,7 @@ const ProductListScreen = ({ route, navigation }) => {
     if (!loadingMore) return null;
     return (
       <View style={styles.footerLoader}>
-        <ActivityIndicator size="small" color="#F97316" />
+        <ActivityIndicator size="small" color={colors.primary} />
       </View>
     );
   };

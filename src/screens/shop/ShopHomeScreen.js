@@ -17,6 +17,7 @@ import productAPI from '../../services/productAPI';
 import CosmicBackground from '../../components/shop/CosmicBackground';
 import AnimatedCard from '../../components/shop/AnimatedCard';
 import MysticBadge from '../../components/shop/MysticBadge';
+import { colors, spacing, radius, shadows } from '../../theme';
 
 const ShopHomeScreen = ({ navigation }) => {
   const [loading, setLoading] = useState(true);
@@ -67,7 +68,7 @@ const ShopHomeScreen = ({ navigation }) => {
         <Image source={{ uri: item.image.url }} style={styles.categoryImage} />
       ) : (
         <View style={[styles.categoryImage, styles.categoryPlaceholder]}>
-          <Ionicons name="planet-outline" size={32} color="#FBBF24" />
+          <Ionicons name="planet-outline" size={32} color={colors.warning} />
         </View>
       )}
       <Text style={styles.categoryName}>{item.name}</Text>
@@ -94,7 +95,7 @@ const ShopHomeScreen = ({ navigation }) => {
       <View style={styles.productInfo}>
         <Text style={styles.productName} numberOfLines={2}>{item.name}</Text>
         <View style={styles.ratingRow}>
-          <Ionicons name="star" size={14} color="#FBBF24" />
+          <Ionicons name="star" size={14} color={colors.warning} />
           <Text style={styles.ratingText}>{item.rating?.toFixed(1) || '0.0'}</Text>
           <Text style={styles.reviewCount}>({item.reviewCount || 0})</Text>
         </View>
@@ -112,7 +113,7 @@ const ShopHomeScreen = ({ navigation }) => {
     return (
       <CosmicBackground>
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#FBBF24" />
+          <ActivityIndicator size="large" color={colors.warning} />
         </View>
       </CosmicBackground>
     );
@@ -131,13 +132,13 @@ const ShopHomeScreen = ({ navigation }) => {
               style={styles.iconButton}
               onPress={() => navigation.navigate('ProductList', { search: true })}
             >
-              <Ionicons name="search-outline" size={24} color="#F3F4F6" />
+              <Ionicons name="search-outline" size={24} color={colors.textPrimary} />
             </TouchableOpacity>
             <TouchableOpacity
               style={styles.iconButton}
               onPress={() => navigation.navigate('Cart')}
             >
-              <Ionicons name="cart-outline" size={24} color="#F3F4F6" />
+              <Ionicons name="cart-outline" size={24} color={colors.textPrimary} />
               {cartCount > 0 && (
                 <View style={styles.cartBadge}>
                   <Text style={styles.cartBadgeText}>{cartCount}</Text>
@@ -150,7 +151,7 @@ const ShopHomeScreen = ({ navigation }) => {
         <ScrollView
           style={styles.content}
           refreshControl={
-            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#FBBF24']} />
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[colors.warning]} />
           }
         >
           {/* Categories Section */}
@@ -219,7 +220,7 @@ const ShopHomeScreen = ({ navigation }) => {
                   <View style={styles.productInfo}>
                     <Text style={styles.productName} numberOfLines={2}>{item.name}</Text>
                     <View style={styles.ratingRow}>
-                      <Ionicons name="star" size={14} color="#FBBF24" />
+                      <Ionicons name="star" size={14} color={colors.warning} />
                       <Text style={styles.ratingText}>{item.rating?.toFixed(1) || '0.0'}</Text>
                       <Text style={styles.reviewCount}>({item.reviewCount || 0})</Text>
                     </View>
@@ -242,14 +243,14 @@ const ShopHomeScreen = ({ navigation }) => {
                 style={styles.actionButton}
                 onPress={() => navigation.navigate('Wishlist')}
               >
-                <Ionicons name="heart-outline" size={24} color="#FBBF24" />
+                <Ionicons name="heart-outline" size={24} color={colors.warning} />
                 <Text style={styles.actionButtonText}>Wishlist</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={styles.actionButton}
                 onPress={() => navigation.navigate('OrderHistory')}
               >
-                <Ionicons name="receipt-outline" size={24} color="#FBBF24" />
+                <Ionicons name="receipt-outline" size={24} color={colors.warning} />
                 <Text style={styles.actionButtonText}>My Orders</Text>
               </TouchableOpacity>
             </View>
@@ -283,11 +284,11 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: 24,
     fontWeight: 'bold',
-    color: '#F3F4F6'
+    color: colors.textPrimary
   },
   headerSubtitle: {
     fontSize: 12,
-    color: '#A5B4FC',
+    color: colors.secondaryLight,
     marginTop: 2
   },
   headerIcons: {
@@ -302,7 +303,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: 4,
     right: 4,
-    backgroundColor: '#EF4444',
+    backgroundColor: colors.error,
     borderRadius: 10,
     minWidth: 18,
     height: 18,
@@ -311,7 +312,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 4
   },
   cartBadgeText: {
-    color: '#FFFFFF',
+    color: colors.textPrimary,
     fontSize: 10,
     fontWeight: 'bold'
   },
@@ -331,12 +332,12 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 20,
     fontWeight: '700',
-    color: '#F3F4F6',
+    color: colors.textPrimary,
     letterSpacing: 0.5
   },
   seeAll: {
     fontSize: 14,
-    color: '#FBBF24',
+    color: colors.warning,
     fontWeight: '500'
   },
   categoriesList: {
@@ -362,7 +363,7 @@ const styles = StyleSheet.create({
   categoryName: {
     marginTop: 8,
     fontSize: 12,
-    color: '#F3F4F6',
+    color: colors.textPrimary,
     textAlign: 'center',
     fontWeight: '500'
   },
@@ -394,7 +395,7 @@ const styles = StyleSheet.create({
   productName: {
     fontSize: 15,
     fontWeight: '600',
-    color: '#FFFFFF',
+    color: colors.textPrimary,
     marginBottom: 4
   },
   ratingRow: {
@@ -404,12 +405,12 @@ const styles = StyleSheet.create({
   },
   ratingText: {
     fontSize: 12,
-    color: '#A5B4FC',
+    color: colors.secondaryLight,
     marginLeft: 4
   },
   reviewCount: {
     fontSize: 12,
-    color: '#94A3B8',
+    color: colors.textMuted,
     marginLeft: 4
   },
   priceRow: {
@@ -420,11 +421,11 @@ const styles = StyleSheet.create({
   price: {
     fontSize: 16,
     fontWeight: 'bold',
-    color: '#FBBF24'
+    color: colors.warning
   },
   comparePrice: {
     fontSize: 12,
-    color: '#94A3B8',
+    color: colors.textMuted,
     textDecorationLine: 'line-through'
   },
   productsGrid: {
@@ -466,7 +467,7 @@ const styles = StyleSheet.create({
   },
   actionButtonText: {
     fontSize: 14,
-    color: '#F3F4F6',
+    color: colors.textPrimary,
     fontWeight: '500'
   }
 });

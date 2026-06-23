@@ -14,6 +14,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 import productAPI from '../../services/productAPI';
 import CosmicBackground from '../../components/shop/CosmicBackground';
+import { colors, spacing, radius, shadows } from '../../theme';
 
 const WishlistScreen = ({ navigation }) => {
   const [loading, setLoading] = useState(true);
@@ -87,7 +88,7 @@ const WishlistScreen = ({ navigation }) => {
               {product.name}
             </Text>
             <View style={styles.ratingRow}>
-              <Ionicons name="star" size={14} color="#FBBF24" />
+              <Ionicons name="star" size={14} color={colors.warning} />
               <Text style={styles.ratingText}>{product.rating?.toFixed(1) || '0.0'}</Text>
               <Text style={styles.reviewCount}>({product.reviewCount || 0})</Text>
             </View>
@@ -110,9 +111,9 @@ const WishlistScreen = ({ navigation }) => {
             disabled={removingItem === product._id}
           >
             {removingItem === product._id ? (
-              <ActivityIndicator size="small" color="#F87171" />
+              <ActivityIndicator size="small" color={colors.error} />
             ) : (
-              <Ionicons name="trash-outline" size={20} color="#F87171" />
+              <Ionicons name="trash-outline" size={20} color={colors.error} />
             )}
           </TouchableOpacity>
           
@@ -121,7 +122,7 @@ const WishlistScreen = ({ navigation }) => {
             onPress={() => addToCart(product)}
             disabled={!product.inStock}
           >
-            <Ionicons name="cart-outline" size={18} color="#FFFFFF" />
+            <Ionicons name="cart-outline" size={18} color={colors.textInverse} />
             <Text style={styles.addToCartText}>Add to Cart</Text>
           </TouchableOpacity>
         </View>
@@ -131,7 +132,7 @@ const WishlistScreen = ({ navigation }) => {
 
   const renderEmpty = () => (
     <View style={styles.emptyContainer}>
-      <Ionicons name="heart-outline" size={80} color="#94A3B8" />
+      <Ionicons name="heart-outline" size={80} color={colors.textMuted} />
       <Text style={styles.emptyText}>Your wishlist is empty</Text>
       <Text style={styles.emptySubtext}>Save products you like to buy them later</Text>
       <TouchableOpacity
@@ -147,7 +148,7 @@ const WishlistScreen = ({ navigation }) => {
     return (
       <CosmicBackground>
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#FBBF24" />
+          <ActivityIndicator size="large" color={colors.warning} />
         </View>
       </CosmicBackground>
     );
@@ -160,11 +161,11 @@ const WishlistScreen = ({ navigation }) => {
       <SafeAreaView style={styles.container} edges={['top']}>
         <View style={styles.header}>
           <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-            <Ionicons name="arrow-back" size={24} color="#F3F4F6" />
+            <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
           </TouchableOpacity>
           <Text style={styles.title}>Wishlist</Text>
           <TouchableOpacity onPress={() => navigation.navigate('Cart')} style={styles.cartButton}>
-            <Ionicons name="cart-outline" size={24} color="#F3F4F6" />
+            <Ionicons name="cart-outline" size={24} color={colors.textPrimary} />
           </TouchableOpacity>
         </View>
 
@@ -206,7 +207,7 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#F3F4F6'
+    color: colors.textPrimary
   },
   cartButton: {
     padding: 4
@@ -243,7 +244,7 @@ const styles = StyleSheet.create({
   productName: {
     fontSize: 14,
     fontWeight: '500',
-    color: '#F3F4F6',
+    color: colors.textPrimary,
     marginBottom: 4
   },
   ratingRow: {
@@ -253,12 +254,12 @@ const styles = StyleSheet.create({
   },
   ratingText: {
     fontSize: 12,
-    color: '#A5B4FC',
+    color: colors.secondaryLight,
     marginLeft: 4
   },
   reviewCount: {
     fontSize: 12,
-    color: '#94A3B8',
+    color: colors.textMuted,
     marginLeft: 4
   },
   priceRow: {
@@ -269,16 +270,16 @@ const styles = StyleSheet.create({
   price: {
     fontSize: 16,
     fontWeight: 'bold',
-    color: '#FBBF24'
+    color: colors.warning
   },
   comparePrice: {
     fontSize: 12,
-    color: '#94A3B8',
+    color: colors.textMuted,
     textDecorationLine: 'line-through'
   },
   outOfStock: {
     fontSize: 12,
-    color: '#F87171',
+    color: colors.error,
     fontWeight: '500',
     marginTop: 4
   },
@@ -305,12 +306,12 @@ const styles = StyleSheet.create({
     gap: 6,
     paddingVertical: 12,
     borderRadius: 8,
-    backgroundColor: '#F97316'
+    backgroundColor: colors.primary
   },
   addToCartText: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#FFFFFF'
+    color: colors.textPrimary
   },
   disabledButton: {
     opacity: 0.5
@@ -324,12 +325,12 @@ const styles = StyleSheet.create({
   emptyText: {
     fontSize: 20,
     fontWeight: '600',
-    color: '#F3F4F6',
+    color: colors.textPrimary,
     marginTop: 16
   },
   emptySubtext: {
     fontSize: 14,
-    color: '#94A3B8',
+    color: colors.textMuted,
     marginTop: 8,
     textAlign: 'center',
     marginBottom: 24
@@ -337,13 +338,13 @@ const styles = StyleSheet.create({
   shopButton: {
     paddingHorizontal: 24,
     paddingVertical: 12,
-    backgroundColor: '#F97316',
+    backgroundColor: colors.primary,
     borderRadius: 12
   },
   shopButtonText: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#FFFFFF'
+    color: colors.textPrimary
   }
 });
 

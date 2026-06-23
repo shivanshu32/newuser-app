@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
+import { colors, spacing, radius, shadows } from '../theme';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -139,7 +140,7 @@ const RejoinChatBottomSheet = ({
             </View>
             
             <TouchableOpacity onPress={onClose} style={styles.closeButton}>
-              <Ionicons name="close" size={24} color="#6B7280" />
+              <Ionicons name="close" size={24} color={colors.textSecondary} />
             </TouchableOpacity>
           </View>
 
@@ -162,7 +163,7 @@ const RejoinChatBottomSheet = ({
             {/* Timer for Free Chat */}
             {sessionData.isFreeChat && remainingTime !== null && (
               <View style={styles.timerContainer}>
-                <MaterialIcons name="timer" size={20} color="#F59E0B" />
+                <MaterialIcons name="timer" size={20} color={colors.warning} />
                 <Text style={styles.timerText}>
                   Time remaining: {formatTime(remainingTime)}
                 </Text>
@@ -195,10 +196,10 @@ const RejoinChatBottomSheet = ({
               onPress={handleRejoin}
             >
               <LinearGradient
-                colors={['#059669', '#047857']}
+                colors={[colors.success, '#059669']}
                 style={styles.rejoinGradient}
               >
-                <Ionicons name="arrow-forward" size={20} color="#fff" />
+                <Ionicons name="arrow-forward" size={20} color={colors.textInverse} />
                 <Text style={styles.rejoinText}>Rejoin Chat</Text>
               </LinearGradient>
             </TouchableOpacity>
@@ -219,24 +220,17 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   bottomSheet: {
-    backgroundColor: '#fff',
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    paddingHorizontal: 20,
-    paddingBottom: 34, // Safe area padding
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: -4,
-    },
-    shadowOpacity: 0.25,
-    shadowRadius: 12,
-    elevation: 12,
+    backgroundColor: colors.surface,
+    borderTopLeftRadius: radius.xxl,
+    borderTopRightRadius: radius.xxl,
+    paddingHorizontal: spacing.xl,
+    paddingBottom: 34,
+    ...shadows.floating,
   },
   handleBar: {
     width: 40,
     height: 4,
-    backgroundColor: '#D1D5DB',
+    backgroundColor: colors.surfaceTertiary,
     borderRadius: 2,
     alignSelf: 'center',
     marginTop: 12,
@@ -257,7 +251,7 @@ const styles = StyleSheet.create({
     width: 48,
     height: 48,
     borderRadius: 24,
-    backgroundColor: '#ECFDF5',
+    backgroundColor: colors.successMuted,
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 12,
@@ -265,33 +259,33 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 18,
     fontWeight: '700',
-    color: '#1F2937',
+    color: colors.textPrimary,
     marginBottom: 2,
   },
   subtitle: {
     fontSize: 14,
-    color: '#6B7280',
+    color: colors.textSecondary,
     fontWeight: '500',
   },
   closeButton: {
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: '#F3F4F6',
+    backgroundColor: colors.surfaceSecondary,
     alignItems: 'center',
     justifyContent: 'center',
   },
   sessionInfo: {
-    backgroundColor: '#F8FAFC',
-    borderRadius: 16,
-    padding: 20,
-    marginBottom: 24,
+    backgroundColor: colors.background,
+    borderRadius: radius.lg,
+    padding: spacing.xl,
+    marginBottom: spacing.xl,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: colors.border,
   },
   messageText: {
     fontSize: 16,
-    color: '#374151',
+    color: colors.textSecondary,
     fontWeight: '600',
     textAlign: 'center',
     marginBottom: 16,
@@ -307,29 +301,29 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: '#ECFDF5',
+    backgroundColor: colors.successMuted,
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 8,
   },
   astrologerName: {
     fontSize: 16,
-    color: '#059669',
+    color: colors.success,
     fontWeight: '600',
   },
   timerContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#FEF3C7',
-    borderRadius: 12,
+    backgroundColor: colors.warningMuted,
+    borderRadius: radius.md,
     paddingVertical: 8,
     paddingHorizontal: 12,
     marginBottom: 12,
   },
   timerText: {
     fontSize: 14,
-    color: '#92400E',
+    color: colors.warning,
     fontWeight: '600',
     marginLeft: 6,
   },
@@ -346,7 +340,7 @@ const styles = StyleSheet.create({
   },
   statusText: {
     fontSize: 14,
-    color: '#6B7280',
+    color: colors.textSecondary,
     fontWeight: '500',
   },
   actions: {
@@ -357,21 +351,21 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingVertical: 16,
     paddingHorizontal: 20,
-    borderRadius: 12,
+    borderRadius: radius.md,
     borderWidth: 1,
-    borderColor: '#D1D5DB',
-    backgroundColor: '#F9FAFB',
+    borderColor: colors.border,
+    backgroundColor: colors.background,
     alignItems: 'center',
     justifyContent: 'center',
   },
   dismissText: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#6B7280',
+    color: colors.textSecondary,
   },
   rejoinButton: {
     flex: 2,
-    borderRadius: 12,
+    borderRadius: radius.md,
     overflow: 'hidden',
   },
   rejoinGradient: {
@@ -385,7 +379,7 @@ const styles = StyleSheet.create({
   rejoinText: {
     fontSize: 16,
     fontWeight: '700',
-    color: '#fff',
+    color: colors.textInverse,
   },
 });
 

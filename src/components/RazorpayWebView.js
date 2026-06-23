@@ -9,6 +9,7 @@ import {
   SafeAreaView,
   StatusBar,
 } from 'react-native';
+import { colors } from '../theme';
 import { WebView } from 'react-native-webview';
 import { Ionicons } from '@expo/vector-icons';
 
@@ -60,7 +61,7 @@ const RazorpayWebView = ({
             .logo {
                 font-size: 24px;
                 font-weight: bold;
-                color: #F97316;
+                color: colors.primary;
                 margin-bottom: 20px;
             }
             .amount {
@@ -75,7 +76,7 @@ const RazorpayWebView = ({
                 font-size: 16px;
             }
             .pay-button {
-                background: #F97316;
+                background: colors.primary;
                 color: white;
                 border: none;
                 padding: 15px 30px;
@@ -101,8 +102,8 @@ const RazorpayWebView = ({
                 display: block;
             }
             .spinner {
-                border: 3px solid #f3f3f3;
-                border-top: 3px solid #F97316;
+                border: 3px solid colors.surfaceSecondary;
+                border-top: 3px solid colors.primary;
                 border-radius: 50%;
                 width: 30px;
                 height: 30px;
@@ -182,7 +183,7 @@ const RazorpayWebView = ({
                             contact: '${userDetails?.phone || ''}'
                         },
                         theme: {
-                            color: '#F97316'
+                            color: colors.primary
                         },
                         handler: function(response) {
                             console.log('Payment Success:', response);
@@ -417,17 +418,17 @@ const RazorpayWebView = ({
   if (error) {
     return (
       <SafeAreaView style={styles.container}>
-        <StatusBar barStyle="light-content" backgroundColor="#F97316" />
+        <StatusBar barStyle="light-content" backgroundColor={colors.primary} />
         <View style={styles.header}>
           <TouchableOpacity onPress={onClose} style={styles.closeButton}>
-            <Ionicons name="close" size={24} color="#fff" />
+            <Ionicons name="close" size={24} color={colors.textInverse} />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>Payment</Text>
           <View style={styles.placeholder} />
         </View>
         
         <View style={styles.errorContainer}>
-          <Ionicons name="alert-circle-outline" size={64} color="#F97316" />
+          <Ionicons name="alert-circle-outline" size={64} color={colors.primary} />
           <Text style={styles.errorTitle}>Payment Error</Text>
           <Text style={styles.errorMessage}>{error}</Text>
           <TouchableOpacity style={styles.retryButton} onPress={handleRetry}>
@@ -440,11 +441,11 @@ const RazorpayWebView = ({
 
   return (
     <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor="#F97316" />
+      <StatusBar barStyle="light-content" backgroundColor={colors.primary} />
       
       <View style={styles.header}>
         <TouchableOpacity onPress={onClose} style={styles.closeButton}>
-          <Ionicons name="close" size={24} color="#fff" />
+          <Ionicons name="close" size={24} color={colors.textInverse} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Payment</Text>
         <View style={styles.placeholder} />
@@ -452,7 +453,7 @@ const RazorpayWebView = ({
 
       {loading && (
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#F97316" />
+          <ActivityIndicator size="large" color={colors.primary} />
           <Text style={styles.loadingText}>Loading payment page...</Text>
         </View>
       )}
@@ -503,7 +504,7 @@ const RazorpayWebView = ({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F97316',
+    backgroundColor: colors.primary,
   },
   header: {
     flexDirection: 'row',
@@ -511,7 +512,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: 16,
     paddingVertical: 12,
-    backgroundColor: '#F97316',
+    backgroundColor: colors.primary,
   },
   closeButton: {
     padding: 8,
@@ -568,7 +569,7 @@ const styles = StyleSheet.create({
     marginBottom: 32,
   },
   retryButton: {
-    backgroundColor: '#F97316',
+    backgroundColor: colors.primary,
     paddingHorizontal: 32,
     paddingVertical: 12,
     borderRadius: 8,

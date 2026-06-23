@@ -21,6 +21,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../context/AuthContext';
 import { bookingsAPI, freeChatAPI } from '../../services/api';
 import ChatConnectionManager from '../../utils/ChatConnectionManager';
+import { colors } from '../../theme';
 
 const EnhancedChatScreen = ({ route, navigation }) => {
   // Extract and validate bookingId from route params
@@ -777,13 +778,13 @@ const EnhancedChatScreen = ({ route, navigation }) => {
   // Get connection status color
   const getConnectionStatusColor = () => {
     switch (connectionStatus) {
-      case 'connected': return '#4CAF50';
+      case 'connected': return colors.success;
       case 'connecting':
-      case 'reconnecting': return '#FF9800';
+      case 'reconnecting': return colors.warning;
       case 'error':
-      case 'failed': return '#F44336';
-      case 'queued': return '#2196F3';
-      default: return '#9E9E9E';
+      case 'failed': return colors.error;
+      case 'queued': return colors.info;
+      default: return colors.textSecondary;
     }
   };
 
@@ -845,9 +846,9 @@ const EnhancedChatScreen = ({ route, navigation }) => {
             </Text>
             {isUser && (
               <View style={styles.messageStatus}>
-                {item.status === 'sending' && <ActivityIndicator size="small" color="#666" />}
-                {item.status === 'sent' && <Ionicons name="checkmark" size={12} color="#666" />}
-                {item.status === 'read' && <Ionicons name="checkmark-done" size={12} color="#4CAF50" />}
+                {item.status === 'sending' && <ActivityIndicator size="small" color={colors.textMuted} />}
+                {item.status === 'sent' && <Ionicons name="checkmark" size={12} color={colors.textMuted} />}
+                {item.status === 'read' && <Ionicons name="checkmark-done" size={12} color={colors.success} />}
               </View>
             )}
           </View>
@@ -864,7 +865,7 @@ const EnhancedChatScreen = ({ route, navigation }) => {
       <View style={[styles.messageContainer, styles.astrologerMessage]}>
         <View style={[styles.messageBubble, styles.astrologerBubble, styles.typingBubble]}>
           <Text style={styles.typingText}>Astrologer is typing...</Text>
-          <ActivityIndicator size="small" color="#666" style={styles.typingIndicator} />
+          <ActivityIndicator size="small" color={colors.textMuted} style={styles.typingIndicator} />
         </View>
       </View>
     );
@@ -880,7 +881,7 @@ const EnhancedChatScreen = ({ route, navigation }) => {
           {getConnectionStatusText()}
         </Text>
         {(connectionStatus === 'connecting' || connectionStatus === 'reconnecting') && (
-          <ActivityIndicator size="small" color="#FFF" style={styles.bannerIndicator} />
+          <ActivityIndicator size="small" color={colors.textInverse} style={styles.bannerIndicator} />
         )}
       </View>
     );
@@ -900,7 +901,7 @@ const EnhancedChatScreen = ({ route, navigation }) => {
     console.log('🎨 [UI-DEBUG] Showing loading screen');
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#6B46C1" />
+        <ActivityIndicator size="large" color={colors.primary} />
         <Text style={styles.loadingText}>Loading chat session...</Text>
       </View>
     );
@@ -914,7 +915,7 @@ const EnhancedChatScreen = ({ route, navigation }) => {
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
       >
-        <StatusBar barStyle="light-content" backgroundColor="#6B46C1" />
+        <StatusBar barStyle="light-content" backgroundColor={colors.background} />
       
       {/* Header */}
       <View style={styles.header}>
@@ -923,7 +924,7 @@ const EnhancedChatScreen = ({ route, navigation }) => {
           style={styles.backButton} 
           onPress={() => navigation.goBack()}
         >
-          <Ionicons name="arrow-back" size={24} color="#FFF" />
+          <Ionicons name="arrow-back" size={24} color={colors.textInverse} />
         </TouchableOpacity>
         
         <View style={styles.headerInfo}>
@@ -1016,7 +1017,7 @@ const EnhancedChatScreen = ({ route, navigation }) => {
           value={messageText}
           onChangeText={handleTypingInput}
           placeholder="Type your message..."
-          placeholderTextColor="#999"
+          placeholderTextColor={colors.textMuted}
           multiline
           maxLength={500}
         />
@@ -1025,7 +1026,7 @@ const EnhancedChatScreen = ({ route, navigation }) => {
           onPress={handleSendMessage}
           disabled={!messageText.trim()}
         >
-          <Ionicons name="send" size={20} color="#FFF" />
+          <Ionicons name="send" size={20} color={colors.textInverse} />
         </TouchableOpacity>
       </View>
     </KeyboardAvoidingView>
@@ -1036,25 +1037,25 @@ const EnhancedChatScreen = ({ route, navigation }) => {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: '#6B46C1',
+    backgroundColor: colors.primary,
   },
   container: {
     flex: 1,
-    backgroundColor: '#f8f8f8',
+    backgroundColor: colors.background,
   },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#f8f8f8',
+    backgroundColor: colors.background,
   },
   loadingText: {
     marginTop: 16,
     fontSize: 16,
-    color: '#666',
+    color: colors.textSecondary,
   },
   header: {
-    backgroundColor: '#6B46C1',
+    backgroundColor: colors.primary,
     flexDirection: 'row',
     alignItems: 'center',
     paddingTop: 44,
@@ -1081,7 +1082,7 @@ const styles = StyleSheet.create({
   astrologerName: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: '#FFF',
+    color: colors.textInverse,
   },
   statusContainer: {
     flexDirection: 'row',
@@ -1096,7 +1097,7 @@ const styles = StyleSheet.create({
   },
   statusText: {
     fontSize: 12,
-    color: '#E0E0E0',
+    color: colors.textSecondary,
   },
   headerRight: {
     flexDirection: 'row',
@@ -1113,7 +1114,7 @@ const styles = StyleSheet.create({
   timerText: {
     fontSize: 14,
     fontWeight: 'bold',
-    color: '#FFF',
+    color: colors.textInverse,
   },
   timerLabel: {
     fontSize: 10,
@@ -1129,16 +1130,16 @@ const styles = StyleSheet.create({
   billingText: {
     fontSize: 12,
     fontWeight: '600',
-    color: '#FFF',
+    color: colors.textInverse,
   },
   endButton: {
-    backgroundColor: '#EF4444',
+    backgroundColor: colors.error,
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 15,
   },
   endButtonText: {
-    color: '#FFFFFF',
+    color: colors.textInverse,
     fontSize: 14,
     fontWeight: 'bold',
   },
@@ -1147,24 +1148,24 @@ const styles = StyleSheet.create({
     alignItems: 'flex-end',
     paddingHorizontal: 16,
     paddingVertical: 12,
-    backgroundColor: '#FFF',
+    backgroundColor: colors.surface,
     borderTopWidth: 1,
-    borderTopColor: '#E0E0E0',
+    borderTopColor: colors.border,
   },
   messageInput: {
     flex: 1,
     borderWidth: 1,
-    borderColor: '#E0E0E0',
+    borderColor: colors.border,
     borderRadius: 20,
     paddingHorizontal: 16,
     paddingVertical: 12,
     marginRight: 12,
     maxHeight: 100,
     fontSize: 16,
-    color: '#333',
+    color: colors.textPrimary,
   },
   sendButton: {
-    backgroundColor: '#6B46C1',
+    backgroundColor: colors.primary,
     width: 44,
     height: 44,
     borderRadius: 22,
@@ -1179,7 +1180,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
   },
   connectionBannerText: {
-    color: '#FFF',
+    color: colors.textInverse,
     fontSize: 14,
     fontWeight: '500',
   },
@@ -1212,11 +1213,11 @@ const styles = StyleSheet.create({
     borderRadius: 20,
   },
   userBubble: {
-    backgroundColor: '#6B46C1',
+    backgroundColor: colors.primary,
     borderBottomRightRadius: 4,
   },
   astrologerBubble: {
-    backgroundColor: '#FFF',
+    backgroundColor: colors.surface,
     borderBottomLeftRadius: 4,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
@@ -1233,10 +1234,10 @@ const styles = StyleSheet.create({
     lineHeight: 20,
   },
   userMessageText: {
-    color: '#FFF',
+    color: colors.textInverse,
   },
   astrologerMessageText: {
-    color: '#333',
+    color: colors.textPrimary,
   },
   messageFooter: {
     flexDirection: 'row',
@@ -1251,14 +1252,14 @@ const styles = StyleSheet.create({
     color: 'rgba(255,255,255,0.7)',
   },
   astrologerMessageTime: {
-    color: '#999',
+    color: colors.textMuted,
   },
   messageStatus: {
     marginLeft: 8,
   },
   typingText: {
     fontSize: 14,
-    color: '#666',
+    color: colors.textSecondary,
     fontStyle: 'italic',
   },
   typingIndicator: {
@@ -1269,14 +1270,14 @@ const styles = StyleSheet.create({
     alignItems: 'flex-end',
     paddingHorizontal: 16,
     paddingVertical: 12,
-    backgroundColor: '#FFF',
+    backgroundColor: colors.surface,
     borderTopWidth: 1,
-    borderTopColor: '#E0E0E0',
+    borderTopColor: colors.border,
   },
   textInput: {
     flex: 1,
     borderWidth: 1,
-    borderColor: '#E0E0E0',
+    borderColor: colors.border,
     borderRadius: 20,
     paddingHorizontal: 16,
     paddingVertical: 10,
@@ -1285,7 +1286,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
   },
   sendButton: {
-    backgroundColor: '#6B46C1',
+    backgroundColor: colors.primary,
     width: 40,
     height: 40,
     borderRadius: 20,

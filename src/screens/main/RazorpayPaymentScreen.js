@@ -9,6 +9,7 @@ import {
   Text,
   TouchableOpacity
 } from 'react-native';
+import { colors } from '../../theme';
 import { WebView } from 'react-native-webview';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAuth } from '../../context/AuthContext';
@@ -655,7 +656,7 @@ const RazorpayPaymentScreen = ({ route, navigation }) => {
             padding: 20px; 
             padding-bottom: max(20px, env(safe-area-inset-bottom));
             text-align: center; 
-            background: #f8f9fa;
+            background: #111111;
             margin: 0;
             min-height: 100vh;
             box-sizing: border-box;
@@ -670,31 +671,31 @@ const RazorpayPaymentScreen = ({ route, navigation }) => {
             box-shadow: 0 2px 10px rgba(0,0,0,0.1);
         }
         .logo {
-            color: #F97316;
+            color: #C8A46A;
             font-size: 24px;
             font-weight: bold;
             margin-bottom: 20px;
         }
         .payment-info { 
-            background: #f8f9fa; 
+            background: #111111; 
             padding: 20px; 
             border-radius: 8px; 
             margin: 20px 0;
-            border-left: 4px solid #F97316;
+            border-left: 4px solid #C8A46A;
         }
         .amount {
             font-size: 28px;
             font-weight: bold;
-            color: #F97316;
+            color: #C8A46A;
             margin: 10px 0;
         }
         .order-id {
             font-size: 12px;
-            color: #666;
+            color: #8A8A8A;
             margin-bottom: 20px;
         }
         .btn { 
-            background: #F97316; 
+            background: #C8A46A; 
             color: white; 
             padding: 16px 32px; 
             border: none; 
@@ -706,7 +707,7 @@ const RazorpayPaymentScreen = ({ route, navigation }) => {
             transition: background 0.3s;
         }
         .btn:hover {
-            background: #e8650e;
+            background: #A68B5B;
         }
         .loading {
             display: flex;
@@ -718,8 +719,8 @@ const RazorpayPaymentScreen = ({ route, navigation }) => {
         .spinner {
             width: 20px;
             height: 20px;
-            border: 2px solid #f3f3f3;
-            border-top: 2px solid #F97316;
+            border: 2px solid #2A2A2A;
+            border-top: 2px solid #C8A46A;
             border-radius: 50%;
             animation: spin 1s linear infinite;
         }
@@ -793,7 +794,7 @@ const RazorpayPaymentScreen = ({ route, navigation }) => {
                 name: 'JyotishCall',
                 description: 'Wallet Top-up',
                 order_id: '${order.id || order.orderId}',
-                theme: { color: '#F97316' },
+                theme: { color: '#C8A46A' },
                 prefill: {
                     name: '${safeUserName}',
                     email: '${safeUserEmail}',
@@ -898,7 +899,7 @@ const RazorpayPaymentScreen = ({ route, navigation }) => {
       
       {loading && (
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#F97316" />
+          <ActivityIndicator size="large" color={colors.primary} />
           <Text style={styles.loadingText}>Loading payment page...</Text>
         </View>
       )}
@@ -946,7 +947,7 @@ const RazorpayPaymentScreen = ({ route, navigation }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#fff',
+    backgroundColor: colors.background,
   },
   webview: {
     flex: 1,
@@ -965,17 +966,17 @@ const styles = StyleSheet.create({
   loadingText: {
     marginTop: 10,
     fontSize: 16,
-    color: '#666',
+    color: colors.textSecondary,
   },
   timeoutHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    backgroundColor: '#FFF3CD',
+    backgroundColor: colors.warningMuted,
     paddingHorizontal: 16,
     paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: '#FFEAA7',
+    borderBottomColor: colors.warning,
   },
   timeoutInfo: {
     flexDirection: 'row',
@@ -984,23 +985,23 @@ const styles = StyleSheet.create({
   },
   timeoutText: {
     fontSize: 14,
-    color: '#856404',
+    color: colors.warning,
     fontWeight: '500',
   },
   timeoutTime: {
     fontSize: 16,
-    color: '#DC3545',
+    color: colors.error,
     fontWeight: 'bold',
     fontFamily: 'monospace',
   },
   cancelButton: {
-    backgroundColor: '#DC3545',
+    backgroundColor: colors.error,
     paddingHorizontal: 16,
     paddingVertical: 8,
     borderRadius: 6,
   },
   cancelButtonText: {
-    color: '#FFFFFF',
+    color: colors.textInverse,
     fontSize: 14,
     fontWeight: '600',
   },

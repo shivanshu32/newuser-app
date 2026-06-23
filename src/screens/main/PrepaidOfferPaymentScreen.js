@@ -9,6 +9,7 @@ import {
   ActivityIndicator,
   Image
 } from 'react-native';
+import { colors } from '../../theme';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useNavigation, useRoute } from '@react-navigation/native';
@@ -138,7 +139,7 @@ const PrepaidOfferPaymentScreen = () => {
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#FF6B35" />
+          <ActivityIndicator size="large" color="colors.primary" />
           <Text style={styles.loadingText}>Loading offer details...</Text>
         </View>
       </SafeAreaView>
@@ -160,7 +161,7 @@ const PrepaidOfferPaymentScreen = () => {
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()}>
-          <MaterialIcons name="arrow-back" size={24} color="#333" />
+          <MaterialIcons name="arrow-back" size={24} color="colors.textPrimary" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Payment Summary</Text>
         <View style={{ width: 24 }} />
@@ -184,7 +185,7 @@ const PrepaidOfferPaymentScreen = () => {
             )}
             {offer.astrologer?.averageRating && (
               <View style={styles.ratingContainer}>
-                <MaterialIcons name="star" size={16} color="#FFD700" />
+                <MaterialIcons name="star" size={16} color="colors.warning" />
                 <Text style={styles.rating}>{offer.astrologer.averageRating}</Text>
               </View>
             )}
@@ -194,21 +195,21 @@ const PrepaidOfferPaymentScreen = () => {
         {/* Offer Details */}
         <View style={styles.offerCard}>
           <View style={styles.offerHeader}>
-            <MaterialIcons name="local-fire-department" size={24} color="#FF6B35" />
+            <MaterialIcons name="local-fire-department" size={24} color="colors.primary" />
             <Text style={styles.offerTitle}>Special Prepaid Chat Offer</Text>
           </View>
           
           <View style={styles.offerDetails}>
             <View style={styles.detailRow}>
-              <MaterialIcons name="schedule" size={20} color="#666" />
+              <MaterialIcons name="schedule" size={20} color="colors.textSecondary" />
               <Text style={styles.detailText}>{offer.durationMinutes} minutes chat</Text>
             </View>
             <View style={styles.detailRow}>
-              <MaterialIcons name="person" size={20} color="#666" />
+              <MaterialIcons name="person" size={20} color="colors.textSecondary" />
               <Text style={styles.detailText}>Same astrologer</Text>
             </View>
             <View style={styles.detailRow}>
-              <MaterialIcons name="flash-on" size={20} color="#666" />
+              <MaterialIcons name="flash-on" size={20} color="colors.textSecondary" />
               <Text style={styles.detailText}>Instant start available</Text>
             </View>
           </View>
@@ -244,7 +245,7 @@ const PrepaidOfferPaymentScreen = () => {
         {/* Payment Method */}
         <View style={styles.paymentMethodCard}>
           <View style={styles.paymentMethodHeader}>
-            <MaterialIcons name="payment" size={24} color="#4CAF50" />
+            <MaterialIcons name="payment" size={24} color="colors.success" />
             <Text style={styles.paymentMethodTitle}>Payment Method</Text>
           </View>
           <View style={styles.paymentMethodContent}>
@@ -284,7 +285,7 @@ const PrepaidOfferPaymentScreen = () => {
           disabled={paying}
         >
           {paying ? (
-            <ActivityIndicator color="#FFFFFF" />
+            <ActivityIndicator color="colors.surface" />
           ) : (
             <Text style={styles.payButtonText}>
               Pay ₹{offer.totalAmount} Now
@@ -299,7 +300,7 @@ const PrepaidOfferPaymentScreen = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F8F9FA',
+    backgroundColor: colors.background,
   },
   header: {
     flexDirection: 'row',
@@ -307,14 +308,14 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: 20,
     paddingVertical: 15,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
     borderBottomWidth: 1,
-    borderBottomColor: '#E0E0E0',
+    borderBottomColor: colors.border,
   },
   headerTitle: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#333',
+    color: colors.textPrimary,
   },
   content: {
     flex: 1,
@@ -328,7 +329,7 @@ const styles = StyleSheet.create({
   loadingText: {
     marginTop: 10,
     fontSize: 16,
-    color: '#666',
+    color: colors.textSecondary,
   },
   errorContainer: {
     flex: 1,
@@ -337,10 +338,10 @@ const styles = StyleSheet.create({
   },
   errorText: {
     fontSize: 16,
-    color: '#F44336',
+    color: colors.error,
   },
   astrologerCard: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
     borderRadius: 12,
     padding: 20,
     marginBottom: 15,
@@ -364,12 +365,12 @@ const styles = StyleSheet.create({
   astrologerName: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#333',
+    color: colors.textPrimary,
     marginBottom: 5,
   },
   specializations: {
     fontSize: 14,
-    color: '#666',
+    color: colors.textSecondary,
     marginBottom: 5,
   },
   ratingContainer: {
@@ -378,16 +379,16 @@ const styles = StyleSheet.create({
   },
   rating: {
     fontSize: 14,
-    color: '#666',
+    color: colors.textSecondary,
     marginLeft: 4,
   },
   offerCard: {
-    backgroundColor: '#FFF8F0',
+    backgroundColor: colors.primaryMuted,
     borderRadius: 12,
     padding: 20,
     marginBottom: 15,
     borderWidth: 1,
-    borderColor: '#FFE4CC',
+    borderColor: colors.primaryMuted,
   },
   offerHeader: {
     flexDirection: 'row',
@@ -397,7 +398,7 @@ const styles = StyleSheet.create({
   offerTitle: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#FF6B35',
+    color: colors.primary,
     marginLeft: 8,
   },
   offerDetails: {
@@ -409,11 +410,11 @@ const styles = StyleSheet.create({
   },
   detailText: {
     fontSize: 14,
-    color: '#333',
+    color: colors.textPrimary,
     marginLeft: 10,
   },
   paymentCard: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
     borderRadius: 12,
     padding: 20,
     marginBottom: 15,
@@ -426,7 +427,7 @@ const styles = StyleSheet.create({
   paymentTitle: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#333',
+    color: colors.textPrimary,
     marginBottom: 15,
   },
   breakdownRow: {
@@ -437,16 +438,16 @@ const styles = StyleSheet.create({
   },
   breakdownLabel: {
     fontSize: 14,
-    color: '#666',
+    color: colors.textSecondary,
   },
   breakdownValue: {
     fontSize: 14,
-    color: '#333',
+    color: colors.textPrimary,
     fontWeight: '500',
   },
   divider: {
     height: 1,
-    backgroundColor: '#E0E0E0',
+    backgroundColor: colors.border,
     marginVertical: 10,
   },
   totalRow: {
@@ -458,15 +459,15 @@ const styles = StyleSheet.create({
   totalLabel: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#333',
+    color: colors.textPrimary,
   },
   totalValue: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: '#FF6B35',
+    color: colors.primary,
   },
   paymentMethodCard: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
     borderRadius: 12,
     padding: 20,
     marginBottom: 15,
@@ -484,11 +485,11 @@ const styles = StyleSheet.create({
   paymentMethodTitle: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#333',
+    color: colors.textPrimary,
     marginLeft: 8,
   },
   paymentMethodContent: {
-    backgroundColor: '#F8F9FA',
+    backgroundColor: colors.background,
     borderRadius: 8,
     padding: 15,
   },
@@ -498,42 +499,42 @@ const styles = StyleSheet.create({
   razorpayText: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#4CAF50',
+    color: colors.success,
     marginBottom: 10,
   },
   paymentOptions: {
     fontSize: 12,
-    color: '#666',
+    color: colors.textSecondary,
     textAlign: 'center',
     lineHeight: 18,
   },
   termsCard: {
-    backgroundColor: '#F0F8FF',
+    backgroundColor: 'colors.infoMuted',
     borderRadius: 12,
     padding: 15,
     marginBottom: 20,
     borderWidth: 1,
-    borderColor: '#E3F2FD',
+    borderColor: colors.info,
   },
   termsTitle: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#1976D2',
+    color: colors.info,
     marginBottom: 8,
   },
   termsText: {
     fontSize: 12,
-    color: '#666',
+    color: colors.textSecondary,
     lineHeight: 18,
   },
   footer: {
     padding: 20,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
     borderTopWidth: 1,
-    borderTopColor: '#E0E0E0',
+    borderTopColor: colors.border,
   },
   payButton: {
-    backgroundColor: '#FF6B35',
+    backgroundColor: colors.primary,
     borderRadius: 12,
     paddingVertical: 15,
     alignItems: 'center',
@@ -542,10 +543,10 @@ const styles = StyleSheet.create({
   payButtonText: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#FFFFFF',
+    color: colors.surface,
   },
   disabledButton: {
-    backgroundColor: '#CCC',
+    backgroundColor: colors.border,
   },
 });
 

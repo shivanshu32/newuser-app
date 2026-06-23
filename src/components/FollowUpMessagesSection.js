@@ -10,6 +10,7 @@ import {
   ScrollView,
   Image,
 } from 'react-native';
+import { colors } from '../theme';
 import { Ionicons } from '@expo/vector-icons';
 import { followUpMessagesAPI } from '../services/api';
 
@@ -113,7 +114,7 @@ const FollowUpMessagesSection = ({ navigation }) => {
                 {item.astrologer?.name || 'Astrologer'}
               </Text>
               <View style={styles.remedyBadge}>
-                <Ionicons name="medical" size={10} color="#fff" />
+                <Ionicons name="medical" size={10} color={colors.textInverse} />
                 <Text style={styles.remedyBadgeText}>REMEDY</Text>
               </View>
             </View>
@@ -127,7 +128,7 @@ const FollowUpMessagesSection = ({ navigation }) => {
         
         <View style={styles.tapToReadContainer}>
           <Text style={styles.tapToRead}>Tap to read full message</Text>
-          <Ionicons name="chevron-forward" size={14} color="#4CAF50" />
+          <Ionicons name="chevron-forward" size={14} color={colors.success} />
         </View>
       </TouchableOpacity>
     );
@@ -143,7 +144,7 @@ const FollowUpMessagesSection = ({ navigation }) => {
       {/* Section Header */}
       <View style={styles.sectionHeader}>
         <View style={styles.sectionTitleContainer}>
-          <Ionicons name="medical" size={20} color="#4CAF50" />
+          <Ionicons name="medical" size={20} color={colors.success} />
           <Text style={styles.sectionTitle}>Remedies from Astrologers</Text>
           {unreadCount > 0 && (
             <View style={styles.unreadBadge}>
@@ -156,7 +157,7 @@ const FollowUpMessagesSection = ({ navigation }) => {
       {/* Loading State */}
       {loading ? (
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="small" color="#4CAF50" />
+          <ActivityIndicator size="small" color={colors.success} />
         </View>
       ) : (
         <FlatList
@@ -200,13 +201,13 @@ const FollowUpMessagesSection = ({ navigation }) => {
                 style={styles.closeButton}
                 onPress={handleCloseMessage}
               >
-                <Ionicons name="close" size={24} color="#666" />
+                <Ionicons name="close" size={24} color={colors.textMuted} />
               </TouchableOpacity>
             </View>
 
             {/* Remedy Badge */}
             <View style={styles.modalRemedyBadge}>
-              <Ionicons name="medical" size={14} color="#fff" />
+              <Ionicons name="medical" size={14} color={colors.textInverse} />
               <Text style={styles.modalRemedyBadgeText}>REMEDY / FOLLOW-UP MESSAGE</Text>
             </View>
 
@@ -225,7 +226,7 @@ const FollowUpMessagesSection = ({ navigation }) => {
               style={styles.gotItButton}
               onPress={handleCloseMessage}
             >
-              <Ionicons name="checkmark-circle" size={20} color="#fff" />
+              <Ionicons name="checkmark-circle" size={20} color={colors.textInverse} />
               <Text style={styles.gotItButtonText}>Got it, Thanks!</Text>
             </TouchableOpacity>
           </View>
@@ -253,7 +254,7 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#333',
+    color: colors.textPrimary,
     marginLeft: 8,
   },
   unreadBadge: {
@@ -267,7 +268,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 6,
   },
   unreadBadgeText: {
-    color: '#fff',
+    color: colors.textInverse,
     fontSize: 11,
     fontWeight: '700',
   },
@@ -279,7 +280,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
   },
   messageCard: {
-    backgroundColor: '#fff',
+    backgroundColor: colors.surface,
     borderRadius: 12,
     padding: 14,
     marginHorizontal: 4,
@@ -315,27 +316,27 @@ const styles = StyleSheet.create({
   astrologerName: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#333',
+    color: colors.textPrimary,
     marginBottom: 2,
   },
   remedyBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#4CAF50',
+    backgroundColor: colors.success,
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: 8,
     alignSelf: 'flex-start',
   },
   remedyBadgeText: {
-    color: '#fff',
+    color: colors.textInverse,
     fontSize: 9,
     fontWeight: '700',
     marginLeft: 3,
   },
   messageTime: {
     fontSize: 11,
-    color: '#999',
+    color: colors.textMuted,
   },
   messagePreview: {
     fontSize: 13,
@@ -349,7 +350,7 @@ const styles = StyleSheet.create({
   },
   tapToRead: {
     fontSize: 12,
-    color: '#4CAF50',
+    color: colors.success,
     fontWeight: '500',
   },
   // Modal Styles
@@ -359,7 +360,7 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   modalContainer: {
-    backgroundColor: '#fff',
+    backgroundColor: colors.surface,
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
     maxHeight: '80%',
@@ -384,11 +385,11 @@ const styles = StyleSheet.create({
   modalAstrologerName: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#333',
+    color: colors.textPrimary,
   },
   modalTimestamp: {
     fontSize: 12,
-    color: '#999',
+    color: colors.textMuted,
     marginTop: 2,
   },
   closeButton: {
@@ -397,7 +398,7 @@ const styles = StyleSheet.create({
   modalRemedyBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#4CAF50',
+    backgroundColor: colors.success,
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 16,
@@ -405,7 +406,7 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   modalRemedyBadgeText: {
-    color: '#fff',
+    color: colors.textInverse,
     fontSize: 11,
     fontWeight: '700',
     marginLeft: 6,
@@ -416,19 +417,19 @@ const styles = StyleSheet.create({
   },
   modalMessageText: {
     fontSize: 15,
-    color: '#333',
+    color: colors.textPrimary,
     lineHeight: 24,
   },
   gotItButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#4CAF50',
+    backgroundColor: colors.success,
     paddingVertical: 14,
     borderRadius: 12,
   },
   gotItButtonText: {
-    color: '#fff',
+    color: colors.textInverse,
     fontSize: 16,
     fontWeight: '600',
     marginLeft: 8,

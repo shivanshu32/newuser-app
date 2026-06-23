@@ -9,6 +9,7 @@ import {
   Dimensions,
   ScrollView
 } from 'react-native';
+import { colors } from '../theme';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 
@@ -106,7 +107,7 @@ const EnhancedPrepaidOfferModal = ({
               onPress={onDecline}
               hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
             >
-              <Ionicons name="close" size={28} color="#fff" />
+              <Ionicons name="close" size={28} color={colors.textInverse} />
             </TouchableOpacity>
 
             <ScrollView
@@ -117,7 +118,7 @@ const EnhancedPrepaidOfferModal = ({
               <View style={styles.header}>
                 {hasDiscount && (
                   <View style={styles.discountBadge}>
-                    <Ionicons name="flash" size={20} color="#fff" />
+                    <Ionicons name="flash" size={20} color={colors.textInverse} />
                     <Text style={styles.discountBadgeText}>
                       {discountPercentage}% OFF
                     </Text>
@@ -250,7 +251,7 @@ const EnhancedPrepaidOfferModal = ({
                     <Text style={styles.acceptButtonText}>
                       {hasDiscount ? 'Claim Offer & Continue' : 'Continue Chat'}
                     </Text>
-                    <Ionicons name="arrow-forward" size={20} color="#fff" />
+                    <Ionicons name="arrow-forward" size={20} color={colors.textInverse} />
                   </LinearGradient>
                 </TouchableOpacity>
 
@@ -332,13 +333,13 @@ const styles = StyleSheet.create({
     marginBottom: 12
   },
   discountBadgeText: {
-    color: '#fff',
+    color: colors.textInverse,
     fontSize: 16,
     fontWeight: 'bold',
     marginLeft: 6
   },
   title: {
-    color: '#fff',
+    color: colors.textInverse,
     fontSize: 24,
     fontWeight: 'bold',
     textAlign: 'center',
@@ -352,7 +353,7 @@ const styles = StyleSheet.create({
   timerCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#fff',
+    backgroundColor: colors.surface,
     borderRadius: 16,
     padding: 16,
     marginBottom: 16
@@ -372,7 +373,7 @@ const styles = StyleSheet.create({
     color: '#8b5cf6'
   },
   pricingCard: {
-    backgroundColor: '#fff',
+    backgroundColor: colors.surface,
     borderRadius: 16,
     padding: 20,
     marginBottom: 16
@@ -404,7 +405,7 @@ const styles = StyleSheet.create({
   },
   divider: {
     height: 1,
-    backgroundColor: '#e5e7eb',
+    backgroundColor: colors.border,
     marginVertical: 12
   },
   finalPriceRow: {
@@ -439,7 +440,7 @@ const styles = StyleSheet.create({
     marginLeft: 6
   },
   featuresCard: {
-    backgroundColor: '#fff',
+    backgroundColor: colors.surface,
     borderRadius: 16,
     padding: 20,
     marginBottom: 16
@@ -506,7 +507,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24
   },
   acceptButtonText: {
-    color: '#fff',
+    color: colors.textInverse,
     fontSize: 18,
     fontWeight: 'bold',
     marginRight: 8
@@ -516,7 +517,7 @@ const styles = StyleSheet.create({
     alignItems: 'center'
   },
   declineButtonText: {
-    color: 'rgba(255, 255, 255, 0.8)',
+    color: colors.textSecondary,
     fontSize: 16,
     fontWeight: '600'
   },

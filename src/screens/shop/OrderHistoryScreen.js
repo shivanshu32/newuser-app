@@ -8,6 +8,7 @@ import {
   ActivityIndicator,
   RefreshControl
 } from 'react-native';
+import { colors } from '../../theme';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
@@ -136,7 +137,7 @@ const OrderHistoryScreen = ({ navigation }) => {
         </View>
         <TouchableOpacity style={styles.viewButton}>
           <Text style={styles.viewButtonText}>View Details</Text>
-          <Ionicons name="chevron-forward" size={16} color="#F97316" />
+          <Ionicons name="chevron-forward" size={16} color={colors.primary} />
         </TouchableOpacity>
       </View>
     </TouchableOpacity>
@@ -389,7 +390,7 @@ const styles = StyleSheet.create({
   shopButton: {
     paddingHorizontal: 24,
     paddingVertical: 12,
-    backgroundColor: '#F97316',
+    backgroundColor: colors.primary,
     borderRadius: 12
   },
   shopButtonText: {

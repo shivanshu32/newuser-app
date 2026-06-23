@@ -7,6 +7,7 @@ import {
   Image,
   FlatList,
 } from 'react-native';
+import { colors } from '../theme';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 
@@ -41,7 +42,7 @@ const PendingPoojaDetailsSection = ({ bookings, onProvideDetails, loading }) => 
         >
           {/* Alert Badge */}
           <View style={styles.alertBadge}>
-            <Ionicons name="alert-circle" size={14} color="#fff" />
+            <Ionicons name="alert-circle" size={14} color={colors.textInverse} />
             <Text style={styles.alertBadgeText}>Action Required</Text>
           </View>
           
@@ -82,9 +83,9 @@ const PendingPoojaDetailsSection = ({ bookings, onProvideDetails, loading }) => 
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 0 }}
             >
-              <MaterialCommunityIcons name="form-textbox" size={18} color="#fff" />
+              <MaterialCommunityIcons name="form-textbox" size={18} color={colors.textInverse} />
               <Text style={styles.buttonText}>Provide Pooja Details</Text>
-              <Ionicons name="chevron-forward" size={18} color="#fff" />
+              <Ionicons name="chevron-forward" size={18} color={colors.textInverse} />
             </LinearGradient>
           </TouchableOpacity>
           
@@ -141,7 +142,7 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 18,
     fontWeight: '700',
-    color: '#fff',
+    color: colors.textInverse,
     marginLeft: 8,
   },
   countBadge: {
@@ -151,7 +152,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
   },
   countText: {
-    color: '#fff',
+    color: colors.textInverse,
     fontSize: 12,
     fontWeight: '700',
   },
@@ -186,7 +187,7 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   alertBadgeText: {
-    color: '#fff',
+    color: colors.textInverse,
     fontSize: 11,
     fontWeight: '600',
     marginLeft: 4,
@@ -213,7 +214,7 @@ const styles = StyleSheet.create({
   poojaName: {
     fontSize: 15,
     fontWeight: '600',
-    color: '#fff',
+    color: colors.textInverse,
     marginBottom: 4,
   },
   packageName: {
@@ -239,7 +240,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
   },
   buttonText: {
-    color: '#fff',
+    color: colors.textInverse,
     fontSize: 14,
     fontWeight: '600',
     marginHorizontal: 8,

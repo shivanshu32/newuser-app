@@ -11,6 +11,7 @@ import {
   Keyboard,
   Platform,
 } from 'react-native';
+import { colors } from '../theme';
 import { Ionicons } from '@expo/vector-icons';
 import { GOOGLE_PLACES_API_KEY, GOOGLE_PLACES_ENDPOINTS, GOOGLE_PLACES_CONFIG } from '../config/googlePlaces';
 
@@ -279,7 +280,7 @@ const GooglePlacesInput = ({
     <View style={[styles.container, style]}>
       {/* Input Field */}
       <View style={styles.inputContainer}>
-        <Ionicons name="location-outline" size={20} color="#6B7280" style={styles.inputIcon} />
+        <Ionicons name="location-outline" size={20} color={colors.textSecondary} style={styles.inputIcon} />
         <TextInput
           ref={inputRef}
           style={[styles.textInput, inputStyle]}
@@ -288,16 +289,16 @@ const GooglePlacesInput = ({
           onFocus={handleFocus}
           onBlur={handleBlur}
           placeholder={placeholder}
-          placeholderTextColor="#9CA3AF"
+          placeholderTextColor={colors.textMuted}
           autoCapitalize="words"
           autoCorrect={false}
           returnKeyType="search"
         />
         {isLoading ? (
-          <ActivityIndicator size="small" color="#F97316" style={styles.loadingIndicator} />
+          <ActivityIndicator size="small" color={colors.primary} style={styles.loadingIndicator} />
         ) : inputValue.length > 0 ? (
           <TouchableOpacity onPress={handleClear} style={styles.clearButton}>
-            <Ionicons name="close-circle" size={20} color="#9CA3AF" />
+            <Ionicons name="close-circle" size={20} color={colors.textMuted} />
           </TouchableOpacity>
         ) : null}
       </View>
@@ -325,7 +326,7 @@ const GooglePlacesInput = ({
                 ]}
                 onPress={() => onPredictionPress(item)}
               >
-                <Ionicons name="location-outline" size={20} color="#6B7280" style={styles.predictionIcon} />
+                <Ionicons name="location-outline" size={20} color={colors.textSecondary} style={styles.predictionIcon} />
                 <View style={styles.predictionTextContainer}>
                   <Text style={styles.predictionMainText} numberOfLines={1}>
                     {item.structured_formatting?.main_text || item.description}
@@ -358,9 +359,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: '#D1D5DB',
+    borderColor: colors.border,
     borderRadius: 12,
-    backgroundColor: '#F9FAFB',
+    backgroundColor: colors.background,
     paddingHorizontal: 12,
   },
   inputIcon: {
@@ -370,7 +371,7 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingVertical: Platform.OS === 'ios' ? 14 : 12,
     fontSize: 16,
-    color: '#111827',
+    color: colors.textPrimary,
   },
   loadingIndicator: {
     marginLeft: 8,
@@ -380,13 +381,13 @@ const styles = StyleSheet.create({
     marginLeft: 4,
   },
   errorText: {
-    color: '#EF4444',
+    color: colors.error,
     fontSize: 12,
     marginTop: 4,
     marginLeft: 4,
   },
   infoText: {
-    color: '#F97316', // Orange color for info/warning instead of red error
+    color: colors.primary,
     fontStyle: 'italic',
   },
   predictionsContainer: {
@@ -394,13 +395,13 @@ const styles = StyleSheet.create({
     top: '100%',
     left: 0,
     right: 0,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
     borderRadius: 12,
     marginTop: 4,
     maxHeight: 250,
     ...Platform.select({
       ios: {
-        shadowColor: '#000',
+        shadowColor: colors.shadow,
         shadowOffset: { width: 0, height: 4 },
         shadowOpacity: 0.15,
         shadowRadius: 8,
@@ -410,7 +411,7 @@ const styles = StyleSheet.create({
       },
     }),
     borderWidth: 1,
-    borderColor: '#E5E7EB',
+    borderColor: colors.border,
     overflow: 'hidden',
   },
   predictionsList: {
@@ -422,11 +423,11 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     paddingHorizontal: 16,
     borderBottomWidth: 1,
-    borderBottomColor: '#F3F4F6',
-    backgroundColor: '#FFFFFF',
+    borderBottomColor: colors.surfaceSecondary,
+    backgroundColor: colors.surface,
   },
   predictionItemPressed: {
-    backgroundColor: '#F3F4F6',
+    backgroundColor: colors.surfaceSecondary,
   },
   predictionIcon: {
     marginRight: 12,
@@ -437,23 +438,23 @@ const styles = StyleSheet.create({
   predictionMainText: {
     fontSize: 15,
     fontWeight: '500',
-    color: '#111827',
+    color: colors.textPrimary,
   },
   predictionSecondaryText: {
     fontSize: 13,
-    color: '#6B7280',
+    color: colors.textSecondary,
     marginTop: 2,
   },
   attributionContainer: {
     paddingVertical: 8,
     paddingHorizontal: 16,
-    backgroundColor: '#F9FAFB',
+    backgroundColor: colors.background,
     borderTopWidth: 1,
-    borderTopColor: '#E5E7EB',
+    borderTopColor: colors.border,
   },
   attributionText: {
     fontSize: 11,
-    color: '#9CA3AF',
+    color: colors.textMuted,
     textAlign: 'right',
   },
 });

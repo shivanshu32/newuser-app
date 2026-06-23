@@ -14,6 +14,7 @@ import {
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 import { useAuth } from '../context/AuthContext';
 import { useSocket } from '../context/SocketContext';
+import { colors, spacing, radius, shadows } from '../theme';
 
 const FreeChatScreen = ({ route, navigation }) => {
   const { sessionId, astrologer, freeChatId, userProfile } = route.params;
@@ -221,19 +222,19 @@ const FreeChatScreen = ({ route, navigation }) => {
   const renderHeader = () => (
     <View style={styles.header}>
       <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-        <Ionicons name="arrow-back" size={24} color="#333" />
+        <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
       </TouchableOpacity>
       
       <View style={styles.headerInfo}>
         <Text style={styles.astrologerName}>{astrologer?.name || 'Astrologer'}</Text>
         <View style={styles.timerContainer}>
-          <MaterialIcons name="timer" size={16} color="#4CAF50" />
+          <MaterialIcons name="timer" size={16} color={colors.success} />
           <Text style={styles.timerText}>{formatTime(timeRemaining)} remaining</Text>
         </View>
       </View>
       
       <TouchableOpacity onPress={endSession} style={styles.endButton}>
-        <MaterialIcons name="call-end" size={20} color="#fff" />
+        <MaterialIcons name="call-end" size={20} color={colors.textInverse} />
       </TouchableOpacity>
     </View>
   );
@@ -263,7 +264,7 @@ const FreeChatScreen = ({ route, navigation }) => {
 
         {!sessionStarted ? (
           <View style={styles.waitingContainer}>
-            <MaterialIcons name="hourglass-empty" size={48} color="#F97316" />
+            <MaterialIcons name="hourglass-empty" size={48} color={colors.primary} />
             <Text style={styles.waitingText}>Starting your free chat session...</Text>
           </View>
         ) : (
@@ -299,7 +300,7 @@ const FreeChatScreen = ({ route, navigation }) => {
                 onPress={sendMessage}
                 disabled={!inputText.trim() || sessionEnded}
               >
-                <Ionicons name="send" size={20} color="#fff" />
+                <Ionicons name="send" size={20} color={colors.textInverse} />
               </TouchableOpacity>
             </View>
           </>
@@ -312,7 +313,7 @@ const FreeChatScreen = ({ route, navigation }) => {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
+    backgroundColor: colors.background,
   },
   container: {
     flex: 1,
@@ -320,11 +321,11 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#fff',
+    backgroundColor: colors.surface,
     paddingHorizontal: 16,
     paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: '#e0e0e0',
+    borderBottomColor: colors.divider,
   },
   backButton: {
     marginRight: 12,
@@ -335,7 +336,7 @@ const styles = StyleSheet.create({
   astrologerName: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: '#333',
+    color: colors.textPrimary,
   },
   timerContainer: {
     flexDirection: 'row',
@@ -344,27 +345,27 @@ const styles = StyleSheet.create({
   },
   timerText: {
     fontSize: 14,
-    color: '#4CAF50',
+    color: colors.success,
     marginLeft: 4,
     fontWeight: '500',
   },
   endButton: {
-    backgroundColor: '#f44336',
+    backgroundColor: colors.error,
     borderRadius: 20,
     padding: 8,
   },
   profileContainer: {
-    backgroundColor: '#fff',
+    backgroundColor: colors.surface,
     margin: 16,
     padding: 16,
     borderRadius: 12,
     borderLeftWidth: 4,
-    borderLeftColor: '#F97316',
+    borderLeftColor: colors.primary,
   },
   profileTitle: {
     fontSize: 16,
     fontWeight: 'bold',
-    color: '#333',
+    color: colors.textPrimary,
     marginBottom: 12,
   },
   profileInfo: {
@@ -372,7 +373,7 @@ const styles = StyleSheet.create({
   },
   profileText: {
     fontSize: 14,
-    color: '#666',
+    color: colors.textSecondary,
   },
   waitingContainer: {
     flex: 1,
@@ -381,7 +382,7 @@ const styles = StyleSheet.create({
   },
   waitingText: {
     fontSize: 16,
-    color: '#666',
+    color: colors.textSecondary,
     marginTop: 16,
   },
   messagesList: {
@@ -407,13 +408,13 @@ const styles = StyleSheet.create({
     borderRadius: 18,
   },
   userBubble: {
-    backgroundColor: '#F97316',
+    backgroundColor: colors.primary,
     borderBottomRightRadius: 4,
   },
   astrologerBubble: {
-    backgroundColor: '#fff',
+    backgroundColor: colors.surface,
     borderBottomLeftRadius: 4,
-    shadowColor: '#000',
+    shadowColor: colors.shadow,
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.1,
     shadowRadius: 2,
@@ -424,20 +425,20 @@ const styles = StyleSheet.create({
     lineHeight: 20,
   },
   userMessageText: {
-    color: '#fff',
+    color: colors.textInverse,
   },
   astrologerMessageText: {
-    color: '#333',
+    color: colors.textPrimary,
   },
   timestamp: {
     fontSize: 12,
     marginTop: 4,
   },
   userTimestamp: {
-    color: 'rgba(255, 255, 255, 0.8)',
+    color: colors.textSecondary,
   },
   astrologerTimestamp: {
-    color: '#999',
+    color: colors.textMuted,
   },
   typingIndicator: {
     paddingHorizontal: 16,
@@ -445,22 +446,22 @@ const styles = StyleSheet.create({
   },
   typingText: {
     fontSize: 14,
-    color: '#666',
+    color: colors.textSecondary,
     fontStyle: 'italic',
   },
   inputContainer: {
     flexDirection: 'row',
     alignItems: 'flex-end',
-    backgroundColor: '#fff',
+    backgroundColor: colors.surface,
     paddingHorizontal: 16,
     paddingVertical: 12,
     borderTopWidth: 1,
-    borderTopColor: '#e0e0e0',
+    borderTopColor: colors.divider,
   },
   textInput: {
     flex: 1,
     borderWidth: 1,
-    borderColor: '#e0e0e0',
+    borderColor: colors.divider,
     borderRadius: 20,
     paddingHorizontal: 16,
     paddingVertical: 10,
@@ -469,12 +470,12 @@ const styles = StyleSheet.create({
     marginRight: 12,
   },
   sendButton: {
-    backgroundColor: '#F97316',
+    backgroundColor: colors.primary,
     borderRadius: 20,
     padding: 10,
   },
   sendButtonDisabled: {
-    backgroundColor: '#ccc',
+    backgroundColor: colors.surfaceTertiary,
   },
 });
 

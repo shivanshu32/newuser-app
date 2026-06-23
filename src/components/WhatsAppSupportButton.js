@@ -1,4 +1,5 @@
 import React from 'react';
+import { colors } from '../theme';
 import {
   TouchableOpacity,
   StyleSheet,
@@ -99,7 +100,7 @@ const WhatsAppSupportButton = ({
       onPress={handleWhatsAppSupport}
       activeOpacity={0.8}
     >
-      <Ionicons name="logo-whatsapp" size={iconSize} color="#fff" />
+      <Ionicons name="logo-whatsapp" size={iconSize} color={colors.textInverse} />
     </TouchableOpacity>
   );
 };

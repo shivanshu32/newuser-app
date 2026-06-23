@@ -10,6 +10,7 @@ import {
   Alert,
   Modal
 } from 'react-native';
+import { colors } from '../../theme';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
@@ -603,7 +604,7 @@ const styles = StyleSheet.create({
     marginHorizontal: 20,
     marginTop: 20,
     paddingVertical: 14,
-    backgroundColor: '#F97316',
+    backgroundColor: colors.primary,
     borderRadius: 12,
     alignItems: 'center'
   },

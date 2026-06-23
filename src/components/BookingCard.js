@@ -9,6 +9,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { SocketContext } from '../context/SocketContext';
+import { colors, spacing, radius, shadows } from '../theme';
 
 const BookingCard = ({ consultation, onJoin, onDismiss, onCancel, onReschedule }) => {
   const [timeRemaining, setTimeRemaining] = useState(null);
@@ -113,47 +114,46 @@ const BookingCard = ({ consultation, onJoin, onDismiss, onCancel, onReschedule }
   }, [callStartTime, isVoiceCall]);
 
   const getStatusColor = () => {
-    if (isExpired) return '#F44336';
-    
-    // Voice call specific status colors
+    if (isExpired) return colors.error;
+
     if (isVoiceCall && voiceCallStatus) {
       switch (voiceCallStatus) {
         case 'validating_balance':
         case 'connecting_astrologer':
-          return '#FF9800'; // Orange for connecting states
+          return colors.warning;
         case 'call_connected':
         case 'user_connected':
         case 'astrologer_connected':
-          return '#4CAF50'; // Green for connected
+          return colors.success;
         case 'call_ended':
-          return '#9C27B0'; // Purple for completed
+          return colors.secondary;
         case 'failed':
         case 'no_answer':
-          return '#F44336'; // Red for failed
+          return colors.error;
         default:
-          return '#2196F3'; // Blue for in-progress
+          return colors.info;
       }
     }
-    
+
     switch (booking.status) {
       case 'pending':
-        return '#FF9800';
+        return colors.warning;
       case 'confirmed':
       case 'waiting_for_user':
-        return '#4CAF50';
+        return colors.success;
       case 'in-progress':
-        return '#2196F3';
+        return colors.info;
       case 'completed':
-        return '#9C27B0';
+        return colors.secondary;
       case 'cancelled':
       case 'rejected':
-        return '#F44336';
+        return colors.error;
       case 'expired':
-        return '#795548';
+        return colors.textMuted;
       case 'no_show':
-        return '#607D8B';
+        return colors.textSecondary;
       default:
-        return '#666';
+        return colors.textMuted;
     }
   };
 
@@ -355,7 +355,7 @@ const BookingCard = ({ consultation, onJoin, onDismiss, onCancel, onReschedule }
     if (isExpired) {
       return (
         <TouchableOpacity style={[styles.actionButton, styles.expiredButton]} disabled>
-          <Ionicons name="time-outline" size={16} color="#fff" />
+          <Ionicons name="time-outline" size={16} color={colors.textInverse} />
           <Text style={styles.actionButtonText}>Expired</Text>
         </TouchableOpacity>
       );
@@ -364,7 +364,7 @@ const BookingCard = ({ consultation, onJoin, onDismiss, onCancel, onReschedule }
     if (canJoin()) {
       return (
         <TouchableOpacity style={[styles.actionButton, styles.joinButton]} onPress={handleJoinPress}>
-          <Ionicons name="play-circle-outline" size={16} color="#fff" />
+          <Ionicons name="play-circle-outline" size={16} color={colors.textInverse} />
           <Text style={styles.actionButtonText}>
             {booking.status === 'in-progress' ? 'Continue' : 'Join Now'}
           </Text>
@@ -375,7 +375,7 @@ const BookingCard = ({ consultation, onJoin, onDismiss, onCancel, onReschedule }
     if (booking.status === 'pending') {
       return (
         <TouchableOpacity style={[styles.actionButton, styles.waitingButton]} disabled>
-          <Ionicons name="hourglass-outline" size={16} color="#fff" />
+          <Ionicons name="hourglass-outline" size={16} color={colors.textInverse} />
           <Text style={styles.actionButtonText}>Waiting for Astrologer</Text>
         </TouchableOpacity>
       );
@@ -384,7 +384,7 @@ const BookingCard = ({ consultation, onJoin, onDismiss, onCancel, onReschedule }
     if (booking.status === 'completed') {
       return (
         <TouchableOpacity style={[styles.actionButton, styles.completedButton]} disabled>
-          <Ionicons name="checkmark-done-outline" size={16} color="#fff" />
+          <Ionicons name="checkmark-done-outline" size={16} color={colors.textInverse} />
           <Text style={styles.actionButtonText}>Completed</Text>
         </TouchableOpacity>
       );
@@ -405,7 +405,7 @@ const BookingCard = ({ consultation, onJoin, onDismiss, onCancel, onReschedule }
           <View style={styles.astrologerDetails}>
             <Text style={styles.astrologerName}>{astrologer.name}</Text>
             <View style={styles.consultationType}>
-              <Ionicons name={getTypeIcon()} size={14} color="#666" />
+              <Ionicons name={getTypeIcon()} size={14} color={colors.textMuted} />
               <Text style={styles.consultationTypeText}>
                 {isFreeChat() ? 'Free Chat' : getTypeText()}
               </Text>
@@ -419,7 +419,7 @@ const BookingCard = ({ consultation, onJoin, onDismiss, onCancel, onReschedule }
         </View>
         
         <View style={[styles.statusBadge, { backgroundColor: getStatusColor() }]}>
-          <Ionicons name={getStatusIcon()} size={12} color="#fff" />
+          <Ionicons name={getStatusIcon()} size={12} color={colors.textInverse} />
           <Text style={styles.statusText}>{getStatusText()}</Text>
         </View>
       </View>
@@ -427,13 +427,13 @@ const BookingCard = ({ consultation, onJoin, onDismiss, onCancel, onReschedule }
       {/* Booking details */}
       <View style={styles.details}>
         <View style={styles.detailRow}>
-          <Ionicons name="calendar-outline" size={16} color="#666" />
+          <Ionicons name="calendar-outline" size={16} color={colors.textMuted} />
           <Text style={styles.detailText}>{formatScheduledTime()}</Text>
         </View>
         
         {booking.totalAmount && booking.totalAmount > 0 && (
           <View style={styles.detailRow}>
-            <Ionicons name="cash-outline" size={16} color="#666" />
+            <Ionicons name="cash-outline" size={16} color={colors.textMuted} />
             <Text style={styles.detailText}>₹{parseFloat(booking.totalAmount).toFixed(0)}</Text>
           </View>
         )}
@@ -441,7 +441,7 @@ const BookingCard = ({ consultation, onJoin, onDismiss, onCancel, onReschedule }
         {/* Countdown timer for pending bookings */}
         {booking.status === 'pending' && timeRemaining && (
           <View style={styles.countdownContainer}>
-            <Ionicons name="timer-outline" size={16} color="#FF9800" />
+            <Ionicons name="timer-outline" size={16} color={colors.warning} />
             <Text style={styles.countdownText}>
               Expires in {timeRemaining}
             </Text>
@@ -464,22 +464,22 @@ const BookingCard = ({ consultation, onJoin, onDismiss, onCancel, onReschedule }
         <View style={styles.secondaryActions}>
           {canCancel() && (
             <TouchableOpacity style={styles.secondaryButton} onPress={handleCancelPress}>
-              <Ionicons name="close-outline" size={16} color="#F44336" />
-              <Text style={[styles.secondaryButtonText, { color: '#F44336' }]}>Cancel</Text>
+              <Ionicons name="close-outline" size={16} color={colors.error} />
+              <Text style={[styles.secondaryButtonText, { color: colors.error }]}>Cancel</Text>
             </TouchableOpacity>
           )}
           
           {canReschedule() && (
             <TouchableOpacity style={styles.secondaryButton} onPress={handleReschedulePress}>
-              <Ionicons name="calendar-outline" size={16} color="#2196F3" />
-              <Text style={[styles.secondaryButtonText, { color: '#2196F3' }]}>Reschedule</Text>
+              <Ionicons name="calendar-outline" size={16} color={colors.info} />
+              <Text style={[styles.secondaryButtonText, { color: colors.info }]}>Reschedule</Text>
             </TouchableOpacity>
           )}
           
           {['completed', 'cancelled', 'rejected', 'expired', 'no_show'].includes(booking.status) && (
             <TouchableOpacity style={styles.secondaryButton} onPress={handleDismissPress}>
-              <Ionicons name="trash-outline" size={16} color="#666" />
-              <Text style={[styles.secondaryButtonText, { color: '#666' }]}>Dismiss</Text>
+              <Ionicons name="trash-outline" size={16} color={colors.textMuted} />
+              <Text style={[styles.secondaryButtonText, { color: colors.textSecondary }]}>Dismiss</Text>
             </TouchableOpacity>
           )}
         </View>
@@ -490,16 +490,12 @@ const BookingCard = ({ consultation, onJoin, onDismiss, onCancel, onReschedule }
 
 const styles = StyleSheet.create({
   container: {
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    padding: 16,
-    marginVertical: 8,
-    marginHorizontal: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    backgroundColor: colors.surface,
+    borderRadius: radius.lg,
+    padding: spacing.lg,
+    marginVertical: spacing.sm,
+    marginHorizontal: spacing.lg,
+    ...shadows.card,
   },
   header: {
     flexDirection: 'row',
@@ -524,8 +520,8 @@ const styles = StyleSheet.create({
   astrologerName: {
     fontSize: 16,
     fontWeight: 'bold',
-    color: '#333',
-    marginBottom: 4,
+    color: colors.textPrimary,
+    marginBottom: spacing.xs,
   },
   consultationType: {
     flexDirection: 'row',
@@ -533,33 +529,33 @@ const styles = StyleSheet.create({
   },
   consultationTypeText: {
     fontSize: 14,
-    color: '#666',
-    marginLeft: 4,
+    color: colors.textSecondary,
+    marginLeft: spacing.xs,
   },
   freeChatBadge: {
-    backgroundColor: '#4CAF50',
-    paddingHorizontal: 6,
+    backgroundColor: colors.success,
+    paddingHorizontal: spacing.xs,
     paddingVertical: 2,
-    borderRadius: 8,
-    marginLeft: 6,
+    borderRadius: radius.sm,
+    marginLeft: spacing.xs,
   },
   freeChatBadgeText: {
     fontSize: 10,
-    color: '#fff',
+    color: colors.textInverse,
     fontWeight: 'bold',
   },
   statusBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    borderRadius: radius.full,
   },
   statusText: {
     fontSize: 12,
-    color: '#fff',
+    color: colors.textInverse,
     fontWeight: 'bold',
-    marginLeft: 4,
+    marginLeft: spacing.xs,
   },
   details: {
     marginBottom: 16,
@@ -571,37 +567,37 @@ const styles = StyleSheet.create({
   },
   detailText: {
     fontSize: 14,
-    color: '#666',
-    marginLeft: 8,
+    color: colors.textSecondary,
+    marginLeft: spacing.sm,
   },
   countdownContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#FFF3E0',
-    padding: 8,
-    borderRadius: 8,
-    marginTop: 8,
+    backgroundColor: colors.warningMuted,
+    padding: spacing.sm,
+    borderRadius: radius.sm,
+    marginTop: spacing.sm,
   },
   countdownText: {
     fontSize: 14,
-    color: '#FF9800',
+    color: colors.warning,
     fontWeight: 'bold',
-    marginLeft: 4,
+    marginLeft: spacing.xs,
   },
   messageContainer: {
-    backgroundColor: '#f5f5f5',
-    padding: 12,
-    borderRadius: 8,
-    marginTop: 8,
+    backgroundColor: colors.surfaceSecondary,
+    padding: spacing.md,
+    borderRadius: radius.sm,
+    marginTop: spacing.sm,
   },
   messageLabel: {
     fontSize: 12,
-    color: '#666',
-    marginBottom: 4,
+    color: colors.textMuted,
+    marginBottom: spacing.xs,
   },
   messageText: {
     fontSize: 14,
-    color: '#333',
+    color: colors.textPrimary,
   },
   actions: {
     gap: 12,
@@ -616,21 +612,21 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   joinButton: {
-    backgroundColor: '#4CAF50',
+    backgroundColor: colors.success,
   },
   waitingButton: {
-    backgroundColor: '#FF9800',
+    backgroundColor: colors.warning,
   },
   completedButton: {
-    backgroundColor: '#9C27B0',
+    backgroundColor: colors.secondary,
   },
   expiredButton: {
-    backgroundColor: '#F44336',
+    backgroundColor: colors.error,
   },
   actionButtonText: {
     fontSize: 16,
     fontWeight: 'bold',
-    color: '#fff',
+    color: colors.textInverse,
   },
   secondaryActions: {
     flexDirection: 'row',
@@ -642,8 +638,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: 8,
     paddingHorizontal: 12,
-    borderRadius: 6,
-    backgroundColor: '#f5f5f5',
+    borderRadius: radius.sm,
+    backgroundColor: colors.surfaceSecondary,
     gap: 4,
   },
   secondaryButtonText: {
