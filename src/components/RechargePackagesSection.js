@@ -57,8 +57,11 @@ const RechargePackagesSection = () => {
   };
 
   const handlePackagePress = (pkg) => {
-    // Navigate to wallet screen with selected package
-    navigation.navigate('Wallet', { selectedPackage: pkg });
+    // Navigate directly to payment summary screen with package details pre-filled
+    navigation.navigate('WalletTopUpSummary', {
+      amount: (pkg.minRechargeAmount || 0).toString(),
+      selectedPackage: pkg,
+    });
   };
 
   const handleViewAll = () => {

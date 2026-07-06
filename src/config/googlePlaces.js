@@ -4,7 +4,7 @@
 // - Places API
 // - Geocoding API
 
-export const GOOGLE_PLACES_API_KEY = 'AIzaSyAX7BtN22juT_Yiuwo1u7ArYixP3Jx_uhc';
+export const GOOGLE_PLACES_API_KEY = 'AIzaSyDM5_yykPFf7jgUia7jKpqjvXCdYWjuqzo';
 
 // Google Places Autocomplete API configuration
 export const GOOGLE_PLACES_CONFIG = {

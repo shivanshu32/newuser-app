@@ -14,6 +14,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../context/AuthContext';
 import { bookingsAPI, astrologersAPI, ratingsAPI } from '../../services/api';
+import analyticsService from '../../services/analyticsService';
 import { colors, spacing, radius, shadows } from '../../theme';
 
 const RatingScreen = ({ route, navigation }) => {
@@ -194,6 +195,15 @@ const RatingScreen = ({ route, navigation }) => {
       if (!response || !response.success) {
         throw new Error(response?.message || 'Failed to submit rating');
       }
+
+      // GA4: rating_submitted
+      analyticsService.trackRatingSubmitted({
+        bookingId: bookingData._id,
+        astrologerId: bookingData.astrologerId || astrologer?._id,
+        rating,
+        consultationType: bookingData.type || 'chat',
+        hasReview: review.trim().length > 0
+      }).catch(() => {});
       
       setSubmitting(false);
       

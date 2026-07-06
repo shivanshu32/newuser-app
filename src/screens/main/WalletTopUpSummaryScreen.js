@@ -6,14 +6,16 @@ import {
   TouchableOpacity,
   Alert,
   ActivityIndicator,
-  SafeAreaView,
   ScrollView,
+  StatusBar,
 } from 'react-native';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Linking } from 'react-native';
 // Using Razorpay Web Checkout instead of native SDK for better compatibility
 // import RazorpayCheckout from 'react-native-razorpay';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute } from '@react-navigation/native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { walletAPI } from '../../services/api';
 import facebookTrackingService from '../../services/facebookTrackingService';
 import analyticsService from '../../services/analyticsService';
@@ -28,6 +30,7 @@ const WalletTopUpSummaryScreen = () => {
   const route = useRoute();
   const { amount, selectedPackage, isFirstTimeUser = true } = route.params;
   const { user, updateUser } = useAuth();
+  const insets = useSafeAreaInsets();
   
   const [processingPayment, setProcessingPayment] = useState(false);
 
@@ -236,7 +239,39 @@ const WalletTopUpSummaryScreen = () => {
         if (updateUser && verificationResult.newBalance) {
           updateUser({ walletBalance: verificationResult.newBalance });
         }
-        
+
+        // GA4 purchase event (primary revenue conversion for UAC)
+        try {
+          const purchasePayload = {
+            transactionId: paymentData.razorpay_payment_id,
+            value: finalAmount,
+            currency: 'INR',
+            itemId: selectedPackage?._id || selectedPackage?.id || 'manual_topup',
+            itemName: selectedPackage?.name || 'Manual Wallet Top-up',
+            itemCategory: 'wallet'
+          };
+          await analyticsService.trackPurchase(purchasePayload);
+
+          // wallet_recharge – specific funnel event for UAC conversion tracking
+          await analyticsService.trackWalletRecharge({
+            transactionId: paymentData.razorpay_payment_id,
+            value: finalAmount,
+            currency: 'INR'
+          });
+
+          // First purchase detection – high-value signal for UAC optimisation
+          const alreadyTrackedFirstPurchase = await AsyncStorage.getItem('ga4_first_purchase_tracked');
+          if (!alreadyTrackedFirstPurchase) {
+            await analyticsService.trackFirstPurchase(purchasePayload);
+            await AsyncStorage.setItem('ga4_first_purchase_tracked', 'true');
+            console.log('📊 [GA4] first_purchase tracked');
+          }
+
+          console.log('📊 [GA4] purchase event tracked:', purchasePayload);
+        } catch (analyticsError) {
+          console.error('❌ [GA4] Failed to track purchase:', analyticsError);
+        }
+
         Alert.alert(
           'Payment Successful!',
           `₹${baseAmount.toFixed(2)} has been added to your wallet.\n\nTransaction Details:\n• Amount Added: ₹${baseAmount.toFixed(2)}\n• GST (18%): ₹${gstAmount.toFixed(2)}\n• Total Paid: ₹${finalAmount.toFixed(2)}`,
@@ -270,12 +305,13 @@ const WalletTopUpSummaryScreen = () => {
 
   return (
     <SafeAreaView style={styles.container}>
+      <StatusBar barStyle="light-content" backgroundColor={colors.surface} />
       <View style={styles.header}>
         <TouchableOpacity 
           style={styles.backButton} 
           onPress={() => navigation.goBack()}
         >
-          <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
+          <Ionicons name="arrow-back" size={24} color="#FFFFFF" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Payment Summary</Text>
         <View style={styles.placeholder} />
@@ -365,7 +401,7 @@ const WalletTopUpSummaryScreen = () => {
         </View>
       </ScrollView>
 
-      <View style={styles.footer}>
+      <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom, 16) }]}>
         <TouchableOpacity
           style={[styles.proceedButton, processingPayment && styles.disabledButton]}
           onPress={handleProceedToPay}
@@ -406,7 +442,7 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: 18,
     fontWeight: '600',
-    color: colors.textPrimary,
+    color: '#FFFFFF',
   },
   placeholder: {
     width: 40,
@@ -607,7 +643,8 @@ const styles = StyleSheet.create({
     lineHeight: 20,
   },
   footer: {
-    padding: 16,
+    paddingTop: 10,
+    paddingHorizontal: 16,
     backgroundColor: colors.surface,
     borderTopWidth: 1,
     borderTopColor: colors.divider,
@@ -615,10 +652,11 @@ const styles = StyleSheet.create({
   proceedButton: {
     backgroundColor: colors.primary,
     borderRadius: radius.md,
-    paddingVertical: 16,
+    paddingVertical: 12,
     paddingHorizontal: 24,
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
+    justifyContent: 'space-between',
     ...shadows.elevated,
   },
   disabledButton: {
@@ -628,13 +666,12 @@ const styles = StyleSheet.create({
   },
   proceedButtonText: {
     color: colors.textInverse,
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '600',
-    marginBottom: 2,
   },
   proceedButtonAmount: {
     color: colors.textInverse,
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: '700',
   },
 });

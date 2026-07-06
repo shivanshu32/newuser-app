@@ -13,6 +13,7 @@ import {
 import { MaterialIcons } from '@expo/vector-icons';
 import { colors, spacing, radius, shadows } from '../theme';
 import prepaidOffersAPI from '../services/prepaidOffersAPI';
+import analyticsService from '../services/analyticsService';
 
 const { height: screenHeight } = Dimensions.get('window');
 
@@ -44,6 +45,12 @@ const PrepaidOfferBottomSheet = ({
   }, [visible]);
 
   const handleProceedToPay = async () => {
+    // GA4: highest-intent pre-purchase signal
+    analyticsService.trackContinueOfferClicked({
+      astrologerId: astrologer?.id,
+      offerId: offerData?.offerId || offerData?._id
+    }).catch(() => {});
+
     // If offer already exists, use it directly
     if (offerData) {
       console.log('💰 [PREPAID_OFFER] Using existing offer data:', offerData);

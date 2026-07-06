@@ -53,38 +53,30 @@ function AppContent() {
   const [updateRequired, setUpdateRequired] = useState(null);
   const [versionCheckComplete, setVersionCheckComplete] = useState(false);
 
-  // Analytics and crash tracking initialization (completely non-blocking)
+  // Analytics initialization (completely non-blocking)
   useEffect(() => {
-    console.log('📊 [APP] Analytics disabled - skipping initialization');
-    
-    // Minimal crash-safe initialization tracking
-    const trackAppInitialization = () => {
+    const initTracking = async () => {
       try {
-        console.log('📊 [APP] App initialization started - version 5.3.3');
-        console.log('📊 [APP] Platform: android');
-        console.log('📊 [APP] Timestamp:', new Date().toISOString());
+        // Initialize Firebase/GA4 Analytics
+        await analyticsService.initialize();
+        // Fire app_open on every foreground session (UAC engagement signal)
+        await analyticsService.trackAppOpen();
+        console.log('📊 [APP] Firebase Analytics ready');
       } catch (error) {
-        // Silent fail - don't crash the app
+        console.error('❌ [APP] Analytics init failed (non-fatal):', error);
       }
-    };
-    
-    // Initialize Facebook tracking and track app install
-    const initializeFacebookTracking = async () => {
+
+      // Initialize Facebook tracking and track app install
       try {
         await facebookTrackingService.initialize();
         await facebookTrackingService.trackAppInstall();
         console.log('📊 [FB-TRACKING] App install tracking initialized');
       } catch (error) {
         console.error('❌ [FB-TRACKING] Failed to initialize app install tracking:', error);
-        // Don't crash the app if tracking fails
       }
     };
-    
-    // Immediate execution - no async operations
-    trackAppInitialization();
-    
-    // Initialize Facebook tracking in background
-    initializeFacebookTracking();
+
+    initTracking();
   }, []);
 
   // Check for updates on app launch (completely non-blocking and crash-safe)

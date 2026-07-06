@@ -381,6 +381,38 @@ const RazorpayPaymentScreen = ({ route, navigation }) => {
             total_wallet_credit: totalWalletCredit
           });
 
+          // Granular funnel events (used as GA4 conversion targets in Google Ads)
+          const _txn = paymentData.payment_id;
+          if (paymentType === 'prepaid_offer') {
+            await analyticsService.trackContinueOfferPurchased({
+              transactionId: _txn,
+              value: finalAmount,
+              currency: 'INR',
+              offerId
+            });
+          } else if (paymentType === 'prepaid_recharge_card') {
+            await analyticsService.trackChatPackPurchase({
+              transactionId: _txn,
+              value: finalAmount,
+              currency: 'INR',
+              packId: rechargeCardPurchaseId
+            });
+          } else if (paymentType === 'prepaid_voice_card') {
+            await analyticsService.trackVoicePackPurchase({
+              transactionId: _txn,
+              value: finalAmount,
+              currency: 'INR',
+              packId: voiceCardPurchaseId
+            });
+          } else {
+            // Default: wallet recharge (covers manual top-up and package recharge)
+            await analyticsService.trackWalletRecharge({
+              transactionId: _txn,
+              value: finalAmount,
+              currency: 'INR'
+            });
+          }
+
           // Only track first payment as separate event for remarketing (not as duplicate purchase)
           if (isFirstPayment) {
             await analyticsService.logEvent('first_payment', {

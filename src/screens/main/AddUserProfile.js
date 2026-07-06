@@ -273,6 +273,8 @@ const AddUserProfile = ({ navigation, route }) => {
             gender: profileData.gender,
             is_required: route.params?.isRequired || false,
           });
+          // GA4 standard onboarding_complete event (UAC optimisation signal)
+          await analyticsService.trackOnboardingComplete(user?._id || user?.id || '');
           const { AppEventsLogger } = require('react-native-fbsdk-next');
           await AppEventsLogger.logEvent('ProfileCompleted', {
             fb_content_type: 'user_profile',
@@ -880,14 +882,12 @@ const styles = StyleSheet.create({
     borderWidth: 1.5,
     borderColor: 'rgba(255,255,255,0.10)',
     borderRadius: 14,
-    overflow: 'hidden',
     backgroundColor: '#17171C',
   },
   placesErrorWrapper: {
     borderWidth: 1.5,
     borderColor: colors.error || '#FF6B6B',
     borderRadius: 14,
-    overflow: 'hidden',
     backgroundColor: '#17171C',
   },
   coordsBadge: {

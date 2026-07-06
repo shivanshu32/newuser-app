@@ -12,6 +12,7 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const { width, height } = Dimensions.get('window');
 
@@ -80,6 +81,7 @@ const slides = [
 ];
 
 const OnboardingScreen = ({ navigation }) => {
+  const insets = useSafeAreaInsets();
   const [currentIndex, setCurrentIndex] = useState(0);
   const scrollX = useRef(new Animated.Value(0)).current;
   const slidesRef = useRef(null);
@@ -222,7 +224,7 @@ const OnboardingScreen = ({ navigation }) => {
       />
 
       {/* Bottom Section */}
-      <View style={styles.bottomSection}>
+      <View style={[styles.bottomSection, { paddingBottom: Math.max(insets.bottom + 16, 40) }]}>
         {/* Pagination */}
         <View style={styles.pagination}>
           {slides.map((_, index) => {

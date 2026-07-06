@@ -2993,6 +2993,11 @@ const HomeScreen = ({ navigation }) => {
       { type: 'followUpMessages', id: 'followUpMessages' }
     ];
 
+    // Free chat (only when globally enabled) - shown right below header buttons
+    if (freeChatEnabled) {
+      data.push({ type: 'freeChat', id: 'freeChat' });
+    }
+
     // ── LAYER 1: ACTION (time-sensitive / active) ──────────────────────────────
 
     // Active bookings (pending/accepted)
@@ -3071,11 +3076,6 @@ const HomeScreen = ({ navigation }) => {
 
     // Astrology Tools section
     data.push({ type: 'astrologyTools', id: 'astrologyTools' });
-
-    // Free chat (only when globally enabled)
-    if (freeChatEnabled) {
-      data.push({ type: 'freeChat', id: 'freeChat' });
-    }
 
     // ── LAYER 4: EXPLORE (collapsible discovery: Pooja + Blog) ──────────────
     data.push({ type: 'exploreHeader', id: 'exploreHeader' });

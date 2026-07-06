@@ -18,6 +18,7 @@ import { Ionicons, MaterialIcons, FontAwesome } from '@expo/vector-icons';
 import { colors, spacing, radius, shadows } from '../../theme';
 import { useAuth } from '../../context/AuthContext';
 import { astrologersAPI, categoriesAPI } from '../../services/api';
+import analyticsService from '../../services/analyticsService';
 
 const AstrologersScreen = ({ navigation, route }) => {
   const { user } = useAuth();
@@ -26,6 +27,7 @@ const AstrologersScreen = ({ navigation, route }) => {
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const searchDebounceRef = useRef(null);
   const [selectedCategory, setSelectedCategory] = useState('all'); // 'all' or specific category
   const autoStartAttemptedRef = useRef(false);
   
@@ -184,6 +186,17 @@ const AstrologersScreen = ({ navigation, route }) => {
     console.log('🔍 [FILTER] Final filtered and sorted results:', filtered.length, 'out of', astrologers.length);
     return filtered;
   }, [astrologers, searchQuery, selectedCategory, isPrepaidRechargeCard, assignedAstrologers, astrologerAssignment]);
+
+  // Fire GA4 search event when query is meaningful (debounced 1s)
+  const handleSearchChange = useCallback((text) => {
+    setSearchQuery(text);
+    if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
+    if (text.trim().length >= 3) {
+      searchDebounceRef.current = setTimeout(() => {
+        analyticsService.trackAstrologerSearch(text, selectedCategory, filteredAstrologers?.length ?? 0).catch(() => {});
+      }, 1000);
+    }
+  }, [selectedCategory, filteredAstrologers?.length ?? 0]);
 
   const handleAstrologerPress = useCallback(async (astrologer) => {
     // If this is a prepaid recharge card flow, start the chat session directly
@@ -489,9 +502,9 @@ const AstrologersScreen = ({ navigation, route }) => {
   // Simple header for results count only
   const renderListHeader = useCallback(() => (
     <Text style={styles.resultsCount}>
-      {filteredAstrologers.length} astrologer{filteredAstrologers.length !== 1 ? 's' : ''} found
+      {filteredAstrologers?.length ?? 0} astrologer{(filteredAstrologers?.length ?? 0) !== 1 ? 's' : ''} found
     </Text>
-  ), [filteredAstrologers.length]);
+  ), [filteredAstrologers?.length]);
 
   if (loading) {
     return (
@@ -548,7 +561,7 @@ const AstrologersScreen = ({ navigation, route }) => {
           style={styles.searchInput}
           placeholder="Search astrologers..."
           value={searchQuery}
-          onChangeText={setSearchQuery}
+          onChangeText={handleSearchChange}
           placeholderTextColor={colors.textMuted}
         />
         {searchQuery.length > 0 && (

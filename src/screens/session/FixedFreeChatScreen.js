@@ -27,6 +27,7 @@ import useMessagePersistence from '../../hooks/useMessagePersistence';
 import PrepaidOfferBottomSheet from '../../components/PrepaidOfferBottomSheet';
 import prepaidOffersAPI from '../../services/prepaidOffersAPI';
 import { uploadChatImage } from '../../services/cloudinaryService';
+import analyticsService from '../../services/analyticsService';
 import { colors, spacing, radius, shadows } from '../../theme';
 
 const API_BASE_URL = 'https://jyotishcallbackend-2uxrv.ondigitalocean.app/api/v1';
@@ -1189,11 +1190,24 @@ const FixedFreeChatScreen = React.memo(({ route, navigation }) => {
       }
       return [...prev, newMessage].sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
     });
+
+    // Fire free_answer_received once per free chat session
+    (async () => {
+      try {
+        const _key = `ga4_far_${freeChatId}`;
+        const _done = await AsyncStorage.getItem(_key);
+        if (!_done) {
+          await analyticsService.trackFreeAnswerReceived({ freeChatId, astrologerId });
+          await AsyncStorage.setItem(_key, 'true');
+          console.log('📊 [GA4] free_answer_received fired');
+        }
+      } catch (_e) {}
+    })();
     
     setTimeout(() => {
       flatListRef.current?.scrollToEnd({ animated: true });
     }, 100);
-  }, [freeChatId, sessionId, authUser?.id, generateMessageId, safeSetState]);
+  }, [freeChatId, sessionId, astrologerId, authUser?.id, generateMessageId, safeSetState]);
 
 
   
@@ -1211,6 +1225,15 @@ const FixedFreeChatScreen = React.memo(({ route, navigation }) => {
     
     safeSetState(setSessionActive, true);
     safeSetState(setConnected, true);
+
+    // GA4: consultation_started (free chat)
+    analyticsService.trackConsultationStarted({
+      consultationType: 'chat',
+      astrologerId: data.astrologerId || '',
+      sessionId: data.sessionId || freeChatId,
+      isFreeChat: true,
+      isPrepaid: false
+    }).catch(() => {});
     
     // Handle question-based mode
     if (data.mode === 'question_based') {
@@ -1410,6 +1433,16 @@ const FixedFreeChatScreen = React.memo(({ route, navigation }) => {
     
     console.log('🛑 [FREE_CHAT_SESSION] Session end details - endedBy:', endedBy, 'currentUser:', currentUserId);
     
+    // GA4: consultation_ended (free chat)
+    analyticsService.trackConsultationEnded({
+      consultationType: 'chat',
+      astrologerId: data.astrologerId || '',
+      sessionId: data.sessionId || freeChatId,
+      durationSeconds: data.duration || sessionDuration || 0,
+      endReason: data.endedBy || 'system',
+      isFreeChat: true
+    }).catch(() => {});
+
     // Stop local timer and update session state
     safeSetState(setSessionActive, false);
     safeSetState(setSessionEnded, true);
@@ -1526,6 +1559,14 @@ const FixedFreeChatScreen = React.memo(({ route, navigation }) => {
           offerData: response.data // Include the created offer data
         });
         
+        // GA4: track that the continuation offer was exposed to the user
+        analyticsService.trackContinueOfferShown({
+          astrologerId,
+          durationMinutes: response.data?.durationMinutes || 5,
+          basePrice: response.data?.basePrice || 25,
+          gstAmount: response.data?.gstAmount || 0,
+          totalAmount: response.data?.totalAmount || 29.5
+        }).catch(() => {});
         setShowPrepaidOffer(true); // Show bottom sheet immediately
       } else {
         console.log('❌ [PREPAID_OFFER] Failed to create offer:', response.message);
@@ -2106,6 +2147,19 @@ const FixedFreeChatScreen = React.memo(({ route, navigation }) => {
                   : msg
               )
             );
+            // PRIMARY UAC CONVERSION: fire once per user lifetime
+            (async () => {
+              try {
+                const _userId = authUser?.id || authUser?._id;
+                const _key = `ga4_ffqs_user_${_userId}`;
+                const _done = await AsyncStorage.getItem(_key);
+                if (!_done) {
+                  await analyticsService.trackFirstFreeQuestionSent(_userId);
+                  await AsyncStorage.setItem(_key, 'true');
+                  console.log('📊 [GA4] first_free_question_sent fired');
+                }
+              } catch (_e) {}
+            })();
           } else {
             console.warn('❌ [USER_APP_ACK] Message acknowledgment failed:', acknowledgment);
             safeSetState(setMessages, prev => 
@@ -2825,7 +2879,7 @@ const FixedFreeChatScreen = React.memo(({ route, navigation }) => {
 
   return (
     <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
-      <StatusBar barStyle="light-content" backgroundColor={colors.secondary} />
+      <StatusBar barStyle="light-content" backgroundColor={colors.accentPurple} />
       
       <KeyboardAvoidingView 
         style={styles.container}
@@ -2873,7 +2927,7 @@ const FixedFreeChatScreen = React.memo(({ route, navigation }) => {
             {sessionActive && (
               freeChatMode === 'question_based' ? (
                 <View style={styles.questionCounterContainer}>
-                  <Ionicons name="help-circle-outline" size={16} color={colors.textInverse} />
+                  <Ionicons name="help-circle-outline" size={16} color="#FFFFFF" />
                   <Text style={styles.questionCounterText}>
                     {questionsRemaining} Q
                   </Text>
@@ -2898,10 +2952,10 @@ const FixedFreeChatScreen = React.memo(({ route, navigation }) => {
 
         <View style={[styles.statusBanner, { backgroundColor: statusInfo.color }]}>
           <View style={styles.statusContent}>
-            <Ionicons name={statusInfo.icon} size={16} color={colors.textInverse} style={styles.statusIcon} />
+            <Ionicons name={statusInfo.icon} size={16} color="#FFFFFF" style={styles.statusIcon} />
             <Text style={styles.statusText}>{statusInfo.text}</Text>
             {statusInfo.showSpinner && (
-              <ActivityIndicator size="small" color={colors.textInverse} style={styles.statusSpinner} />
+              <ActivityIndicator size="small" color="#FFFFFF" style={styles.statusSpinner} />
             )}
           </View>
         </View>
@@ -2934,7 +2988,7 @@ const FixedFreeChatScreen = React.memo(({ route, navigation }) => {
         {/* Session Ending Countdown */}
         {sessionEndingCountdown !== null && (
           <View style={styles.countdownBanner}>
-            <Ionicons name="time-outline" size={16} color={colors.textInverse} />
+            <Ionicons name="time-outline" size={16} color="#FFFFFF" />
             <Text style={styles.countdownText}>
               Session ending in {sessionEndingCountdown}s - Special offer coming!
             </Text>
@@ -3004,7 +3058,7 @@ const FixedFreeChatScreen = React.memo(({ route, navigation }) => {
             onPress={sendMessage}
             disabled={!messageText.trim() || !sessionActive || sessionEnded}
           >
-            <Ionicons name="send" size={20} color={colors.textInverse} />
+            <Ionicons name="send" size={20} color="#FFFFFF" />
           </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>
@@ -3039,7 +3093,7 @@ const FixedFreeChatScreen = React.memo(({ route, navigation }) => {
                 disabled={uploadingImage}
               >
                 {uploadingImage ? (
-                  <ActivityIndicator size="small" color={colors.textInverse} />
+                  <ActivityIndicator size="small" color="#FFFFFF" />
                 ) : (
                   <Text style={styles.imagePreviewSendText}>Send</Text>
                 )}
@@ -3061,7 +3115,7 @@ const FixedFreeChatScreen = React.memo(({ route, navigation }) => {
             style={styles.fullScreenCloseButton}
             onPress={closeFullScreenImage}
           >
-            <Ionicons name="close" size={30} color={colors.textInverse} />
+            <Ionicons name="close" size={30} color="#FFFFFF" />
           </TouchableOpacity>
           {fullScreenImage && (
             <Image
@@ -3087,9 +3141,10 @@ const FixedFreeChatScreen = React.memo(({ route, navigation }) => {
 });
 
 const styles = StyleSheet.create({
+  // ─── Structural ───────────────────────────────────────────────
   safeArea: {
     flex: 1,
-    backgroundColor: colors.secondary,
+    backgroundColor: colors.accentPurple,
   },
   loadingContainer: {
     flex: 1,
@@ -3098,27 +3153,27 @@ const styles = StyleSheet.create({
     backgroundColor: colors.background,
   },
   loadingText: {
-    marginTop: 10,
+    marginTop: spacing.md,
     fontSize: 16,
+    lineHeight: 24,
     color: colors.textSecondary,
   },
   container: {
     flex: 1,
     backgroundColor: colors.background,
   },
+
+  // ─── Header (purple accent for free chat identity) ────────────
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.secondary,
-    paddingTop: 10, // SafeAreaView now handles safe area properly
-    paddingBottom: 15,
-    paddingLeft: 5,
-    paddingRight: 15,
-    elevation: 4,
-    shadowColor: colors.shadow,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
+    backgroundColor: colors.accentPurple,
+    paddingTop: spacing.md,
+    paddingBottom: spacing.md,
+    paddingHorizontal: spacing.lg,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(139, 127, 255, 0.3)',
+    ...shadows.card,
   },
   headerLeft: {
     minWidth: 0,
@@ -3127,18 +3182,19 @@ const styles = StyleSheet.create({
   freeIndicator: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
+    backgroundColor: 'rgba(255, 255, 255, 0.18)',
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    borderRadius: radius.sm,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.3)',
+    borderColor: 'rgba(255, 255, 255, 0.25)',
   },
   freeText: {
-    color: colors.textInverse,
+    color: '#FFFFFF',
     fontSize: 12,
-    fontWeight: 'bold',
+    fontWeight: '700',
     marginLeft: 4,
+    letterSpacing: 0.5,
   },
   headerCenter: {
     flex: 1,
@@ -3148,86 +3204,92 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   astrologerImage: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    marginRight: 12,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    marginRight: spacing.md,
     borderWidth: 2,
-    borderColor: 'rgba(255, 255, 255, 0.3)',
+    borderColor: 'rgba(255, 255, 255, 0.4)',
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
   },
   astrologerDetails: {
     flex: 1,
   },
   headerTitle: {
-    color: colors.textInverse,
-    fontSize: 18,
-    fontWeight: 'bold',
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '700',
+    letterSpacing: -0.1,
   },
   headerSubtitle: {
-    color: 'rgba(255, 255, 255, 0.8)',
-    fontSize: 14,
+    color: 'rgba(255, 255, 255, 0.75)',
+    fontSize: 12,
+    fontWeight: '500',
     marginTop: 2,
+    letterSpacing: 0.2,
   },
   headerRight: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'flex-end',
+    gap: spacing.sm,
   },
   connectionDot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    marginRight: 8,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
   },
   timerContainer: {
     alignItems: 'center',
-    marginRight: 8,
     backgroundColor: 'rgba(255, 255, 255, 0.15)',
-    paddingHorizontal: 6,
-    paddingVertical: 3,
-    borderRadius: 6,
-    minWidth: 45,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    borderRadius: radius.sm,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.2)',
+    minWidth: 48,
   },
   timerText: {
-    color: colors.textInverse,
-    fontSize: 14,
-    fontWeight: 'bold',
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '700',
+    letterSpacing: 0.5,
   },
   questionCounterContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginRight: 8,
-    backgroundColor: 'rgba(139, 92, 246, 0.3)',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 6,
+    backgroundColor: 'rgba(255, 255, 255, 0.15)',
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    borderRadius: radius.sm,
     borderWidth: 1,
-    borderColor: 'rgba(139, 92, 246, 0.5)',
+    borderColor: 'rgba(255, 255, 255, 0.25)',
   },
   questionCounterText: {
-    color: colors.textInverse,
+    color: '#FFFFFF',
     fontSize: 13,
-    fontWeight: 'bold',
+    fontWeight: '700',
     marginLeft: 4,
   },
   endSessionButton: {
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(255, 68, 68, 0.2)',
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    backgroundColor: colors.errorMuted,
+    width: 34,
+    height: 34,
+    borderRadius: 17,
     borderWidth: 1,
-    borderColor: 'rgba(255, 68, 68, 0.3)',
+    borderColor: 'rgba(248, 113, 113, 0.4)',
   },
   amountText: {
-    color: 'rgba(255, 255, 255, 0.9)',
-    fontSize: 12,
+    color: 'rgba(255, 255, 255, 0.8)',
+    fontSize: 11,
     marginTop: 2,
   },
+
+  // ─── Status Banner ────────────────────────────────────────────
   statusBanner: {
-    paddingVertical: 8,
-    paddingHorizontal: 16,
+    paddingVertical: 7,
+    paddingHorizontal: spacing.lg,
     alignItems: 'center',
   },
   statusContent: {
@@ -3239,22 +3301,26 @@ const styles = StyleSheet.create({
     marginRight: 6,
   },
   statusText: {
-    color: colors.textInverse,
-    fontWeight: 'bold',
-    fontSize: 14,
+    color: '#FFFFFF',
+    fontWeight: '600',
+    fontSize: 13,
+    letterSpacing: 0.2,
   },
   statusSpinner: {
-    marginLeft: 8,
+    marginLeft: spacing.sm,
   },
+
+  // ─── Messages ─────────────────────────────────────────────────
   messagesList: {
     flex: 1,
-    paddingHorizontal: 16,
+    paddingHorizontal: spacing.lg,
   },
   messagesContent: {
-    paddingVertical: 16,
+    paddingTop: spacing.lg,
+    paddingBottom: spacing.xl,
   },
   messageContainer: {
-    marginVertical: 4,
+    marginVertical: 3,
   },
   ownMessage: {
     alignItems: 'flex-end',
@@ -3263,30 +3329,30 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
   },
   messageBubble: {
-    maxWidth: '80%',
-    paddingHorizontal: 15,
-    paddingVertical: 10,
-    borderRadius: 20,
+    maxWidth: '78%',
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+    borderRadius: radius.lg,
   },
   ownBubble: {
-    backgroundColor: colors.secondary,
-    borderBottomRightRadius: 5,
+    backgroundColor: colors.accentPurple,
+    borderBottomRightRadius: 4,
+    ...shadows.pressed,
   },
   otherBubble: {
-    backgroundColor: colors.surface,
-    borderBottomLeftRadius: 5,
-    elevation: 1,
-    shadowColor: colors.shadow,
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
+    backgroundColor: colors.surfaceSecondary,
+    borderBottomLeftRadius: 4,
+    borderWidth: 1,
+    borderColor: colors.border,
+    ...shadows.pressed,
   },
   messageText: {
-    fontSize: 16,
-    lineHeight: 20,
+    fontSize: 15,
+    lineHeight: 22,
   },
   ownMessageText: {
-    color: colors.textInverse,
+    color: '#FFFFFF',
+    fontWeight: '500',
   },
   otherMessageText: {
     color: colors.textPrimary,
@@ -3294,65 +3360,55 @@ const styles = StyleSheet.create({
   messageFooter: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 5,
+    marginTop: spacing.xs,
   },
   messageTime: {
-    fontSize: 12,
-    marginRight: 5,
+    fontSize: 11,
+    marginRight: 4,
+    fontWeight: '500',
   },
   ownMessageTime: {
-    color: colors.border,
+    color: 'rgba(255, 255, 255, 0.6)',
   },
   otherMessageTime: {
     color: colors.textMuted,
   },
   messageStatus: {
-    marginLeft: 5,
+    marginLeft: 4,
   },
+  readReceiptContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    position: 'relative',
+    width: 18,
+  },
+  readTick1: {
+    position: 'absolute',
+    left: 0,
+  },
+  readTick2: {
+    position: 'absolute',
+    left: 4,
+  },
+
+  // ─── Typing ───────────────────────────────────────────────────
   typingContainer: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    backgroundColor: colors.divider,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.sm,
+    backgroundColor: colors.surfaceSecondary,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
   },
   typingText: {
     color: colors.textSecondary,
     fontStyle: 'italic',
-    fontSize: 14,
+    fontSize: 13,
   },
-  inputContainer: {
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    paddingHorizontal: 15,
-    paddingVertical: 10,
-    backgroundColor: colors.surface,
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
-  },
-  textInput: {
-    flex: 1,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 20,
-    paddingHorizontal: 15,
-    paddingVertical: 10,
-    fontSize: 16,
-    maxHeight: 100,
-    marginRight: 10,
-  },
-  sendButton: {
-    backgroundColor: colors.secondary,
-    borderRadius: 20,
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  sendButtonDisabled: {
-    backgroundColor: colors.surfaceTertiary,
-  },
+
+  // ─── Session End ──────────────────────────────────────────────
   sessionEndContainer: {
-    paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
     backgroundColor: colors.background,
     borderTopWidth: 1,
     borderTopColor: colors.border,
@@ -3360,50 +3416,36 @@ const styles = StyleSheet.create({
   sessionEndMessage: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.surface,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderRadius: 8,
+    backgroundColor: colors.surfaceSecondary,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+    borderRadius: radius.md,
     borderLeftWidth: 4,
-    borderLeftColor: colors.secondary,
-    elevation: 1,
-    shadowColor: colors.shadow,
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
+    borderLeftColor: colors.accentPurple,
+    ...shadows.pressed,
   },
   sessionEndText: {
     flex: 1,
-    marginLeft: 12,
+    marginLeft: spacing.md,
     fontSize: 14,
     color: colors.textSecondary,
     lineHeight: 20,
   },
   textInputDisabled: {
-    backgroundColor: colors.background,
+    backgroundColor: colors.surfaceTertiary,
     color: colors.textMuted,
   },
-  typingContainer: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    backgroundColor: 'rgba(107, 70, 193, 0.1)',
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(107, 70, 193, 0.2)',
-  },
-  typingText: {
-    color: colors.secondary,
-    fontSize: 14,
-    fontStyle: 'italic',
-  },
+
+  // ─── Hint & Countdown Banners ─────────────────────────────────
   hintBanner: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    backgroundColor: 'rgba(251, 191, 36, 0.15)',
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.sm,
+    backgroundColor: colors.warningMuted,
     borderTopWidth: 1,
-    borderTopColor: 'rgba(251, 191, 36, 0.3)',
-    gap: 8,
+    borderTopColor: 'rgba(251, 191, 36, 0.25)',
+    gap: spacing.sm,
   },
   hintText: {
     color: colors.warning,
@@ -3415,204 +3457,261 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    backgroundColor: colors.secondary,
-    gap: 8,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+    backgroundColor: colors.accentPurple,
+    gap: spacing.sm,
   },
   countdownText: {
-    color: colors.textInverse,
+    color: '#FFFFFF',
     fontSize: 14,
     fontWeight: '600',
   },
-  readReceiptContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    position: 'relative',
-  },
-  readTick1: {
-    position: 'absolute',
-    left: 0,
-  },
-  readTick2: {
-    position: 'absolute',
-    left: 3,
-  },
-  // Reply preview styles (inside message bubble)
+
+  // ─── Reply preview (inside bubble) ────────────────────────────
   replyPreview: {
     flexDirection: 'row',
-    marginBottom: 8,
-    paddingBottom: 8,
+    marginBottom: spacing.sm,
+    paddingBottom: spacing.sm,
     borderBottomWidth: 1,
   },
   ownReplyPreview: {
-    borderBottomColor: 'rgba(255, 255, 255, 0.3)',
+    borderBottomColor: 'rgba(255, 255, 255, 0.25)',
   },
   otherReplyPreview: {
-    borderBottomColor: 'rgba(0, 0, 0, 0.1)',
+    borderBottomColor: colors.border,
   },
   replyBar: {
     width: 3,
     borderRadius: 2,
-    marginRight: 8,
+    marginRight: spacing.sm,
   },
   ownReplyBar: {
-    backgroundColor: 'rgba(255, 255, 255, 0.6)',
+    backgroundColor: 'rgba(255, 255, 255, 0.55)',
   },
   otherReplyBar: {
-    backgroundColor: colors.secondary,
+    backgroundColor: colors.accentPurple,
   },
   replyContent: {
     flex: 1,
   },
   replySenderName: {
-    fontSize: 12,
-    fontWeight: 'bold',
+    fontSize: 11,
+    fontWeight: '700',
     marginBottom: 2,
+    letterSpacing: 0.3,
   },
   ownReplySenderName: {
-    color: 'rgba(255, 255, 255, 0.9)',
+    color: 'rgba(255, 255, 255, 0.8)',
   },
   otherReplySenderName: {
-    color: colors.secondary,
+    color: colors.accentPurpleLight,
   },
   replyText: {
-    fontSize: 13,
+    fontSize: 12,
+    lineHeight: 17,
   },
   ownReplyText: {
-    color: 'rgba(255, 255, 255, 0.8)',
+    color: 'rgba(255, 255, 255, 0.65)',
   },
   otherReplyText: {
     color: colors.textSecondary,
   },
-  // Replying-to bar styles (above input)
+
+  // ─── Reply bar (above input) ───────────────────────────────────
   replyingToContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.background,
-    paddingHorizontal: 15,
-    paddingVertical: 10,
+    backgroundColor: colors.surfaceSecondary,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
     borderTopWidth: 1,
     borderTopColor: colors.border,
   },
   replyingToBar: {
     width: 4,
     height: '100%',
-    minHeight: 35,
-    backgroundColor: colors.secondary,
+    minHeight: 36,
+    backgroundColor: colors.accentPurple,
     borderRadius: 2,
-    marginRight: 10,
+    marginRight: spacing.md,
   },
   replyingToContent: {
     flex: 1,
   },
   replyingToLabel: {
-    fontSize: 12,
-    fontWeight: 'bold',
-    color: colors.secondary,
+    fontSize: 11,
+    fontWeight: '700',
+    color: colors.accentPurpleLight,
     marginBottom: 2,
+    letterSpacing: 0.3,
+    textTransform: 'uppercase',
   },
   replyingToText: {
-    fontSize: 14,
+    fontSize: 13,
     color: colors.textSecondary,
   },
   cancelReplyButton: {
-    padding: 5,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: colors.surfaceTertiary,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
-  // Image button styles
+
+  // ─── Input Bar ────────────────────────────────────────────────
+  inputContainer: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.md,
+    backgroundColor: colors.backgroundElevated,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+  },
   imageButton: {
-    padding: 10,
-    marginRight: 5,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: colors.surfaceSecondary,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: spacing.sm,
+    marginBottom: spacing.sm,
   },
-  // Image in message styles
+  textInput: {
+    flex: 1,
+    backgroundColor: colors.surfaceSecondary,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.xl,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+    fontSize: 15,
+    lineHeight: 22,
+    color: colors.textPrimary,
+    maxHeight: 110,
+    marginRight: spacing.sm,
+    marginBottom: spacing.sm,
+  },
+  sendButton: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    backgroundColor: colors.accentPurple,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: spacing.sm,
+    ...shadows.card,
+  },
+  sendButtonDisabled: {
+    backgroundColor: colors.surfaceTertiary,
+    shadowOpacity: 0,
+    elevation: 0,
+  },
+
+  // ─── Image in messages ────────────────────────────────────────
   messageImage: {
-    width: 200,
-    height: 200,
-    borderRadius: 10,
-    marginTop: 5,
+    width: 210,
+    height: 210,
+    borderRadius: radius.md,
+    marginTop: 4,
   },
   messageImageContainer: {
-    marginTop: 5,
+    marginTop: 4,
   },
-  // Minimal padding for image-only messages
   imageBubble: {
     paddingHorizontal: 4,
     paddingVertical: 4,
-    borderRadius: 12,
+    borderRadius: radius.md,
   },
-  // Image preview modal styles
+
+  // ─── Image Preview Modal ──────────────────────────────────────
   imagePreviewOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.8)',
+    backgroundColor: 'rgba(0, 0, 0, 0.88)',
     justifyContent: 'center',
     alignItems: 'center',
   },
   imagePreviewContainer: {
-    backgroundColor: colors.surface,
-    borderRadius: 15,
-    padding: 20,
+    backgroundColor: colors.backgroundElevated,
+    borderRadius: radius.xl,
+    borderWidth: 1,
+    borderColor: colors.border,
+    padding: spacing.xl,
     width: '90%',
-    maxHeight: '80%',
+    maxHeight: '82%',
     alignItems: 'center',
+    ...shadows.floating,
   },
   imagePreviewTitle: {
     fontSize: 18,
-    fontWeight: '600',
+    fontWeight: '700',
     color: colors.textPrimary,
-    marginBottom: 15,
+    marginBottom: spacing.lg,
+    letterSpacing: -0.1,
   },
   imagePreviewImage: {
     width: '100%',
     height: 300,
-    borderRadius: 10,
+    borderRadius: radius.md,
   },
   imagePreviewButtons: {
     flexDirection: 'row',
-    marginTop: 20,
-    gap: 15,
+    marginTop: spacing.xl,
+    gap: spacing.md,
   },
   imagePreviewCancelButton: {
     flex: 1,
-    paddingVertical: 12,
-    paddingHorizontal: 20,
-    borderRadius: 10,
-    backgroundColor: colors.divider,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.xl,
+    borderRadius: radius.md,
+    backgroundColor: colors.surfaceTertiary,
     alignItems: 'center',
+    borderWidth: 1,
+    borderColor: colors.border,
   },
   imagePreviewCancelText: {
-    fontSize: 16,
+    fontSize: 15,
     color: colors.textSecondary,
     fontWeight: '600',
   },
   imagePreviewSendButton: {
     flex: 1,
-    paddingVertical: 12,
-    paddingHorizontal: 20,
-    borderRadius: 10,
-    backgroundColor: colors.secondary,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.xl,
+    borderRadius: radius.md,
+    backgroundColor: colors.accentPurple,
     alignItems: 'center',
   },
   imagePreviewSendButtonDisabled: {
     backgroundColor: colors.surfaceTertiary,
   },
   imagePreviewSendText: {
-    fontSize: 16,
-    color: colors.textInverse,
-    fontWeight: '600',
+    fontSize: 15,
+    color: '#FFFFFF',
+    fontWeight: '700',
   },
-  // Full screen image modal styles
+
+  // ─── Full-Screen Image Modal ──────────────────────────────────
   fullScreenImageOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.95)',
+    backgroundColor: 'rgba(0, 0, 0, 0.97)',
     justifyContent: 'center',
     alignItems: 'center',
   },
   fullScreenCloseButton: {
     position: 'absolute',
-    top: 50,
+    top: 52,
     right: 20,
     zIndex: 10,
-    padding: 10,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   fullScreenImage: {
     width: Dimensions.get('window').width,

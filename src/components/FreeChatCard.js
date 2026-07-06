@@ -199,15 +199,11 @@ const FreeChatCard = ({ navigation }) => {
     <>
       <View style={styles.container}>
         <View style={styles.content}>
-          <Text style={styles.badgeLabel}>COMPLIMENTARY</Text>
-          <Text style={styles.title}>Your Complimentary Consultation</Text>
+          <Text style={styles.badgeLabel}>CLAIM FREE CHAT</Text>
+          <Text style={styles.title}>Ask your First Free Question</Text>
           <Text style={styles.subtitle}>A brief introduction to our advisors</Text>
 
           <View style={styles.featuresRow}>
-            <View style={styles.featureItem}>
-              <Ionicons name="time-outline" size={16} color={colors.primary} />
-              <Text style={styles.featureText} numberOfLines={1}>3 Minutes</Text>
-            </View>
             <View style={styles.featureItem}>
               <Ionicons name="star-outline" size={16} color={colors.primary} />
               <Text style={styles.featureText} numberOfLines={1}>Expert Advisors</Text>

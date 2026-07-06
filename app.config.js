@@ -2,7 +2,7 @@ module.exports = {
   jsEngine: "hermes",
   name: "Jyotish Call",
   slug: "jyotishcall-user-app",
-  version: "5.8.2",
+  version: "5.8.4",
   orientation: "portrait",
   icon: "./assets/icon-square.png",
   userInterfaceStyle: "light",
@@ -32,7 +32,7 @@ module.exports = {
       backgroundColor: "#ffffff"
     },
     package: "com.jyotishtalk",
-    versionCode: 107,
+    versionCode: 109,
     minSdkVersion: 24,
     compileSdkVersion: 36,
     targetSdkVersion: 36,
